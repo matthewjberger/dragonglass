@@ -1,11 +1,12 @@
 mod app;
 mod logger;
+mod settings;
 
 use anyhow::Result;
 use app::App;
-use logger::Logger;
+use logger::create_logger;
 
 fn main() -> Result<()> {
-    Logger::setup_logger()?;
+    create_logger()?;
     App::run()
 }

@@ -6,6 +6,9 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.32"
+config = "0.10.1"
 log = "0.4.11"
+serde = { version = "1.0.115", features = ["derive"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
+toml = "0.5.6"
 winit = "0.22.2"
