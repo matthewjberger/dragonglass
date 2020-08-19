@@ -10,5 +10,7 @@ use logger::create_logger;
 
 fn main() -> Result<()> {
     create_logger()?;
-    App::run()
+    let app = App::new()?;
+    app.run()?;
+    Ok(())
 }

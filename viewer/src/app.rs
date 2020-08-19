@@ -6,16 +6,21 @@ use winit::{
     dpi::PhysicalSize,
     event::VirtualKeyCode,
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::{WindowBuilder, Window},
 };
 
-#[derive(Default)]
-pub struct App;
+pub struct App {
+    _settings: Settings,
+    input: Input,
+    system: System,
+    _window: Window,
+    event_loop: EventLoop<()>,
+}
 
 impl App {
     pub const TITLE: &'static str = "Dragonglass - GLTF Model Viewer";
 
-    pub fn run() -> Result<()> {
+    pub fn new() -> Result<Self> {
         let settings = Settings::load_current_settings()?;
 
         debug!("Running viewer");
@@ -29,8 +34,27 @@ impl App {
             window.inner_size().width as _,
             window.inner_size().height as _,
         );
-        let mut system = System::new(window_dimensions);
-        let mut input = Input::default();
+        let system = System::new(window_dimensions);
+        let input = Input::default();
+
+        let app = Self {
+            _settings: settings,
+            input,
+            system,
+            _window: window,
+            event_loop,
+        };
+
+        Ok(app)
+    }
+
+    pub fn run(self) -> Result<()> {
+        let Self {
+            mut input,
+            mut system,
+            event_loop,
+            ..
+        } = self;
 
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
