@@ -1,12 +1,12 @@
+use crate::settings::Settings;
 use anyhow::Result;
+use log::debug;
 use winit::{
     dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-use log::debug;
-use crate::settings::Settings;
 
 #[derive(Default)]
 pub struct App;
@@ -28,10 +28,8 @@ impl App {
             *control_flow = ControlFlow::Poll;
 
             match event {
-                Event::NewEvents { .. } => {
-                }
-                Event::MainEventsCleared => {
-                }
+                Event::NewEvents { .. } => {}
+                Event::MainEventsCleared => {}
                 _ => {}
             }
         });

@@ -35,9 +35,7 @@ impl Settings {
         Ok(settings)
     }
 
-    pub fn from_path<P: AsRef<Path> + Into<PathBuf>>(
-        path: P,
-    ) -> Result<Settings> {
+    pub fn from_path<P: AsRef<Path> + Into<PathBuf>>(path: P) -> Result<Settings> {
         let path_str = path.as_ref().display().to_string();
         debug!("Loading settings file: {}", &path_str);
         let mut config = config::Config::default();
@@ -47,9 +45,7 @@ impl Settings {
         Ok(settings)
     }
 
-    pub fn generate_settings_file<P: AsRef<Path> + Into<PathBuf> + Copy>(
-        path: P,
-    ) -> Result<()> {
+    pub fn generate_settings_file<P: AsRef<Path> + Into<PathBuf> + Copy>(path: P) -> Result<()> {
         let settings = Self::default();
         let toml = toml::to_string(&settings)?;
 
