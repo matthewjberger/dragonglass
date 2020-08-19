@@ -6,7 +6,7 @@ use winit::{
     dpi::PhysicalSize,
     event::VirtualKeyCode,
     event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder, Window},
+    window::{Window, WindowBuilder},
 };
 
 pub struct App {
