@@ -1,6 +1,8 @@
 mod app;
+mod input;
 mod logger;
 mod settings;
+mod system;
 
 use anyhow::Result;
 use app::App;
