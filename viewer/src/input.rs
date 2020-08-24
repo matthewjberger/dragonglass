@@ -19,22 +19,19 @@ impl Input {
     }
 
     pub fn handle_event<T>(&mut self, event: &Event<T>, window_center: glm::Vec2) {
-        match event {
-            Event::WindowEvent { event, .. } => match *event {
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode: Some(keycode),
-                            state,
-                            ..
-                        },
-                    ..
-                } => {
-                    *self.keystates.entry(keycode).or_insert(state) = state;
-                }
-                _ => {}
-            },
-            _ => {}
+        if let Event::WindowEvent { event, .. } = event {
+            if let WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(keycode),
+                        state,
+                        ..
+                    },
+                ..
+            } = *event
+            {
+                *self.keystates.entry(keycode).or_insert(state) = state;
+            }
         }
 
         self.mouse.handle_event(&event, window_center);
