@@ -3,6 +3,7 @@ use anyhow::Result;
 use dragonglass::Renderer;
 use log::info;
 use nalgebra_glm as glm;
+use raw_window_handle::HasRawWindowHandle;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode},
@@ -36,12 +37,14 @@ impl App {
             window.inner_size().height as _,
         );
 
+        let renderer = Renderer::new(&window.raw_window_handle())?;
+
         let app = Self {
             _settings: settings,
             input: Input::default(),
             system: System::new(window_dimensions),
             _window: window,
-            renderer: Renderer::new()?,
+            renderer,
             event_loop,
         };
 
