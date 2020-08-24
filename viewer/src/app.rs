@@ -70,11 +70,8 @@ impl App {
                 *control_flow = ControlFlow::Exit;
             }
 
-            match event {
-                Event::MainEventsCleared => {
-                    renderer.render().expect("Failed to render a frame!");
-                }
-                _ => {}
+            if let Event::MainEventsCleared = event {
+                renderer.render().expect("Failed to render a frame!");
             }
         });
     }
