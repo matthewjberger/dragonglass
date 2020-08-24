@@ -5,3 +5,5 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0.32"
+log = "0.4.11"

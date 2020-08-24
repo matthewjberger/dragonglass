@@ -1,6 +1,6 @@
 //! Handles loading, serialization, deserialization, and generation of the settings file
 use anyhow::Result;
-use log::debug;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -37,7 +37,7 @@ impl Settings {
 
     pub fn from_path<P: AsRef<Path> + Into<PathBuf>>(path: P) -> Result<Settings> {
         let path_str = path.as_ref().display().to_string();
-        debug!("Loading settings file: {}", &path_str);
+        info!("Loading settings file: {}", &path_str);
         let mut config = config::Config::default();
         let config_file = config::File::with_name(&path_str);
         config.merge(config_file)?;
@@ -52,7 +52,7 @@ impl Settings {
         let mut file = File::create(&path)?;
         file.write_all(toml.as_bytes())?;
 
-        debug!(
+        info!(
             "Generated settings file: {}",
             path_str = path.as_ref().display().to_string()
         );

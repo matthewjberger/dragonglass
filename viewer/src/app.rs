@@ -1,10 +1,11 @@
 use crate::{input::Input, settings::Settings, system::System};
 use anyhow::Result;
-use log::debug;
+use dragonglass::Renderer;
+use log::info;
 use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
-    event::VirtualKeyCode,
+    event::{Event, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -14,6 +15,7 @@ pub struct App {
     input: Input,
     system: System,
     _window: Window,
+    renderer: Renderer,
     event_loop: EventLoop<()>,
 }
 
@@ -23,7 +25,6 @@ impl App {
     pub fn new() -> Result<Self> {
         let settings = Settings::load_current_settings()?;
 
-        debug!("Running viewer");
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
             .with_title(Self::TITLE)
@@ -34,14 +35,13 @@ impl App {
             window.inner_size().width as _,
             window.inner_size().height as _,
         );
-        let system = System::new(window_dimensions);
-        let input = Input::default();
 
         let app = Self {
             _settings: settings,
-            input,
-            system,
+            input: Input::default(),
+            system: System::new(window_dimensions),
             _window: window,
+            renderer: Renderer::new()?,
             event_loop,
         };
 
@@ -52,10 +52,14 @@ impl App {
         let Self {
             mut input,
             mut system,
+            mut renderer,
             event_loop,
             ..
         } = self;
 
+        renderer.initialize()?;
+
+        info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
@@ -64,6 +68,13 @@ impl App {
 
             if input.is_key_pressed(VirtualKeyCode::Escape) {
                 *control_flow = ControlFlow::Exit;
+            }
+
+            match event {
+                Event::MainEventsCleared => {
+                    renderer.render().expect("Failed to render a frame!");
+                }
+                _ => {}
             }
         });
     }
