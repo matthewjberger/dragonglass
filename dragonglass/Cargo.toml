@@ -7,3 +7,6 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.32"
 log = "0.4.11"
+ash = "0.31.0"
+raw-window-handle = "0.3.3"
+vk-mem = "0.2.2"
