@@ -5,6 +5,7 @@ use super::{
 use anyhow::Result;
 use log::info;
 use raw_window_handle::RawWindowHandle;
+use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
 
 // The order the struct members are declared in
@@ -12,7 +13,7 @@ use vk_mem::{Allocator, AllocatorCreateInfo};
 // when this struct is dropped
 pub struct Context {
     pub allocator: vk_mem::Allocator,
-    pub logical_device: LogicalDevice,
+    pub logical_device: Arc<LogicalDevice>,
     pub debug_layer: Option<DebugLayer>,
     pub physical_device: PhysicalDevice,
     pub surface: Surface,
@@ -32,7 +33,10 @@ impl Context {
         } else {
             None
         };
-        let logical_device = LogicalDevice::from_physical(&instance.handle, &physical_device)?;
+        let logical_device = Arc::new(LogicalDevice::from_physical(
+            &instance.handle,
+            &physical_device,
+        )?);
 
         let allocator_create_info = AllocatorCreateInfo {
             device: logical_device.handle.clone(),
