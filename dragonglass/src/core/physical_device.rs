@@ -27,8 +27,8 @@ impl PhysicalDevice {
         instance: &ash::Instance,
         surface: &Surface,
     ) -> Result<Option<PhysicalDevice>> {
-        let device_name = Self::device_name(instance, device);
-        let queue_indices = Self::queue_family_indices(instance, device, surface)?;
+        let device_name = Self::device_name(instance, device)?;
+        let queue_indices = Self::find_queue_family_indices(instance, device, surface)?;
         let swapchain_supported = Self::swapchain_supported(device, surface)?;
         let features_supported = Self::features_supported(instance, device);
 
@@ -48,14 +48,14 @@ impl PhysicalDevice {
         Ok(Some(physical_device))
     }
 
-    fn device_name(instance: &ash::Instance, device: vk::PhysicalDevice) -> &CStr {
+    fn device_name(instance: &ash::Instance, device: vk::PhysicalDevice) -> Result<String> {
         let properties = unsafe { instance.get_physical_device_properties(device) };
-        let device_name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) };
+        let device_name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str()?;
         info!(
             "Physical device available: {:?} - {:?}",
             device_name, properties.device_type
         );
-        device_name
+        Ok(device_name.into())
     }
 
     fn swapchain_supported(device: vk::PhysicalDevice, surface: &Surface) -> Result<bool> {
@@ -75,7 +75,7 @@ impl PhysicalDevice {
         Ok(swapchain_supported)
     }
 
-    fn queue_family_indices(
+    fn find_queue_family_indices(
         instance: &ash::Instance,
         device: vk::PhysicalDevice,
         surface: &Surface,
@@ -127,5 +127,9 @@ impl PhysicalDevice {
     fn features_supported(instance: &ash::Instance, device: vk::PhysicalDevice) -> bool {
         let features = unsafe { instance.get_physical_device_features(device) };
         features.sampler_anisotropy == vk::TRUE
+    }
+
+    pub fn queue_indices(&self) -> Vec<u32> {
+        vec![self.graphics_queue_index, self.presentation_queue_index]
     }
 }

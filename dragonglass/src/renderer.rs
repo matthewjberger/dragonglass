@@ -1,6 +1,6 @@
 use super::{
     command_pool::CommandPool,
-    core::{Context, LogicalDevice},
+    core::{Context, LogicalDevice, Swapchain},
     sync::{Fence, Semaphore},
 };
 use anyhow::Result;
@@ -27,10 +27,11 @@ impl FrameSyncHandles {
 }
 
 pub struct Renderer {
-    context: Context,
     sync_handles: Vec<FrameSyncHandles>,
     command_pool: CommandPool,
     transient_command_pool: CommandPool,
+    swapchain: Swapchain,
+    context: Context,
 }
 
 impl Renderer {
@@ -38,9 +39,10 @@ impl Renderer {
 
     pub fn new(raw_window_handle: &RawWindowHandle) -> Result<Self> {
         let context = Context::new(&raw_window_handle)?;
+
         let sync_handles = (0..Self::MAX_FRAMES_IN_FLIGHT)
             .into_iter()
-            .map(|frame| FrameSyncHandles::new(context.logical_device.clone()))
+            .map(|_| FrameSyncHandles::new(context.logical_device.clone()))
             .collect::<Result<Vec<FrameSyncHandles>, anyhow::Error>>()?;
 
         let create_info = vk::CommandPoolCreateInfo::builder()
@@ -53,11 +55,14 @@ impl Renderer {
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
         let transient_command_pool = CommandPool::new(context.logical_device.clone(), create_info)?;
 
+        let swapchain = context.create_swapchain(&[800, 600])?;
+
         let renderer = Self {
-            context,
             sync_handles,
             command_pool,
             transient_command_pool,
+            swapchain,
+            context,
         };
 
         Ok(renderer)
