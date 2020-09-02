@@ -1,18 +1,11 @@
 pub use self::{
-    context::Context,
-    image::{ImageView, Sampler},
-    instance::Instance,
-    logical_device::LogicalDevice,
-    physical_device::PhysicalDevice,
-    surface::Surface,
-    swapchain::{Swapchain, SwapchainProperties},
+    context::Context, instance::Instance, logical_device::LogicalDevice,
+    physical_device::PhysicalDevice, surface::Surface,
 };
 
-pub mod context;
-pub mod debug;
-pub mod image;
-pub mod instance;
-pub mod logical_device;
-pub mod physical_device;
-pub mod surface;
-pub mod swapchain;
+mod context;
+mod debug;
+mod instance;
+mod logical_device;
+mod physical_device;
+mod surface;

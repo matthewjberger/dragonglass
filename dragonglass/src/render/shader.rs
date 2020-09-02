@@ -1,4 +1,4 @@
-use super::core::LogicalDevice;
+use crate::core::LogicalDevice;
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use std::ffi::CStr;

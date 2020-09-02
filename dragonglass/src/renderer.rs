@@ -1,7 +1,7 @@
 use super::{
-    command_pool::CommandPool,
-    core::{Context, LogicalDevice, Swapchain},
-    sync::{Fence, Semaphore},
+    core::{Context, LogicalDevice},
+    render::Swapchain,
+    resource::{CommandPool, Fence, Semaphore},
 };
 use anyhow::Result;
 use ash::vk;

@@ -1,8 +1,6 @@
 pub use self::renderer::Renderer;
 
-mod command_pool;
 mod core;
-mod pipeline;
+mod render;
 mod renderer;
-mod shader;
-mod sync;
+mod resource;
