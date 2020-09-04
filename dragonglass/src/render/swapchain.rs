@@ -177,10 +177,10 @@ impl SwapchainImage {
 }
 
 impl crate::core::Context {
-    pub fn create_swapchain(&self, dimensions: &[u32; 2]) -> Result<Swapchain> {
-        let properties =
-            SwapchainProperties::new(dimensions, self.physical_device.handle, &self.surface)?;
-
+    pub fn create_swapchain(
+        &self,
+        dimensions: &[u32; 2],
+    ) -> Result<(Swapchain, SwapchainProperties)> {
         let capabilities = self.physical_device_surface_capabilities()?;
 
         let image_count = std::cmp::max(
@@ -189,6 +189,9 @@ impl crate::core::Context {
         );
 
         let queue_indices = self.physical_device.queue_indices();
+
+        let properties =
+            SwapchainProperties::new(dimensions, self.physical_device.handle, &self.surface)?;
 
         let create_info = {
             let builder = vk::SwapchainCreateInfoKHR::builder()
@@ -219,11 +222,12 @@ impl crate::core::Context {
             &self.logical_device.handle,
             create_info,
         )?;
+
         swapchain.create_image_views(
             self.logical_device.clone(),
             properties.surface_format.format,
         )?;
 
-        Ok(swapchain)
+        Ok((swapchain, properties))
     }
 }

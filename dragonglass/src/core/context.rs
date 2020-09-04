@@ -1,6 +1,9 @@
 use super::{debug::DebugLayer, Instance, LogicalDevice, PhysicalDevice, Surface};
-use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
+use anyhow::{anyhow, Result};
+use ash::{
+    version::{DeviceV1_0, InstanceV1_0},
+    vk,
+};
 use log::info;
 use raw_window_handle::RawWindowHandle;
 use std::sync::Arc;
@@ -68,6 +71,38 @@ impl Context {
                 )
         }?;
         Ok(capabilities)
+    }
+
+    pub fn determine_depth_format(
+        &self,
+        tiling: vk::ImageTiling,
+        features: vk::FormatFeatureFlags,
+    ) -> Result<vk::Format> {
+        let depth_format = vec![
+            vk::Format::D32_SFLOAT,
+            vk::Format::D32_SFLOAT_S8_UINT,
+            vk::Format::D24_UNORM_S8_UINT,
+        ]
+        .into_iter()
+        .find(|format| {
+            let properties = unsafe {
+                self.instance
+                    .handle
+                    .get_physical_device_format_properties(self.physical_device.handle, *format)
+            };
+
+            match tiling {
+                vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
+                vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
+                _ => false,
+            }
+        });
+
+        if let Some(format) = depth_format {
+            Ok(format)
+        } else {
+            Err(anyhow!("Couldn't determine the depth format!"))
+        }
     }
 }
 

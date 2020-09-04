@@ -32,12 +32,13 @@ impl App {
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
 
-        let window_dimensions = glm::vec2(
-            window.inner_size().width as _,
-            window.inner_size().height as _,
-        );
+        let logical_size = window.inner_size();
+        let renderer = Renderer::new(
+            &window.raw_window_handle(),
+            &[logical_size.width, logical_size.height],
+        )?;
 
-        let renderer = Renderer::new(&window.raw_window_handle())?;
+        let window_dimensions = glm::vec2(logical_size.width as f32, logical_size.height as f32);
 
         let app = Self {
             _settings: settings,
