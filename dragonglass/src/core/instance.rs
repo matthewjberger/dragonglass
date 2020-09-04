@@ -79,13 +79,14 @@ impl Instance {
 
     fn check_layers_supported(entry: &ash::Entry, layers: &[*const i8]) -> Result<()> {
         let supported_layers = entry.enumerate_instance_layer_properties()?;
-        info!("Supported layers: {:#?}", layers);
 
         let supported_layer_names = supported_layers
             .iter()
             .map(|layer| layer.layer_name.as_ptr())
             .map(|name_ptr| unsafe { CStr::from_ptr(name_ptr) }.to_str())
             .collect::<Result<Vec<&str>, std::str::Utf8Error>>()?;
+
+        info!("Supported layers: {:#?}", supported_layer_names);
 
         for name in layers.iter() {
             let name = unsafe { CStr::from_ptr(*name) }.to_str()?;
