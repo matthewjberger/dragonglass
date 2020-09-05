@@ -1,6 +1,5 @@
 [workspace]
 members = [
   "dragonglass",
-  "shader-compilation",
   "viewer",
 ]

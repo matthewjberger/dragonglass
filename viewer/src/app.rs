@@ -2,7 +2,6 @@ use crate::{input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::Renderer;
 use log::info;
-use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use winit::{
     dpi::PhysicalSize,

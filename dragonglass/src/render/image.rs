@@ -28,28 +28,6 @@ impl Drop for ImageView {
     }
 }
 
-pub struct Sampler {
-    pub handle: vk::Sampler,
-    device: Arc<LogicalDevice>,
-}
-
-impl Sampler {
-    pub fn new(
-        device: Arc<LogicalDevice>,
-        create_info: vk::SamplerCreateInfoBuilder,
-    ) -> Result<Self> {
-        let handle = unsafe { device.handle.create_sampler(&create_info, None) }?;
-        let sampler = Self { handle, device };
-        Ok(sampler)
-    }
-}
-
-impl Drop for Sampler {
-    fn drop(&mut self) {
-        unsafe { self.device.handle.destroy_sampler(self.handle, None) };
-    }
-}
-
 pub struct Framebuffer {
     pub handle: vk::Framebuffer,
     device: Arc<LogicalDevice>,
@@ -77,7 +55,7 @@ impl Drop for Framebuffer {
 pub struct Image {
     pub handle: vk::Image,
     allocation: vk_mem::Allocation,
-    allocation_info: vk_mem::AllocationInfo,
+    _allocation_info: vk_mem::AllocationInfo,
     allocator: Arc<Allocator>,
 }
 
@@ -87,13 +65,13 @@ impl Image {
         allocation_create_info: &vk_mem::AllocationCreateInfo,
         image_create_info: &vk::ImageCreateInfoBuilder,
     ) -> Result<Self> {
-        let (handle, allocation, allocation_info) =
+        let (handle, allocation, _allocation_info) =
             allocator.create_image(&image_create_info, &allocation_create_info)?;
 
         let texture = Self {
             handle,
             allocation,
-            allocation_info,
+            _allocation_info,
             allocator,
         };
 

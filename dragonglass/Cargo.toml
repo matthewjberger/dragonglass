@@ -13,10 +13,5 @@ raw-window-handle = "0.3.3"
 vk-mem = "0.2.2"
 winit = "0.22.2"
 
-[build-dependencies]
-log = "0.4.8"
-shader-compilation = { path = "../shader-compilation" }
-simplelog = { version = "0.8.0", features = ["termcolor"] }
-
 [features]
 validation = []
