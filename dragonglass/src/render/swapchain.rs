@@ -38,6 +38,17 @@ impl Swapchain {
             .collect::<Result<Vec<_>>>()?;
         Ok(())
     }
+
+    pub fn acquire_next_image(
+        &self,
+        semaphore: vk::Semaphore,
+        fence: vk::Fence,
+    ) -> ash::prelude::VkResult<(u32, bool)> {
+        unsafe {
+            self.handle_ash
+                .acquire_next_image(self.handle_khr, std::u64::MAX, semaphore, fence)
+        }
+    }
 }
 
 impl Drop for Swapchain {

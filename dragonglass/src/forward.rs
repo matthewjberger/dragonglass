@@ -1,6 +1,6 @@
 use super::{
     core::{Context, LogicalDevice},
-    render::{Framebuffer, Image, ImageView, RenderPass, Swapchain},
+    render::{Framebuffer, Image, ImageView, RenderPass, Swapchain, SwapchainProperties},
 };
 use anyhow::Result;
 use ash::vk;
@@ -9,6 +9,7 @@ use vk_mem::Allocator;
 
 pub struct ForwardSwapchain {
     pub swapchain: Swapchain,
+    pub swapchain_properties: SwapchainProperties,
     pub render_pass: RenderPass,
     pub depth_image: Image,
     pub depth_image_view: ImageView,
@@ -79,6 +80,7 @@ impl ForwardSwapchain {
 
         let forward_swapchain = Self {
             swapchain,
+            swapchain_properties,
             render_pass,
             depth_image,
             depth_image_view,

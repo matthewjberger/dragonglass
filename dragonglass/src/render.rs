@@ -1,7 +1,7 @@
 pub use self::{
     descriptor::{DescriptorPool, DescriptorSetLayout},
     image::{Framebuffer, Image, ImageView, Sampler},
-    pipeline::{ComputePipeline, GraphicsPipeline, PipelineLayout},
+    pipeline::{GraphicsPipeline, PipelineLayout},
     renderpass::RenderPass,
     shader::Shader,
     swapchain::{Swapchain, SwapchainProperties},

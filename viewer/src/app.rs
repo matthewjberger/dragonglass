@@ -33,12 +33,8 @@ impl App {
             .build(&event_loop)?;
 
         let logical_size = window.inner_size();
-        let renderer = Renderer::new(
-            &window.raw_window_handle(),
-            &[logical_size.width, logical_size.height],
-        )?;
-
-        let window_dimensions = glm::vec2(logical_size.width as f32, logical_size.height as f32);
+        let window_dimensions = [logical_size.width, logical_size.height];
+        let renderer = Renderer::new(&window.raw_window_handle(), &window_dimensions)?;
 
         let app = Self {
             _settings: settings,
@@ -75,7 +71,9 @@ impl App {
             }
 
             if let Event::MainEventsCleared = event {
-                renderer.render().expect("Failed to render a frame!");
+                renderer
+                    .render(&system.window_dimensions)
+                    .expect("Failed to render a frame!");
             }
         });
     }

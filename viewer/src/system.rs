@@ -6,14 +6,14 @@ use winit::{
 };
 
 pub struct System {
-    pub window_dimensions: glm::Vec2,
+    pub window_dimensions: [u32; 2],
     pub delta_time: f64,
     pub last_frame: Instant,
     pub exit_requested: bool,
 }
 
 impl System {
-    pub fn new(window_dimensions: glm::Vec2) -> Self {
+    pub fn new(window_dimensions: [u32; 2]) -> Self {
         Self {
             last_frame: Instant::now(),
             window_dimensions,
@@ -24,8 +24,8 @@ impl System {
 
     pub fn window_center(&self) -> glm::Vec2 {
         glm::vec2(
-            (self.window_dimensions.x / 2.0) as _,
-            (self.window_dimensions.y / 2.0) as _,
+            self.window_dimensions[0] as f32 / 2.0,
+            self.window_dimensions[1] as f32 / 2.0,
         )
     }
 
@@ -40,7 +40,7 @@ impl System {
             Event::WindowEvent { event, .. } => match *event {
                 WindowEvent::CloseRequested => self.exit_requested = true,
                 WindowEvent::Resized(PhysicalSize { width, height }) => {
-                    self.window_dimensions = glm::vec2(width as f32, height as f32);
+                    self.window_dimensions = [width, height];
                 }
                 _ => {}
             },

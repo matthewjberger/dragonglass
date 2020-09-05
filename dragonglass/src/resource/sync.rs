@@ -4,7 +4,7 @@ use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 
 pub struct Fence {
-    handle: vk::Fence,
+    pub handle: vk::Fence,
     device: Arc<LogicalDevice>,
 }
 
