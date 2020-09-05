@@ -98,11 +98,7 @@ impl Context {
             }
         });
 
-        if let Some(format) = depth_format {
-            Ok(format)
-        } else {
-            Err(anyhow!("Couldn't determine the depth format!"))
-        }
+        depth_format.ok_or(anyhow!("Couldn't determine the depth format!"))
     }
 }
 

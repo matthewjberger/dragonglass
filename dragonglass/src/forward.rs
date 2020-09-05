@@ -8,14 +8,14 @@ use std::sync::Arc;
 use vk_mem::Allocator;
 
 pub struct ForwardSwapchain {
-    pub swapchain: Swapchain,
-    pub swapchain_properties: SwapchainProperties,
-    pub render_pass: RenderPass,
     pub depth_image: Image,
     pub depth_image_view: ImageView,
     pub color_image: Image,
     pub color_image_view: ImageView,
+    pub render_pass: Arc<RenderPass>,
     pub framebuffers: Vec<Framebuffer>,
+    pub swapchain: Swapchain,
+    pub swapchain_properties: SwapchainProperties,
 }
 
 impl ForwardSwapchain {
@@ -60,13 +60,7 @@ impl ForwardSwapchain {
         let framebuffers = swapchain
             .images
             .iter()
-            .map(|image| {
-                [
-                    color_image_view.handle,
-                    depth_image_view.handle,
-                    image.view.handle,
-                ]
-            })
+            .map(|image| [image.view.handle, depth_image_view.handle])
             .map(|attachments| {
                 let create_info = vk::FramebufferCreateInfo::builder()
                     .render_pass(render_pass.handle)
@@ -79,14 +73,14 @@ impl ForwardSwapchain {
             .collect::<Result<Vec<_>, _>>()?;
 
         let forward_swapchain = Self {
-            swapchain,
-            swapchain_properties,
-            render_pass,
             depth_image,
             depth_image_view,
             color_image,
             color_image_view,
+            render_pass: Arc::new(render_pass),
             framebuffers,
+            swapchain,
+            swapchain_properties,
         };
 
         Ok(forward_swapchain)

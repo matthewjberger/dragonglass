@@ -5,6 +5,9 @@ use std::ffi::CStr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[derive(Copy, Clone)]
+pub struct ShaderSet;
+
 pub struct Shader {
     device: Arc<LogicalDevice>,
     module: vk::ShaderModule,

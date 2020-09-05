@@ -1,9 +1,11 @@
 pub use self::{
     descriptor::{DescriptorPool, DescriptorSetLayout},
     image::{Framebuffer, Image, ImageView, Sampler},
-    pipeline::{GraphicsPipeline, PipelineLayout},
+    pipeline::{
+        GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,
+    },
     renderpass::RenderPass,
-    shader::Shader,
+    shader::{Shader, ShaderSet},
     swapchain::{Swapchain, SwapchainProperties},
 };
 
