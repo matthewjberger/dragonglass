@@ -1,12 +1,13 @@
 use crate::core::LogicalDevice;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
-use std::ffi::CStr;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
-#[derive(Copy, Clone)]
-pub struct ShaderSet;
+use derive_builder::Builder;
+use std::{
+    collections::HashMap,
+    ffi::CStr,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub struct Shader {
     device: Arc<LogicalDevice>,
@@ -48,3 +49,84 @@ impl Drop for Shader {
         }
     }
 }
+
+#[derive(Default, Clone)]
+pub struct ShaderSet {
+    pub vertex: Option<Arc<Shader>>,
+    pub fragment: Option<Arc<Shader>>,
+    pub geometry: Option<Arc<Shader>>,
+    pub tessellation_evaluation: Option<Arc<Shader>>,
+    pub tessellation_control: Option<Arc<Shader>>,
+    pub compute: Option<Arc<Shader>>,
+}
+
+#[derive(Builder, Clone, Default)]
+#[builder(default, setter(into, strip_option))]
+pub struct ShaderPathSet {
+    pub vertex: Option<String>,
+    pub fragment: Option<String>,
+    pub geometry: Option<String>,
+    pub tessellation_evaluation: Option<String>,
+    pub tessellation_control: Option<String>,
+    pub compute: Option<String>,
+}
+
+#[derive(Default)]
+pub struct ShaderCache {
+    pub shaders: HashMap<String, Arc<Shader>>,
+}
+
+impl ShaderCache {
+    pub fn load_shader<P: AsRef<Path> + Into<PathBuf>>(
+        &mut self,
+        path: P,
+        stage_flags: vk::ShaderStageFlags,
+        device: Arc<LogicalDevice>,
+    ) -> Result<Arc<Shader>> {
+        let shader_path = path
+            .as_ref()
+            .to_str()
+            .ok_or(anyhow!("The shader path is not a valid UTF-8 sequence"))?
+            .to_string();
+        let shader = self
+            .shaders
+            .entry(shader_path)
+            .or_insert(Arc::new(Shader::from_file(path, stage_flags, device)?))
+            .clone();
+        Ok(shader)
+    }
+}
+
+macro_rules! impl_create_shader_set {
+    ($( $field:ident:$stage:ident ),*) => {
+        impl ShaderCache {
+            pub fn create_shader_set(
+                &mut self,
+                device: Arc<LogicalDevice>,
+                shader_paths: &ShaderPathSet,
+            ) -> Result<ShaderSet> {
+                let mut shader_set = ShaderSet::default();
+                $(
+                    if let Some(shader_path) = shader_paths.$field.as_ref() {
+                        let shader = self.load_shader(
+                            &shader_path,
+                            vk::ShaderStageFlags::$stage,
+                            device.clone(),
+                        )?;
+                        shader_set.$field = Some(shader);
+                    }
+                )*
+                Ok(shader_set)
+            }
+        }
+    };
+}
+
+impl_create_shader_set!(
+    vertex: VERTEX,
+    fragment: FRAGMENT,
+    geometry: GEOMETRY,
+    tessellation_control: TESSELLATION_CONTROL,
+    tessellation_evaluation: TESSELLATION_EVALUATION,
+    compute: COMPUTE
+);

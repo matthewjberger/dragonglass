@@ -1,7 +1,9 @@
 use super::{
     core::{Context, LogicalDevice},
     forward::ForwardSwapchain,
-    render::{DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettingsBuilder},
+    render::{
+        DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettingsBuilder, PipelineLayout,
+    },
     resource::{CommandPool, Fence, Semaphore},
 };
 use anyhow::{anyhow, bail, Result};
@@ -15,6 +17,7 @@ pub struct Renderer {
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
     pipeline: Option<GraphicsPipeline>,
+    pipeline_layout: Option<PipelineLayout>,
     command_pool: CommandPool,
     transient_command_pool: CommandPool,
     forward_swapchain: Option<ForwardSwapchain>,
@@ -56,28 +59,29 @@ impl Renderer {
                 .allocate_command_buffers(&allocate_info)
         }?;
 
-        // let descriptor_set_layout_create_info =
-        //     vk::DescriptorSetLayoutCreateInfo::builder().build();
-        // let descriptor_set_layout = DescriptorSetLayout::new(
-        //     context.logical_device.clone(),
-        //     descriptor_set_layout_create_info,
-        // )?;
-        // let descriptor_set_layout = Arc::new(descriptor_set_layout);
+        let descriptor_set_layout_create_info =
+            vk::DescriptorSetLayoutCreateInfo::builder().build();
+        let descriptor_set_layout = DescriptorSetLayout::new(
+            context.logical_device.clone(),
+            descriptor_set_layout_create_info,
+        )?;
+        let descriptor_set_layout = Arc::new(descriptor_set_layout);
 
-        // let pipeline_settings = GraphicsPipelineSettingsBuilder::default()
-        //     .render_pass(forward_swapchain.render_pass.clone())
-        //     .vertex_state_info(vk::PipelineVertexInputStateCreateInfo::builder().build())
-        //     .descriptor_set_layout(descriptor_set_layout.clone())
-        //     .build()
-        //     .unwrap();
-        // let (pipeline, pipeline_layout) =
-        //     GraphicsPipeline::from_settings(context.logical_device.clone(), pipeline_settings)?;
+        let pipeline_settings = GraphicsPipelineSettingsBuilder::default()
+            .render_pass(forward_swapchain.render_pass.clone())
+            .vertex_state_info(vk::PipelineVertexInputStateCreateInfo::builder().build())
+            .descriptor_set_layout(descriptor_set_layout.clone())
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        let (pipeline, pipeline_layout) =
+            GraphicsPipeline::from_settings(context.logical_device.clone(), pipeline_settings)?;
 
         let renderer = Self {
             current_frame: 0,
             frame_locks,
             command_buffers,
-            pipeline: None,
+            pipeline: Some(pipeline),
+            pipeline_layout: Some(pipeline_layout),
             command_pool,
             transient_command_pool,
             forward_swapchain: Some(forward_swapchain),
