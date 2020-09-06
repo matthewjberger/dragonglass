@@ -111,11 +111,11 @@ impl Renderer {
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let image_available_semaphores = [image_available];
         let render_finished_semaphores = [render_finished];
-        let command_buffers_to_use = [command_buffer];
+        let command_buffers = [command_buffer];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(&image_available_semaphores)
             .wait_dst_stage_mask(&wait_stages)
-            .command_buffers(&command_buffers_to_use)
+            .command_buffers(&command_buffers)
             .signal_semaphores(&render_finished_semaphores)
             .build();
         let submit_info_arr = [submit_info];
