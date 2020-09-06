@@ -9,7 +9,7 @@ anyhow = "1.0.32"
 config = "0.10.1"
 dragonglass = { path = "../dragonglass" }
 log = "0.4.11"
-nalgebra-glm = "0.7.0"
+nalgebra-glm = "0.8.0"
 serde = { version = "1.0.115", features = ["derive"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
 toml = "0.5.6"
