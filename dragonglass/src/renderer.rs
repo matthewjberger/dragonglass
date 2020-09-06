@@ -4,7 +4,7 @@ use super::{
     resource::{CommandPool, Fence, Semaphore},
 };
 use anyhow::{anyhow, bail, Result};
-use ash::{prelude::VkResult, version::DeviceV1_0, vk};
+use ash::{version::DeviceV1_0, vk};
 use raw_window_handle::RawWindowHandle;
 use std::sync::Arc;
 
@@ -66,61 +66,50 @@ impl Renderer {
     }
 
     pub fn render(&mut self, dimensions: &[u32; 2]) -> Result<()> {
-        let image_index = match self.prepare_next_frame()? {
-            Ok((image_index, _)) => image_index,
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => return self.create_swapchain(dimensions),
-            Err(error) => bail!(error),
-        } as usize;
-
-        self.wait_for_frame()?;
-
-        self.record_command_buffer(image_index)?;
-
-        self.submit_command_buffer(image_index)?;
-
-        match self.present_next_frame(image_index)? {
-            Ok(is_suboptimal) if is_suboptimal => {
-                self.create_swapchain(dimensions)?;
-            }
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                self.create_swapchain(dimensions)?;
-            }
-            Err(error) => bail!(error),
-            _ => {}
+        self.wait_for_in_flight_fence()?;
+        if let Some(image_index) = self.acquire_next_frame(dimensions)? {
+            self.reset_in_flight_fence()?;
+            self.record_command_buffer(image_index)?;
+            self.submit_command_buffer(image_index)?;
+            self.present_next_frame(image_index, dimensions)?;
+            self.current_frame += (1 + self.current_frame) % Self::MAX_FRAMES_IN_FLIGHT;
         }
-
-        self.current_frame += (1 + self.current_frame) % Self::MAX_FRAMES_IN_FLIGHT;
-
         Ok(())
     }
 
-    fn wait_for_frame(&self) -> Result<()> {
+    fn reset_in_flight_fence(&self) -> Result<()> {
         let device = self.context.logical_device.handle.clone();
         let in_flight_fence = self.frame_locks[self.current_frame].in_flight.handle;
         unsafe { device.reset_fences(&[in_flight_fence]) }?;
         Ok(())
     }
 
-    fn prepare_next_frame(&self) -> Result<VkResult<(u32, bool)>> {
-        let frame_lock = &self.frame_locks[self.current_frame];
+    fn wait_for_in_flight_fence(&self) -> Result<()> {
+        let device = self.context.logical_device.handle.clone();
+        let in_flight_fence = self.frame_locks[self.current_frame].in_flight.handle;
+        unsafe { device.wait_for_fences(&[in_flight_fence], true, std::u64::MAX) }?;
+        Ok(())
+    }
 
-        unsafe {
-            self.context.logical_device.handle.wait_for_fences(
-                &[frame_lock.in_flight.handle],
-                true,
-                std::u64::MAX,
-            )
-        }?;
+    fn acquire_next_frame(&mut self, dimensions: &[u32; 2]) -> Result<Option<usize>> {
+        let frame_lock = &self.frame_locks[self.current_frame];
 
         let result = self
             .forward_swapchain()?
             .swapchain
             .acquire_next_image(frame_lock.image_available.handle, vk::Fence::null());
 
-        Ok(result)
+        match result {
+            Ok((image_index, _)) => Ok(Some(image_index as usize)),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                self.create_swapchain(dimensions)?;
+                Ok(None)
+            }
+            Err(error) => bail!(error),
+        }
     }
 
-    fn present_next_frame(&self, image_index: usize) -> Result<VkResult<bool>> {
+    fn present_next_frame(&mut self, image_index: usize, dimensions: &[u32; 2]) -> Result<()> {
         let frame_lock = &self.frame_locks[self.current_frame];
 
         let device = self.context.logical_device.handle.clone();
@@ -144,7 +133,18 @@ impl Renderer {
                 .queue_present(presentation_queue, &present_info)
         };
 
-        Ok(presentation_result)
+        match presentation_result {
+            Ok(is_suboptimal) if is_suboptimal => {
+                self.create_swapchain(dimensions)?;
+            }
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                self.create_swapchain(dimensions)?;
+            }
+            Err(error) => bail!(error),
+            _ => {}
+        }
+
+        Ok(())
     }
 
     fn create_swapchain(&mut self, dimensions: &[u32; 2]) -> Result<()> {
