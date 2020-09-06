@@ -1,9 +1,7 @@
 pub use self::{
-    image::{Framebuffer, Image, ImageView},
-    renderpass::RenderPass,
+    resource::{CommandPool, Fence, Framebuffer, Image, ImageView, RenderPass, Semaphore},
     swapchain::{Swapchain, SwapchainProperties},
 };
 
-mod image;
-mod renderpass;
+mod resource;
 mod swapchain;

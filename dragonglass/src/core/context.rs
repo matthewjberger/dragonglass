@@ -100,6 +100,16 @@ impl Context {
 
         depth_format.ok_or(anyhow!("Couldn't determine the depth format!"))
     }
+
+    pub fn graphics_queue(&self) -> vk::Queue {
+        let index = self.physical_device.presentation_queue_index;
+        unsafe { self.logical_device.handle.get_device_queue(index, 0) }
+    }
+
+    pub fn presentation_queue(&self) -> vk::Queue {
+        let index = self.physical_device.presentation_queue_index;
+        unsafe { self.logical_device.handle.get_device_queue(index, 0) }
+    }
 }
 
 impl Drop for Context {

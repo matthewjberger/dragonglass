@@ -1,8 +1,7 @@
 use super::{
     core::{Context, LogicalDevice},
     forward::ForwardSwapchain,
-    render::RenderPass,
-    resource::{CommandPool, Fence, Semaphore},
+    render::{CommandPool, Fence, RenderPass, Semaphore},
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -113,8 +112,6 @@ impl RenderingDevice {
     fn present_next_frame(&mut self, image_index: usize, dimensions: &[u32; 2]) -> Result<()> {
         let frame_lock = &self.frame_locks[self.current_frame];
 
-        let device = self.context.logical_device.handle.clone();
-
         let wait_semaphores = [frame_lock.render_finished.handle];
         let swapchains = [self.forward_swapchain()?.swapchain.handle_khr];
         let image_indices = [image_index as u32];
@@ -124,14 +121,11 @@ impl RenderingDevice {
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
-        let presentation_queue_index = self.context.physical_device.presentation_queue_index;
-        let presentation_queue = unsafe { device.get_device_queue(presentation_queue_index, 0) };
-
         let presentation_result = unsafe {
             self.forward_swapchain()?
                 .swapchain
                 .handle_ash
-                .queue_present(presentation_queue, &present_info)
+                .queue_present(self.context.presentation_queue(), &present_info)
         };
 
         match presentation_result {
@@ -220,6 +214,24 @@ impl RenderingDevice {
         Ok(framebuffer)
     }
 
+    fn command_buffer_at(&self, image_index: usize) -> Result<vk::CommandBuffer> {
+        let command_buffer = *self.command_buffers.get(image_index).ok_or(anyhow!(
+            "No command buffer was found at image index: {}",
+            image_index
+        ))?;
+        Ok(command_buffer)
+    }
+
+    // fn current_frame_lock(&self) -> Result<&FrameLock> {
+    //     &self.frame_locks[self.current_frame]
+    //     let command_buffer = self.command_buffers.get(image_index).ok_or(anyhow!(
+    //         "No command buffer was found at image index: {}",
+    //         image_index
+    //     ))?;
+    //     Ok(command_buffer)
+
+    // }
+
     fn clear_values() -> Vec<vk::ClearValue> {
         let color = vk::ClearColorValue {
             float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
@@ -232,19 +244,18 @@ impl RenderingDevice {
     }
 
     fn submit_command_buffer(&self, image_index: usize) -> Result<()> {
-        let frame_lock = &self.frame_locks[self.current_frame];
-
-        let device = self.context.logical_device.handle.clone();
-
-        let command_buffer = *self.command_buffers.get(image_index).ok_or(anyhow!(
-            "No command buffer was found at image index: {}",
-            image_index
-        ))?;
-
+        let (image_available, render_finished, in_flight) = {
+            let lock = &self.frame_locks[self.current_frame];
+            (
+                lock.image_available.handle,
+                lock.render_finished.handle,
+                lock.in_flight.handle,
+            )
+        };
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let image_available_semaphores = [frame_lock.image_available.handle];
-        let wait_semaphores = [frame_lock.render_finished.handle];
-        let command_buffers = [command_buffer];
+        let image_available_semaphores = [image_available];
+        let wait_semaphores = [render_finished];
+        let command_buffers = [self.command_buffer_at(image_index)?];
 
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(&image_available_semaphores)
@@ -252,14 +263,11 @@ impl RenderingDevice {
             .command_buffers(&command_buffers)
             .signal_semaphores(&wait_semaphores);
 
-        let graphics_queue_index = self.context.physical_device.graphics_queue_index;
-        let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index, 0) };
-
         unsafe {
-            device.queue_submit(
-                graphics_queue,
+            self.context.logical_device.handle.queue_submit(
+                self.context.graphics_queue(),
                 &[submit_info.build()],
-                frame_lock.in_flight.handle,
+                in_flight,
             )
         }?;
 
