@@ -8,7 +8,7 @@ use ash::{version::DeviceV1_0, vk};
 use raw_window_handle::RawWindowHandle;
 use std::sync::Arc;
 
-pub struct Renderer {
+pub struct VulkanBackend {
     current_frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -17,7 +17,7 @@ pub struct Renderer {
     context: Arc<Context>,
 }
 
-impl Renderer {
+impl VulkanBackend {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new(raw_window_handle: &RawWindowHandle, dimensions: &[u32; 2]) -> Result<Self> {

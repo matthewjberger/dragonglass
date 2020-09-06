@@ -1,6 +1,6 @@
 use crate::{input::Input, settings::Settings, system::System};
 use anyhow::Result;
-use dragonglass::Renderer;
+use dragonglass::VulkanBackend;
 use log::info;
 use raw_window_handle::HasRawWindowHandle;
 use winit::{
@@ -15,7 +15,7 @@ pub struct App {
     input: Input,
     system: System,
     _window: Window,
-    renderer: Renderer,
+    renderer_backend: VulkanBackend,
     event_loop: EventLoop<()>,
 }
 
@@ -33,14 +33,14 @@ impl App {
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let renderer = Renderer::new(&window.raw_window_handle(), &window_dimensions)?;
+        let renderer_backend = VulkanBackend::new(&window.raw_window_handle(), &window_dimensions)?;
 
         let app = Self {
             _settings: settings,
             input: Input::default(),
             system: System::new(window_dimensions),
             _window: window,
-            renderer,
+            renderer_backend,
             event_loop,
         };
 
@@ -51,7 +51,7 @@ impl App {
         let Self {
             mut input,
             mut system,
-            mut renderer,
+            mut renderer_backend,
             event_loop,
             ..
         } = self;
@@ -68,7 +68,7 @@ impl App {
             }
 
             if let Event::MainEventsCleared = event {
-                renderer
+                renderer_backend
                     .render(&system.window_dimensions)
                     .expect("Failed to render a frame!");
             }
