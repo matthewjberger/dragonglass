@@ -1,7 +1,7 @@
-pub use self::backend::VulkanBackend;
+pub use self::device::RenderingDevice;
 
-mod backend;
 mod core;
+mod device;
 mod forward;
 mod render;
 mod resource;
