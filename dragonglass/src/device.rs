@@ -149,6 +149,10 @@ impl RenderingDevice {
     }
 
     fn create_swapchain(&mut self, dimensions: &[u32; 2]) -> Result<()> {
+        if dimensions[0] <= 0 || dimensions[1] <= 0 {
+            return Ok(());
+        }
+
         unsafe { self.context.logical_device.handle.device_wait_idle() }?;
 
         self.forward_swapchain = None;

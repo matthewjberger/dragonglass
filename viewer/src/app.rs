@@ -62,7 +62,7 @@ impl App {
             system.handle_event(&event);
             input.handle_event(&event, system.window_center());
 
-            if input.is_key_pressed(VirtualKeyCode::Escape) {
+            if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
                 *control_flow = ControlFlow::Exit;
             }
 
