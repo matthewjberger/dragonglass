@@ -10,8 +10,8 @@ use std::{
 };
 
 pub struct Shader {
+    pub module: vk::ShaderModule,
     device: Arc<LogicalDevice>,
-    module: vk::ShaderModule,
 }
 
 impl Shader {
@@ -22,7 +22,7 @@ impl Shader {
         create_info: vk::ShaderModuleCreateInfoBuilder,
     ) -> Result<Self> {
         let module = unsafe { device.handle.create_shader_module(&create_info, None)? };
-        let shader = Self { device, module };
+        let shader = Self { module, device };
         Ok(shader)
     }
 
@@ -59,6 +59,13 @@ pub struct ShaderSet {
     pub tessellation_control: Option<Arc<Shader>>,
     pub compute: Option<Arc<Shader>>,
 }
+
+// impl ShaderSet {
+//     pub fn state_info_vec() -> Result<Vec<vk::PipelineShaderStageCreateInfo>> {
+//         let mut stage_info_vec = Vec::new();
+//         Ok(stage_info_vec)
+//     }
+// }
 
 #[derive(Builder, Clone, Default)]
 #[builder(default, setter(into, strip_option))]

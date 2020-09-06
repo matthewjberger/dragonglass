@@ -112,15 +112,13 @@ impl GraphicsPipeline {
         device: Arc<LogicalDevice>,
         settings: GraphicsPipelineSettings,
     ) -> Result<(Self, PipelineLayout)> {
-        // let shader_state_info = vec![
-        //     settings.shader_set.vertex_shader.state_info(),
-        //     settings
-        //         .shader_set
-        //         .fragment_shader
-        //         .as_ref()
-        //         .expect("Failed to lookup fragment shader!")
-        //         .state_info(),
+        // let mut shader_state_info = vec![
+        //     settings.shader_set.vertex.as_ref().state_info(),
+        //     settings.shader_set.fragment.as_ref()?.state_info(),
         // ];
+
+
+        if settings.shader_set
 
         let input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)

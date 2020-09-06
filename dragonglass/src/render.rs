@@ -5,7 +5,7 @@ pub use self::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,
     },
     renderpass::RenderPass,
-    shader::{Shader, ShaderSet},
+    shader::{Shader, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, ShaderSet},
     swapchain::{Swapchain, SwapchainProperties},
 };
 

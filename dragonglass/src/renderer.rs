@@ -3,6 +3,7 @@ use super::{
     forward::ForwardSwapchain,
     render::{
         DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettingsBuilder, PipelineLayout,
+        ShaderCache, ShaderPathSetBuilder,
     },
     resource::{CommandPool, Fence, Semaphore},
 };
@@ -59,6 +60,17 @@ impl Renderer {
                 .allocate_command_buffers(&allocate_info)
         }?;
 
+        let mut shader_cache = ShaderCache::default();
+
+        let shader_paths = ShaderPathSetBuilder::default()
+            .vertex("assets/shaders/triangle/triangle.vert.spv")
+            .fragment("assets/shaders/triangle/triangle.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+
+        let shader_set =
+            shader_cache.create_shader_set(context.logical_device.clone(), &shader_paths)?;
+
         let descriptor_set_layout_create_info =
             vk::DescriptorSetLayoutCreateInfo::builder().build();
         let descriptor_set_layout = DescriptorSetLayout::new(
@@ -70,6 +82,7 @@ impl Renderer {
         let pipeline_settings = GraphicsPipelineSettingsBuilder::default()
             .render_pass(forward_swapchain.render_pass.clone())
             .vertex_state_info(vk::PipelineVertexInputStateCreateInfo::builder().build())
+            .shader_set(Arc::new(shader_set))
             .descriptor_set_layout(descriptor_set_layout.clone())
             .build()
             .map_err(|error| anyhow!("{}", error))?;
