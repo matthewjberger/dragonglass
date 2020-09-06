@@ -1,11 +1,12 @@
 use super::{
     core::{Context, LogicalDevice},
     forward::ForwardSwapchain,
+    render::RenderPass,
     resource::{CommandPool, Fence, Semaphore},
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{version::DeviceV1_0, vk};
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
@@ -20,8 +21,8 @@ pub struct RenderingDevice {
 impl RenderingDevice {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new(raw_window_handle: &RawWindowHandle, dimensions: &[u32; 2]) -> Result<Self> {
-        let context = Arc::new(Context::new(&raw_window_handle)?);
+    pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
+        let context = Arc::new(Context::new(window_handle)?);
 
         let frame_locks = (0..Self::MAX_FRAMES_IN_FLIGHT)
             .into_iter()
@@ -157,65 +158,73 @@ impl RenderingDevice {
     }
 
     fn record_command_buffer(&mut self, image_index: usize) -> Result<()> {
-        let forward_swapchain = self.forward_swapchain()?;
-
-        let extent = forward_swapchain.swapchain_properties.extent;
-
-        let clear_values = [
-            vk::ClearValue {
-                color: vk::ClearColorValue {
-                    // Cornflower blue
-                    float32: [0.39, 0.58, 0.93, 1.0],
-                },
-            },
-            vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            },
-        ];
-
         let command_buffer = *self.command_buffers.get(image_index).ok_or(anyhow!(
             "No command buffer was found for the forward swapchain at image index: {}",
             image_index
         ))?;
 
-        let framebuffer = forward_swapchain
+        self.context.logical_device.clone().record_command_buffer(
+            command_buffer,
+            vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+            || {
+                self.record_render_pass(command_buffer, image_index)?;
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    fn record_render_pass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        let clear_values = Self::clear_values();
+        let begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(self.forward_swapchain()?.render_pass.handle)
+            .framebuffer(self.framebuffer_at(image_index)?)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: self.forward_swapchain()?.swapchain_properties.extent,
+            })
+            .clear_values(&clear_values);
+
+        RenderPass::record(
+            self.context.logical_device.clone(),
+            command_buffer,
+            begin_info,
+            || {
+                // TODO: render stuff
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    fn framebuffer_at(&self, image_index: usize) -> Result<vk::Framebuffer> {
+        let framebuffer = self
+            .forward_swapchain()?
             .framebuffers
             .get(image_index)
             .ok_or(anyhow!(
                 "No framebuffer was found for the forward swapchain at image index: {}",
                 image_index
-            ))?;
+            ))?
+            .handle;
+        Ok(framebuffer)
+    }
 
-        let begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE);
-        let device = self.context.logical_device.handle.clone();
-        unsafe { device.begin_command_buffer(command_buffer, &begin_info) }?;
-
-        let begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(forward_swapchain.render_pass.handle)
-            .framebuffer(framebuffer.handle)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .clear_values(&clear_values);
-
-        unsafe {
-            device.cmd_begin_render_pass(command_buffer, &begin_info, vk::SubpassContents::INLINE)
+    fn clear_values() -> Vec<vk::ClearValue> {
+        let color = vk::ClearColorValue {
+            float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
         };
-
-        // TODO: Render stuff
-
-        unsafe {
-            device.cmd_end_render_pass(command_buffer);
-        }
-
-        unsafe { device.end_command_buffer(command_buffer) }?;
-
-        Ok(())
+        let depth_stencil = vk::ClearDepthStencilValue {
+            depth: 1.0,
+            stencil: 0,
+        };
+        vec![vk::ClearValue { color }, vk::ClearValue { depth_stencil }]
     }
 
     fn submit_command_buffer(&self, image_index: usize) -> Result<()> {

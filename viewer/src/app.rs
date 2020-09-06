@@ -2,7 +2,6 @@ use crate::{input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
 use log::info;
-use raw_window_handle::HasRawWindowHandle;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode},
@@ -33,8 +32,7 @@ impl App {
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let rendering_device =
-            RenderingDevice::new(&window.raw_window_handle(), &window_dimensions)?;
+        let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
 
         let app = Self {
             _settings: settings,

@@ -74,6 +74,22 @@ impl LogicalDevice {
             })
             .collect::<Vec<_>>()
     }
+
+    pub fn record_command_buffer<T>(
+        &self,
+        buffer: vk::CommandBuffer,
+        usage: vk::CommandBufferUsageFlags,
+        mut action: T,
+    ) -> Result<()>
+    where
+        T: FnMut() -> Result<()>,
+    {
+        let begin_info = vk::CommandBufferBeginInfo::builder().flags(usage);
+        unsafe { self.handle.begin_command_buffer(buffer, &begin_info) }?;
+        action()?;
+        unsafe { self.handle.end_command_buffer(buffer) }?;
+        Ok(())
+    }
 }
 
 impl Drop for LogicalDevice {

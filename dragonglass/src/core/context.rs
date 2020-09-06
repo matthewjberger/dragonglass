@@ -5,7 +5,7 @@ use ash::{
     vk,
 };
 use log::info;
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
 
@@ -23,10 +23,10 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(raw_window_handle: &RawWindowHandle) -> Result<Self> {
+    pub fn new<T: HasRawWindowHandle>(window_handle: &T) -> Result<Self> {
         let entry = ash::Entry::new()?;
-        let instance = Instance::new(&entry)?;
-        let surface = Surface::new(&entry, &instance.handle, &raw_window_handle)?;
+        let instance = Instance::new(&entry, window_handle)?;
+        let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
         let debug_layer = if DebugLayer::enabled() {
             info!("Loading debug layer");

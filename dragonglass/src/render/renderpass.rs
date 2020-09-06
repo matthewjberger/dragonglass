@@ -14,6 +14,30 @@ impl RenderPass {
         let render_pass = Self { handle, device };
         Ok(render_pass)
     }
+
+    pub fn record<T>(
+        device: Arc<LogicalDevice>,
+        buffer: vk::CommandBuffer,
+        begin_info: vk::RenderPassBeginInfoBuilder,
+        mut action: T,
+    ) -> Result<()>
+    where
+        T: FnMut() -> Result<()>,
+    {
+        unsafe {
+            device
+                .handle
+                .cmd_begin_render_pass(buffer, &begin_info, vk::SubpassContents::INLINE)
+        };
+
+        action()?;
+
+        unsafe {
+            device.handle.cmd_end_render_pass(buffer);
+        }
+
+        Ok(())
+    }
 }
 
 impl Drop for RenderPass {
