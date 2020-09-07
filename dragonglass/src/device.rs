@@ -12,7 +12,7 @@ pub struct RenderingDevice {
     frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
-    command_pool: CommandPool,
+    _command_pool: CommandPool,
     forward_swapchain: Option<ForwardSwapchain>,
     context: Arc<Context>,
 }
@@ -28,15 +28,18 @@ impl RenderingDevice {
             context.physical_device.graphics_queue_index,
         )?;
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
-        let mut renderer = Self {
+        let command_buffers = command_pool.allocate_command_buffers(
+            forward_swapchain.framebuffers.len() as _,
+            vk::CommandBufferLevel::PRIMARY,
+        )?;
+        let renderer = Self {
             frame: 0,
             frame_locks,
-            command_buffers: Vec::new(),
-            command_pool,
+            command_buffers,
+            _command_pool: command_pool,
             forward_swapchain: Some(forward_swapchain),
             context,
         };
-        renderer.allocate_command_buffers()?;
         Ok(renderer)
     }
 
@@ -53,15 +56,6 @@ impl RenderingDevice {
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
         let command_pool = CommandPool::new(device, create_info)?;
         Ok(command_pool)
-    }
-
-    fn allocate_command_buffers(&mut self) -> Result<()> {
-        let allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(self.command_pool.handle)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(self.forward_swapchain()?.framebuffers.len() as _);
-        self.command_buffers = unsafe { self.device().allocate_command_buffers(&allocate_info) }?;
-        Ok(())
     }
 
     fn forward_swapchain(&self) -> Result<&ForwardSwapchain> {

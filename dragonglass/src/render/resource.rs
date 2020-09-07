@@ -147,6 +147,20 @@ impl CommandPool {
         let command_pool = Self { handle, device };
         Ok(command_pool)
     }
+
+    pub fn allocate_command_buffers(
+        &self,
+        count: u32,
+        level: vk::CommandBufferLevel,
+    ) -> Result<Vec<vk::CommandBuffer>> {
+        let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(self.handle)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(count);
+        let command_buffers =
+            unsafe { self.device.handle.allocate_command_buffers(&allocate_info) }?;
+        Ok(command_buffers)
+    }
 }
 
 impl Drop for CommandPool {
