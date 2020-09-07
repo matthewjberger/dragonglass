@@ -4,15 +4,15 @@ use super::{
     render::{CommandPool, Fence, RenderPass, Semaphore},
 };
 use anyhow::{anyhow, bail, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
-    current_frame: usize,
+    frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
-    _command_pool: CommandPool,
+    command_pool: CommandPool,
     forward_swapchain: Option<ForwardSwapchain>,
     context: Arc<Context>,
 }
@@ -22,41 +22,46 @@ impl RenderingDevice {
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
-
-        let frame_locks = (0..Self::MAX_FRAMES_IN_FLIGHT)
-            .into_iter()
-            .map(|_| FrameLock::new(context.logical_device.clone()))
-            .collect::<Result<Vec<FrameLock>, anyhow::Error>>()?;
-
-        let create_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(context.physical_device.graphics_queue_index)
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
-        let command_pool = CommandPool::new(context.logical_device.clone(), create_info)?;
-
+        let frame_locks = Self::create_frame_locks(context.logical_device.clone())?;
+        let command_pool = Self::create_command_pool(
+            context.logical_device.clone(),
+            context.physical_device.graphics_queue_index,
+        )?;
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
-
-        let allocate_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(command_pool.handle)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(forward_swapchain.framebuffers.len() as _);
-
-        let command_buffers = unsafe {
-            context
-                .logical_device
-                .handle
-                .allocate_command_buffers(&allocate_info)
-        }?;
-
-        let renderer = Self {
-            current_frame: 0,
+        let mut renderer = Self {
+            frame: 0,
             frame_locks,
-            command_buffers,
-            _command_pool: command_pool,
+            command_buffers: Vec::new(),
+            command_pool,
             forward_swapchain: Some(forward_swapchain),
             context,
         };
-
+        renderer.allocate_command_buffers()?;
         Ok(renderer)
+    }
+
+    fn create_frame_locks(device: Arc<LogicalDevice>) -> Result<Vec<FrameLock>> {
+        (0..Self::MAX_FRAMES_IN_FLIGHT)
+            .into_iter()
+            .map(|_| FrameLock::new(device.clone()))
+            .collect()
+    }
+
+    fn create_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
+        let create_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(queue_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+        let command_pool = CommandPool::new(device, create_info)?;
+        Ok(command_pool)
+    }
+
+    fn allocate_command_buffers(&mut self) -> Result<()> {
+        let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(self.command_pool.handle)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(self.forward_swapchain()?.framebuffers.len() as _);
+        self.command_buffers = unsafe { self.device().allocate_command_buffers(&allocate_info) }?;
+        Ok(())
     }
 
     fn forward_swapchain(&self) -> Result<&ForwardSwapchain> {
@@ -65,39 +70,40 @@ impl RenderingDevice {
             .ok_or(anyhow!("No forward swapchain was available for rendering!"))
     }
 
+    fn device(&self) -> ash::Device {
+        self.context.logical_device.handle.clone()
+    }
+
     pub fn render(&mut self, dimensions: &[u32; 2]) -> Result<()> {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
-            self.present_next_frame(image_index, dimensions)?;
-            self.current_frame = (1 + self.current_frame) % Self::MAX_FRAMES_IN_FLIGHT;
+            let result = self.present_next_frame(image_index)?;
+            self.check_presentation_result(result, dimensions)?;
+            self.frame = (1 + self.frame) % Self::MAX_FRAMES_IN_FLIGHT;
         }
         Ok(())
     }
 
     fn reset_in_flight_fence(&self) -> Result<()> {
-        let device = self.context.logical_device.handle.clone();
-        let in_flight_fence = self.frame_locks[self.current_frame].in_flight.handle;
-        unsafe { device.reset_fences(&[in_flight_fence]) }?;
+        let in_flight_fence = self.frame_lock()?.in_flight.handle;
+        unsafe { self.device().reset_fences(&[in_flight_fence]) }?;
         Ok(())
     }
 
     fn wait_for_in_flight_fence(&self) -> Result<()> {
-        let device = self.context.logical_device.handle.clone();
-        let in_flight_fence = self.frame_locks[self.current_frame].in_flight.handle;
-        unsafe { device.wait_for_fences(&[in_flight_fence], true, std::u64::MAX) }?;
+        let fence = self.frame_lock()?.in_flight.handle;
+        unsafe { self.device().wait_for_fences(&[fence], true, std::u64::MAX) }?;
         Ok(())
     }
 
     fn acquire_next_frame(&mut self, dimensions: &[u32; 2]) -> Result<Option<usize>> {
-        let frame_lock = &self.frame_locks[self.current_frame];
-
         let result = self
             .forward_swapchain()?
             .swapchain
-            .acquire_next_image(frame_lock.image_available.handle, vk::Fence::null());
+            .acquire_next_image(self.frame_lock()?.image_available.handle, vk::Fence::null());
 
         match result {
             Ok((image_index, _)) => Ok(Some(image_index as usize)),
@@ -109,10 +115,8 @@ impl RenderingDevice {
         }
     }
 
-    fn present_next_frame(&mut self, image_index: usize, dimensions: &[u32; 2]) -> Result<()> {
-        let frame_lock = &self.frame_locks[self.current_frame];
-
-        let wait_semaphores = [frame_lock.render_finished.handle];
+    fn present_next_frame(&mut self, image_index: usize) -> Result<VkResult<bool>> {
+        let wait_semaphores = [self.frame_lock()?.render_finished.handle];
         let swapchains = [self.forward_swapchain()?.swapchain.handle_khr];
         let image_indices = [image_index as u32];
 
@@ -128,6 +132,14 @@ impl RenderingDevice {
                 .queue_present(self.context.presentation_queue(), &present_info)
         };
 
+        Ok(presentation_result)
+    }
+
+    fn check_presentation_result(
+        &mut self,
+        presentation_result: VkResult<bool>,
+        dimensions: &[u32; 2],
+    ) -> Result<()> {
         match presentation_result {
             Ok(is_suboptimal) if is_suboptimal => {
                 self.create_swapchain(dimensions)?;
@@ -137,8 +149,7 @@ impl RenderingDevice {
             }
             Err(error) => bail!(error),
             _ => {}
-        }
-
+        };
         Ok(())
     }
 
@@ -222,15 +233,13 @@ impl RenderingDevice {
         Ok(command_buffer)
     }
 
-    // fn current_frame_lock(&self) -> Result<&FrameLock> {
-    //     &self.frame_locks[self.current_frame]
-    //     let command_buffer = self.command_buffers.get(image_index).ok_or(anyhow!(
-    //         "No command buffer was found at image index: {}",
-    //         image_index
-    //     ))?;
-    //     Ok(command_buffer)
-
-    // }
+    fn frame_lock(&self) -> Result<&FrameLock> {
+        let lock = &self.frame_locks.get(self.frame).ok_or(anyhow!(
+            "No frame lock was found at frame index: {}",
+            self.frame,
+        ))?;
+        Ok(lock)
+    }
 
     fn clear_values() -> Vec<vk::ClearValue> {
         let color = vk::ClearColorValue {
@@ -244,22 +253,14 @@ impl RenderingDevice {
     }
 
     fn submit_command_buffer(&self, image_index: usize) -> Result<()> {
-        let (image_available, render_finished, in_flight) = {
-            let lock = &self.frame_locks[self.current_frame];
-            (
-                lock.image_available.handle,
-                lock.render_finished.handle,
-                lock.in_flight.handle,
-            )
-        };
-        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let image_available_semaphores = [image_available];
-        let wait_semaphores = [render_finished];
+        let lock = self.frame_lock()?;
+        let image_available_semaphores = [lock.image_available.handle];
+        let wait_semaphores = [lock.render_finished.handle];
         let command_buffers = [self.command_buffer_at(image_index)?];
 
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(&image_available_semaphores)
-            .wait_dst_stage_mask(&wait_stages)
+            .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
             .command_buffers(&command_buffers)
             .signal_semaphores(&wait_semaphores);
 
@@ -267,7 +268,7 @@ impl RenderingDevice {
             self.context.logical_device.handle.queue_submit(
                 self.context.graphics_queue(),
                 &[submit_info.build()],
-                in_flight,
+                lock.in_flight.handle,
             )
         }?;
 
