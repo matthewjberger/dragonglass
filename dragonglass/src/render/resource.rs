@@ -1,6 +1,7 @@
 use crate::core::LogicalDevice;
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
+use log::error;
 use std::sync::Arc;
 use vk_mem::Allocator;
 
@@ -81,9 +82,9 @@ impl Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        self.allocator
-            .destroy_image(self.handle, &self.allocation)
-            .expect("Failed to destroy image!");
+        if let Err(error) = self.allocator.destroy_image(self.handle, &self.allocation) {
+            error!("{}", error);
+        }
     }
 }
 

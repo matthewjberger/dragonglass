@@ -4,7 +4,7 @@ use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
-use log::info;
+use log::{error, info};
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
@@ -115,10 +115,9 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe {
-            self.logical_device
-                .handle
-                .device_wait_idle()
-                .expect("Failed to wait for the logical device to idle when dropping the context!")
+            if let Err(error) = self.logical_device.handle.device_wait_idle() {
+                error!("{}", error);
+            }
         }
     }
 }
