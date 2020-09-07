@@ -155,7 +155,7 @@ impl CommandPool {
     ) -> Result<Vec<vk::CommandBuffer>> {
         let allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(self.handle)
-            .level(vk::CommandBufferLevel::PRIMARY)
+            .level(level)
             .command_buffer_count(count);
         let command_buffers =
             unsafe { self.device.handle.allocate_command_buffers(&allocate_info) }?;
