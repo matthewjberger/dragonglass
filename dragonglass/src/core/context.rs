@@ -1,9 +1,11 @@
-use super::{debug::DebugLayer, Instance, LogicalDevice, PhysicalDevice, Surface};
+use super::{debug::DebugLayer, Instance, LogicalDevice, PhysicalDevice};
 use anyhow::{anyhow, Result};
 use ash::{
+    extensions::khr::Surface as AshSurface,
     version::{DeviceV1_0, InstanceV1_0},
-    vk,
+    vk::{self, SurfaceKHR},
 };
+use ash_window::create_surface;
 use log::{error, info};
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
@@ -116,6 +118,35 @@ impl Drop for Context {
             if let Err(error) = self.logical_device.handle.device_wait_idle() {
                 error!("{}", error);
             }
+        }
+    }
+}
+
+pub struct Surface {
+    pub handle_ash: AshSurface,
+    pub handle_khr: SurfaceKHR,
+}
+
+impl Surface {
+    pub fn new<T: HasRawWindowHandle>(
+        entry: &ash::Entry,
+        instance: &ash::Instance,
+        window_handle: &T,
+    ) -> Result<Self> {
+        let handle_ash = AshSurface::new(entry, instance);
+        let handle_khr = unsafe { create_surface(entry, instance, window_handle, None) }?;
+        let surface = Self {
+            handle_ash,
+            handle_khr,
+        };
+        Ok(surface)
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        unsafe {
+            self.handle_ash.destroy_surface(self.handle_khr, None);
         }
     }
 }
