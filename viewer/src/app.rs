@@ -1,7 +1,7 @@
 use crate::{input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use log::info;
+use log::{error, info};
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode},
@@ -67,9 +67,9 @@ impl App {
             }
 
             if let Event::MainEventsCleared = event {
-                rendering_device
-                    .render(&system.window_dimensions)
-                    .expect("Failed to render a frame!");
+                if let Err(error) = rendering_device.render(&system.window_dimensions) {
+                    error!("{}", error);
+                }
             }
         });
     }
