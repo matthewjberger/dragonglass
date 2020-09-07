@@ -27,35 +27,19 @@ impl ForwardSwapchain {
 
         let (swapchain, swapchain_properties) = context.create_swapchain(dimensions)?;
 
-        let render_pass = Self::create_render_pass(
-            context.logical_device.clone(),
-            swapchain_properties.surface_format.format,
-            depth_format,
-        )?;
+        let device = context.logical_device.clone();
+        let surface_format = swapchain_properties.surface_format.format;
+        let render_pass = Self::create_render_pass(device.clone(), surface_format, depth_format)?;
 
-        let depth_image = Self::create_depth_image(
-            context.allocator.clone(),
-            swapchain_properties.extent,
-            depth_format,
-        )?;
+        let allocator = context.allocator.clone();
+        let extent = swapchain_properties.extent;
+        let depth_image = Self::create_depth_image(allocator.clone(), extent, depth_format)?;
+        let depth_image_view =
+            Self::create_depth_image_view(device.clone(), &depth_image, depth_format)?;
 
-        let depth_image_view = Self::create_depth_image_view(
-            context.logical_device.clone(),
-            &depth_image,
-            depth_format,
-        )?;
-
-        let color_image = Self::create_color_image(
-            context.allocator.clone(),
-            swapchain_properties.extent,
-            swapchain_properties.surface_format.format,
-        )?;
-
-        let color_image_view = Self::create_color_image_view(
-            context.logical_device.clone(),
-            &color_image,
-            swapchain_properties.surface_format.format,
-        )?;
+        let color_image = Self::create_color_image(allocator.clone(), extent, surface_format)?;
+        let color_image_view =
+            Self::create_color_image_view(device.clone(), &color_image, surface_format)?;
 
         let framebuffers = swapchain
             .images
