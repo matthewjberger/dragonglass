@@ -50,13 +50,13 @@ impl Instance {
     }
 
     fn extensions<T: HasRawWindowHandle>(window_handle: &T) -> Result<Vec<*const i8>> {
-        let mut extensions = vec![ash::extensions::khr::Surface::name().as_ptr()];
+        let mut extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
+            .iter()
+            .map(|extension| extension.as_ptr())
+            .collect();
         if DebugLayer::enabled() {
             extensions.push(DebugLayer::extension_name().as_ptr());
         }
-        enumerate_required_extensions(window_handle)?
-            .iter()
-            .for_each(|extension_name| extensions.push(extension_name.as_ptr()));
         Ok(extensions)
     }
 
