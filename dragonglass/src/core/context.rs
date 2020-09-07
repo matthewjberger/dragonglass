@@ -34,10 +34,8 @@ impl Context {
         } else {
             None
         };
-        let logical_device = Arc::new(LogicalDevice::from_physical(
-            &instance.handle,
-            &physical_device,
-        )?);
+        let logical_device = LogicalDevice::from_physical(&instance.handle, &physical_device)?;
+        let logical_device = Arc::new(logical_device);
 
         let allocator_create_info = AllocatorCreateInfo {
             device: logical_device.handle.clone(),
