@@ -6,7 +6,7 @@ use ash::{
     vk::{self, SurfaceKHR},
 };
 use ash_window::create_surface;
-use log::{error, info};
+use log::info;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
@@ -109,16 +109,6 @@ impl Context {
     pub fn presentation_queue(&self) -> vk::Queue {
         let index = self.physical_device.presentation_queue_index;
         unsafe { self.logical_device.handle.get_device_queue(index, 0) }
-    }
-}
-
-impl Drop for Context {
-    fn drop(&mut self) {
-        unsafe {
-            if let Err(error) = self.logical_device.handle.device_wait_idle() {
-                error!("{}", error);
-            }
-        }
     }
 }
 

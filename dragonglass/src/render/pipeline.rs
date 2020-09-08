@@ -13,12 +13,12 @@ pub struct GraphicsPipeline {
 impl GraphicsPipeline {
     pub fn new(
         device: Arc<LogicalDevice>,
-        create_info: vk::GraphicsPipelineCreateInfo,
+        create_info: vk::GraphicsPipelineCreateInfoBuilder,
     ) -> Result<Self> {
         let handle = unsafe {
             let result = device.handle.create_graphics_pipelines(
                 vk::PipelineCache::null(),
-                &[create_info],
+                &[create_info.build()],
                 None,
             );
             match result {
@@ -112,15 +112,7 @@ impl GraphicsPipeline {
         device: Arc<LogicalDevice>,
         settings: GraphicsPipelineSettings,
     ) -> Result<(Self, PipelineLayout)> {
-        // let shader_state_info = vec![
-        //     settings.shader_set.vertex_shader.state_info(),
-        //     settings
-        //         .shader_set
-        //         .fragment_shader
-        //         .as_ref()
-        //         .expect("Failed to lookup fragment shader!")
-        //         .state_info(),
-        // ];
+        let stages = settings.shader_set.stages()?;
 
         let input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
@@ -180,7 +172,7 @@ impl GraphicsPipeline {
             .dynamic_states(&dynamic_states);
 
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
-            // .stages(&shader_state_info) // TODO: USE SHADER STAGES
+            .stages(&stages)
             .vertex_input_state(&settings.vertex_state_info)
             .input_assembly_state(&input_assembly_create_info)
             .rasterization_state(&rasterizer_create_info)
@@ -193,7 +185,7 @@ impl GraphicsPipeline {
             .render_pass(settings.render_pass.handle)
             .subpass(0);
 
-        let pipeline = Self::new(device, *pipeline_create_info)?;
+        let pipeline = Self::new(device, pipeline_create_info)?;
 
         Ok((pipeline, pipeline_layout))
     }

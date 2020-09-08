@@ -10,35 +10,28 @@ use std::{
 };
 
 pub struct Shader {
+    pub module: vk::ShaderModule,
     device: Arc<LogicalDevice>,
-    module: vk::ShaderModule,
 }
 
 impl Shader {
-    pub const SHADER_ENTRY_POINT_NAME: &'static str = "main";
-
     pub fn new(
         device: Arc<LogicalDevice>,
         create_info: vk::ShaderModuleCreateInfoBuilder,
     ) -> Result<Self> {
         let module = unsafe { device.handle.create_shader_module(&create_info, None)? };
-        let shader = Self { device, module };
+        let shader = Self { module, device };
         Ok(shader)
     }
 
     pub fn from_file<P: AsRef<Path> + Into<PathBuf>>(
         path: P,
-        flags: vk::ShaderStageFlags,
         device: Arc<LogicalDevice>,
     ) -> Result<Self> {
         let mut shader_file = std::fs::File::open(path)?;
         let shader_source = ash::util::read_spv(&mut shader_file)?;
         let create_info = vk::ShaderModuleCreateInfo::builder().code(&shader_source);
         Self::new(device.clone(), create_info)
-    }
-
-    pub fn entry_point_name() -> Result<&'static CStr> {
-        Ok(CStr::from_bytes_with_nul(b"main")?)
     }
 }
 
@@ -58,6 +51,37 @@ pub struct ShaderSet {
     pub tessellation_evaluation: Option<Arc<Shader>>,
     pub tessellation_control: Option<Arc<Shader>>,
     pub compute: Option<Arc<Shader>>,
+}
+
+impl ShaderSet {
+    pub fn entry_point_name() -> Result<&'static CStr> {
+        Ok(CStr::from_bytes_with_nul(b"main\0")?)
+    }
+
+    // TODO: Use a macro to fill this out
+    pub fn stages(&self) -> Result<Vec<vk::PipelineShaderStageCreateInfo>> {
+        let mut state_info_vec = Vec::new();
+
+        if let Some(vertex_shader) = self.vertex.as_ref() {
+            let state_info = vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::VERTEX)
+                .module(vertex_shader.module)
+                .name(Self::entry_point_name()?)
+                .build();
+            state_info_vec.push(state_info);
+        }
+
+        if let Some(fragment_shader) = self.fragment.as_ref() {
+            let state_info = vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::FRAGMENT)
+                .module(fragment_shader.module)
+                .name(Self::entry_point_name()?)
+                .build();
+            state_info_vec.push(state_info);
+        }
+
+        Ok(state_info_vec)
+    }
 }
 
 #[derive(Builder, Clone, Default)]
@@ -80,7 +104,6 @@ impl ShaderCache {
     pub fn load_shader<P: AsRef<Path> + Into<PathBuf>>(
         &mut self,
         path: P,
-        stage_flags: vk::ShaderStageFlags,
         device: Arc<LogicalDevice>,
     ) -> Result<Arc<Shader>> {
         let shader_path = path
@@ -91,14 +114,14 @@ impl ShaderCache {
         let shader = self
             .shaders
             .entry(shader_path)
-            .or_insert(Arc::new(Shader::from_file(path, stage_flags, device)?))
+            .or_insert(Arc::new(Shader::from_file(path, device)?))
             .clone();
         Ok(shader)
     }
 }
 
 macro_rules! impl_create_shader_set {
-    ($( $field:ident:$stage:ident ),*) => {
+    ($( $field:ident ),*) => {
         impl ShaderCache {
             pub fn create_shader_set(
                 &mut self,
@@ -110,7 +133,6 @@ macro_rules! impl_create_shader_set {
                     if let Some(shader_path) = shader_paths.$field.as_ref() {
                         let shader = self.load_shader(
                             &shader_path,
-                            vk::ShaderStageFlags::$stage,
                             device.clone(),
                         )?;
                         shader_set.$field = Some(shader);
@@ -123,10 +145,10 @@ macro_rules! impl_create_shader_set {
 }
 
 impl_create_shader_set!(
-    vertex: VERTEX,
-    fragment: FRAGMENT,
-    geometry: GEOMETRY,
-    tessellation_control: TESSELLATION_CONTROL,
-    tessellation_evaluation: TESSELLATION_EVALUATION,
-    compute: COMPUTE
+    vertex,
+    fragment,
+    geometry,
+    tessellation_control,
+    tessellation_evaluation,
+    compute
 );

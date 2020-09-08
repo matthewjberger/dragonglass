@@ -1,14 +1,20 @@
 use super::{
     core::{Context, LogicalDevice},
     forward::ForwardSwapchain,
-    render::{CommandPool, Fence, RenderPass, Semaphore},
+    render::{
+        CommandPool, DescriptorSetLayout, Fence, GraphicsPipeline, GraphicsPipelineSettingsBuilder,
+        PipelineLayout, RenderPass, Semaphore, ShaderCache, ShaderPathSetBuilder,
+    },
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
+use log::error;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
+    triangle: Option<TriangleRendering>,
+    shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -32,7 +38,15 @@ impl RenderingDevice {
             forward_swapchain.framebuffers.len() as _,
             vk::CommandBufferLevel::PRIMARY,
         )?;
+        let mut shader_cache = ShaderCache::default();
+        let triangle = TriangleRendering::new(
+            context.logical_device.clone(),
+            forward_swapchain.render_pass.clone(),
+            &mut shader_cache,
+        )?;
         let renderer = Self {
+            triangle: Some(triangle),
+            shader_cache,
             frame: 0,
             frame_locks,
             command_buffers,
@@ -157,6 +171,14 @@ impl RenderingDevice {
         self.forward_swapchain = None;
         self.forward_swapchain = Some(ForwardSwapchain::new(self.context.clone(), dimensions)?);
 
+        self.triangle = None;
+        let triangle = TriangleRendering::new(
+            self.context.logical_device.clone(),
+            self.forward_swapchain()?.render_pass.clone(),
+            &mut self.shader_cache,
+        )?;
+        self.triangle = Some(triangle);
+
         Ok(())
     }
 
@@ -183,13 +205,14 @@ impl RenderingDevice {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
+        let extent = self.forward_swapchain()?.swapchain_properties.extent;
         let clear_values = Self::clear_values();
         let begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(self.forward_swapchain()?.render_pass.handle)
             .framebuffer(self.framebuffer_at(image_index)?)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
-                extent: self.forward_swapchain()?.swapchain_properties.extent,
+                extent,
             })
             .clear_values(&clear_values);
 
@@ -198,10 +221,41 @@ impl RenderingDevice {
             command_buffer,
             begin_info,
             || {
-                // TODO: render stuff
+                self.update_viewport(command_buffer)?;
+                if let Some(triangle) = self.triangle.as_ref() {
+                    triangle.issue_commands(command_buffer)?;
+                }
                 Ok(())
             },
         )?;
+
+        Ok(())
+    }
+
+    fn update_viewport(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        let extent = self.forward_swapchain()?.swapchain_properties.extent;
+
+        let viewport = vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: extent.width as _,
+            height: extent.height as _,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        };
+        let viewports = [viewport];
+
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent,
+        };
+        let scissors = [scissor];
+
+        let device = self.context.logical_device.handle.clone();
+        unsafe {
+            device.cmd_set_viewport(command_buffer, 0, &viewports);
+            device.cmd_set_scissor(command_buffer, 0, &scissors);
+        }
 
         Ok(())
     }
@@ -270,6 +324,16 @@ impl RenderingDevice {
     }
 }
 
+impl Drop for RenderingDevice {
+    fn drop(&mut self) {
+        unsafe {
+            if let Err(error) = self.context.logical_device.handle.device_wait_idle() {
+                error!("{}", error);
+            }
+        }
+    }
+}
+
 pub struct FrameLock {
     pub image_available: Semaphore,
     pub render_finished: Semaphore,
@@ -284,5 +348,55 @@ impl FrameLock {
             in_flight: Fence::new(device.clone(), vk::FenceCreateFlags::SIGNALED)?,
         };
         Ok(handles)
+    }
+}
+
+pub struct TriangleRendering {
+    pub pipeline: GraphicsPipeline,
+    pub pipeline_layout: PipelineLayout,
+    device: Arc<LogicalDevice>,
+}
+
+impl TriangleRendering {
+    pub fn new(
+        device: Arc<LogicalDevice>,
+        render_pass: Arc<RenderPass>,
+        shader_cache: &mut ShaderCache,
+    ) -> Result<Self> {
+        let create_info = vk::DescriptorSetLayoutCreateInfo::builder().build();
+        let descriptor_set_layout = DescriptorSetLayout::new(device.clone(), create_info)?;
+        let descriptor_set_layout = Arc::new(descriptor_set_layout);
+
+        let shader_paths = ShaderPathSetBuilder::default()
+            .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
+            .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
+
+        let settings = GraphicsPipelineSettingsBuilder::default()
+            .shader_set(shader_set)
+            .render_pass(render_pass)
+            .vertex_state_info(vk::PipelineVertexInputStateCreateInfo::builder().build())
+            .descriptor_set_layout(descriptor_set_layout.clone())
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+
+        let (pipeline, pipeline_layout) =
+            GraphicsPipeline::from_settings(device.clone(), settings)?;
+
+        let rendering = Self {
+            pipeline,
+            pipeline_layout,
+            device,
+        };
+
+        Ok(rendering)
+    }
+
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        self.pipeline.bind(&self.device.handle, command_buffer);
+        unsafe { self.device.handle.cmd_draw(command_buffer, 3, 1, 0, 0) };
+        Ok(())
     }
 }
