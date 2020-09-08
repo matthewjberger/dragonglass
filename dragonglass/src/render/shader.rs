@@ -57,32 +57,39 @@ impl ShaderSet {
     pub fn entry_point_name() -> Result<&'static CStr> {
         Ok(CStr::from_bytes_with_nul(b"main\0")?)
     }
-
-    // TODO: Use a macro to fill this out
-    pub fn stages(&self) -> Result<Vec<vk::PipelineShaderStageCreateInfo>> {
-        let mut state_info_vec = Vec::new();
-
-        if let Some(vertex_shader) = self.vertex.as_ref() {
-            let state_info = vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::VERTEX)
-                .module(vertex_shader.module)
-                .name(Self::entry_point_name()?)
-                .build();
-            state_info_vec.push(state_info);
-        }
-
-        if let Some(fragment_shader) = self.fragment.as_ref() {
-            let state_info = vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::FRAGMENT)
-                .module(fragment_shader.module)
-                .name(Self::entry_point_name()?)
-                .build();
-            state_info_vec.push(state_info);
-        }
-
-        Ok(state_info_vec)
-    }
 }
+
+macro_rules! impl_shader_stages {
+    ($( $field:ident: $stage:ident ),*) => {
+        impl ShaderSet {
+            pub fn stages(&self) -> Result<Vec<vk::PipelineShaderStageCreateInfo>> {
+                let mut stages = Vec::new();
+
+                $(
+                    if let Some(shader) = self.$field.as_ref() {
+                        let stage_info = vk::PipelineShaderStageCreateInfo::builder()
+                            .stage(vk::ShaderStageFlags::$stage)
+                            .module(shader.module)
+                            .name(Self::entry_point_name()?)
+                            .build();
+                        stages.push(stage_info);
+                    }
+                )*
+
+                Ok(stages)
+            }
+        }
+    };
+}
+
+impl_shader_stages!(
+    vertex: VERTEX,
+    fragment: FRAGMENT,
+    geometry: GEOMETRY,
+    tessellation_control: TESSELLATION_CONTROL,
+    tessellation_evaluation: TESSELLATION_EVALUATION,
+    compute: COMPUTE
+);
 
 #[derive(Builder, Clone, Default)]
 #[builder(default, setter(into, strip_option))]
