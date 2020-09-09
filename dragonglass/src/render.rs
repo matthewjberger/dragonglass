@@ -3,8 +3,8 @@ pub use self::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,
     },
     resource::{
-        CommandPool, DescriptorPool, DescriptorSetLayout, Fence, Framebuffer, Image, ImageView,
-        RenderPass, Semaphore,
+        CommandPool, DescriptorSetLayout, Fence, Framebuffer, Image, ImageView, RenderPass,
+        Semaphore,
     },
     shader::{Shader, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, ShaderSet},
     swapchain::{Swapchain, SwapchainProperties},
