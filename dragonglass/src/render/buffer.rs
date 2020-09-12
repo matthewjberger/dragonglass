@@ -68,14 +68,13 @@ impl Buffer {
         self.allocator.unmap_memory(&self.allocation)
     }
 
-    pub fn staging_buffer<T: Copy>(allocator: Arc<Allocator>, data: &[T]) -> Result<Self> {
+    pub fn staging_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
         let allocation_create_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuToGpu,
             ..Default::default()
         };
-        let buffer_size = (data.len() * std::mem::size_of::<T>()) as ash::vk::DeviceSize;
         let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(buffer_size)
+            .size(size)
             .usage(vk::BufferUsageFlags::TRANSFER_SRC)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         Self::new(allocator, &allocation_create_info, buffer_create_info)

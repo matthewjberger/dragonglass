@@ -86,7 +86,8 @@ impl CommandPool {
         allocator: Arc<vk_mem::Allocator>,
         graphics_queue: vk::Queue,
     ) -> Result<Buffer> {
-        let staging_buffer = Buffer::staging_buffer(allocator.clone(), data)?;
+        let size = data.len() * std::mem::size_of::<T>();
+        let staging_buffer = Buffer::staging_buffer(allocator.clone(), size as _)?;
         staging_buffer.upload_data(data, 0)?;
         let device_local_buffer = Buffer::device_local_buffer(allocator, &staging_buffer, usage)?;
         let size = data.len() * mem::size_of::<T>();
