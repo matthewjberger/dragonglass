@@ -4,8 +4,6 @@ use log::error;
 use std::sync::Arc;
 use vk_mem::Allocator;
 
-pub struct GeometryBuffer;
-
 pub struct Buffer {
     pub handle: vk::Buffer,
     allocation: vk_mem::Allocation,
@@ -32,11 +30,31 @@ impl Buffer {
         Ok(buffer)
     }
 
-    pub fn upload_to_buffer<T>(&self, data: &[T], offset: usize) -> Result<()> {
+    pub fn upload_data<T>(&self, data: &[T], offset: usize) -> Result<()> {
         let data_pointer = self.map_memory()?;
         unsafe {
             let data_pointer = data_pointer.add(offset);
             (data_pointer as *mut T).copy_from_nonoverlapping(data.as_ptr(), data.len());
+        }
+        self.unmap_memory()?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn upload_data_aligned<T: Copy>(
+        &self,
+        data: &[T],
+        offset: usize,
+        alignment: vk::DeviceSize,
+    ) -> Result<()> {
+        let data_pointer = self.map_memory()?;
+        unsafe {
+            let mut align = ash::util::Align::new(
+                data_pointer.add(offset) as _,
+                alignment,
+                self.allocation_info.get_size() as _,
+            );
+            align.copy_from_slice(data);
         }
         self.unmap_memory()?;
         Ok(())
@@ -87,61 +105,3 @@ impl Drop for Buffer {
         }
     }
 }
-
-// pub struct GeometryBuffer {
-//     pub vertex_buffer: Buffer,
-//     pub index_buffer: Option<Buffer>,
-//     pub number_of_vertices: u32,
-//     pub number_of_indices: u32,
-// }
-
-// impl GeometryBuffer {
-//     pub fn new<T: Copy>(
-//         context: Arc<Context>,
-//         command_pool: &CommandPool,
-//         vertices: &[T],
-//         indices: Option<&[u32]>,
-//     ) -> Result<Self> {
-//         let vertex_buffer =
-//             context.create_buffer(command_pool, &vertices, vk::BufferUsageFlags::VERTEX_BUFFER)?;
-
-//         let mut number_of_indices = 0;
-//         let index_buffer = if let Some(indices) = indices {
-//             number_of_indices = indices.len() as u32;
-//             index_buffer = context.create_buffer(
-//                 command_pool,
-//                 &indices,
-//                 vk::BufferUsageFlags::INDEX_BUFFER,
-//             )?;
-//             Some(index_buffer)
-//         } else {
-//             None
-//         };
-
-//         let buffer = Self {
-//             vertex_buffer,
-//             index_buffer,
-//             number_of_indices,
-//         };
-
-//         Ok(buffer)
-//     }
-
-//     pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
-//         let offsets = [0];
-//         let vertex_buffers = [self.vertex_buffer.buffer()];
-
-//         unsafe {
-//             device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
-
-//             if let Some(index_buffer) = self.index_buffer.as_ref() {
-//                 device.cmd_bind_index_buffer(
-//                     command_buffer,
-//                     index_buffer.buffer(),
-//                     0,
-//                     vk::IndexType::UINT32,
-//                 );
-//             }
-//         }
-//     }
-// }

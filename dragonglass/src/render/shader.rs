@@ -116,7 +116,7 @@ impl ShaderCache {
         let shader_path = path
             .as_ref()
             .to_str()
-            .ok_or(anyhow!("The shader path is not a valid UTF-8 sequence"))?
+            .ok_or_else(|| anyhow!("The shader path is not a valid UTF-8 sequence"))?
             .to_string();
         let shader = self
             .shaders
