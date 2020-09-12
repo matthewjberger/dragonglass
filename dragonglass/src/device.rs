@@ -10,6 +10,7 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use log::error;
+use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -101,7 +102,7 @@ impl RenderingDevice {
     fn forward_swapchain(&self) -> Result<&ForwardSwapchain> {
         self.forward_swapchain
             .as_ref()
-            .ok_or(anyhow!("No forward swapchain was available for rendering!"))
+            .ok_or_else(|| anyhow!("No forward swapchain was available for rendering!"))
     }
 
     fn device(&self) -> ash::Device {
@@ -188,7 +189,7 @@ impl RenderingDevice {
     }
 
     fn create_swapchain(&mut self, dimensions: &[u32; 2]) -> Result<()> {
-        if dimensions[0] <= 0 || dimensions[1] <= 0 {
+        if dimensions[0] == 0 || dimensions[1] == 0 {
             return Ok(());
         }
 
@@ -210,10 +211,12 @@ impl RenderingDevice {
     }
 
     fn record_command_buffer(&mut self, image_index: usize) -> Result<()> {
-        let command_buffer = *self.command_buffers.get(image_index).ok_or(anyhow!(
-            "No command buffer was found for the forward swapchain at image index: {}",
-            image_index
-        ))?;
+        let command_buffer = *self.command_buffers.get(image_index).ok_or_else(|| {
+            anyhow!(
+                "No command buffer was found for the forward swapchain at image index: {}",
+                image_index
+            )
+        })?;
 
         self.context.logical_device.clone().record_command_buffer(
             command_buffer,
@@ -303,18 +306,20 @@ impl RenderingDevice {
     }
 
     fn command_buffer_at(&self, image_index: usize) -> Result<vk::CommandBuffer> {
-        let command_buffer = *self.command_buffers.get(image_index).ok_or(anyhow!(
-            "No command buffer was found at image index: {}",
-            image_index
-        ))?;
+        let command_buffer = *self.command_buffers.get(image_index).ok_or_else(|| {
+            anyhow!(
+                "No command buffer was found at image index: {}",
+                image_index
+            )
+        })?;
         Ok(command_buffer)
     }
 
     fn frame_lock(&self) -> Result<&FrameLock> {
-        let lock = &self.frame_locks.get(self.frame).ok_or(anyhow!(
-            "No frame lock was found at frame index: {}",
-            self.frame,
-        ))?;
+        let lock = &self
+            .frame_locks
+            .get(self.frame)
+            .ok_or_else(|| anyhow!("No frame lock was found at frame index: {}", self.frame,))?;
         Ok(lock)
     }
 
@@ -378,6 +383,12 @@ impl FrameLock {
         };
         Ok(handles)
     }
+}
+
+pub struct UniformBuffer {
+    pub view: glm::Mat4,
+    pub projection: glm::Mat4,
+    pub model: glm::Mat4,
 }
 
 pub struct TriangleRendering {
