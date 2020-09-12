@@ -426,9 +426,9 @@ impl TriangleRendering {
 
         #[rustfmt::skip]
         let vertices: [f32; 15] = [
-           -0.5, 0.5, 1.0, 0.0, 0.0,
+           -0.5,  0.5, 1.0, 0.0, 0.0,
             0.0, -0.5, 0.0, 1.0, 0.0,
-            0.5, 0.5, 0.0, 0.0, 1.0,
+            0.5,  0.5, 0.0, 0.0, 1.0,
         ];
         let number_of_vertices = vertices.len();
 
