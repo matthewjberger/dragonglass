@@ -98,7 +98,7 @@ impl Context {
             }
         });
 
-        depth_format.ok_or(anyhow!("Couldn't determine the depth format!"))
+        depth_format.ok_or_else(|| anyhow!("Couldn't determine the depth format!"))
     }
 
     pub fn graphics_queue(&self) -> vk::Queue {
