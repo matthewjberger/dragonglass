@@ -372,7 +372,7 @@ impl FrameLock {
         let handles = Self {
             image_available: Semaphore::new(device.clone())?,
             render_finished: Semaphore::new(device.clone())?,
-            in_flight: Fence::new(device.clone(), vk::FenceCreateFlags::SIGNALED)?,
+            in_flight: Fence::new(device, vk::FenceCreateFlags::SIGNALED)?,
         };
         Ok(handles)
     }
