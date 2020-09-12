@@ -264,9 +264,9 @@ impl RenderingDevice {
 
         let viewport = vk::Viewport {
             x: 0.0,
-            y: 0.0,
+            y: extent.height as _,
             width: extent.width as _,
-            height: extent.height as _,
+            height: (-1.0 * extent.height as f32) as _,
             min_depth: 0.0,
             max_depth: 1.0,
         };
@@ -292,10 +292,12 @@ impl RenderingDevice {
             .forward_swapchain()?
             .framebuffers
             .get(image_index)
-            .ok_or(anyhow!(
-                "No framebuffer was found for the forward swapchain at image index: {}",
-                image_index
-            ))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "No framebuffer was found for the forward swapchain at image index: {}",
+                    image_index
+                )
+            })?
             .handle;
         Ok(framebuffer)
     }
@@ -426,9 +428,9 @@ impl TriangleRendering {
 
         #[rustfmt::skip]
         let vertices: [f32; 15] = [
-           -0.5,  0.5, 1.0, 0.0, 0.0,
-            0.0, -0.5, 0.0, 1.0, 0.0,
-            0.5,  0.5, 0.0, 0.0, 1.0,
+           -0.5,  -0.5, 1.0, 0.0, 0.0,
+            0.0,  0.5, 0.0, 1.0, 0.0,
+            0.5,  -0.5, 0.0, 0.0, 1.0,
         ];
         let number_of_vertices = vertices.len();
 

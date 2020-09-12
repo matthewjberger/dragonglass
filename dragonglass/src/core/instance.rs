@@ -16,7 +16,7 @@ pub struct Instance {
 impl Instance {
     const APPLICATION_NAME: &'static str = "Dragonglass";
     const APPLICATION_VERSION: u32 = make_version(1, 0, 0);
-    const API_VERSION: u32 = make_version(1, 0, 0);
+    const API_VERSION: u32 = make_version(1, 2, 0);
     const ENGINE_VERSION: u32 = make_version(1, 0, 0);
     const ENGINE_NAME: &'static str = "Dragonglass Engine";
 
