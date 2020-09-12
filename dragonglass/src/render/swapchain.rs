@@ -1,5 +1,5 @@
 use super::resource::ImageView;
-use crate::core::{LogicalDevice, Surface};
+use crate::core::{Context, LogicalDevice, Surface};
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
 use std::sync::Arc;
@@ -48,6 +48,60 @@ impl Swapchain {
             self.handle_ash
                 .acquire_next_image(self.handle_khr, std::u64::MAX, semaphore, fence)
         }
+    }
+
+    pub fn from_dimensions(
+        context: Arc<Context>,
+        dimensions: &[u32; 2],
+    ) -> Result<(Swapchain, SwapchainProperties)> {
+        let capabilities = context.physical_device_surface_capabilities()?;
+
+        let image_count = std::cmp::max(
+            capabilities.max_image_count,
+            capabilities.min_image_count + 1,
+        );
+
+        let queue_indices = context.physical_device.queue_indices();
+
+        let properties =
+            SwapchainProperties::new(dimensions, context.physical_device.handle, &context.surface)?;
+
+        let create_info = {
+            let builder = vk::SwapchainCreateInfoKHR::builder()
+                .surface(context.surface.handle_khr)
+                .min_image_count(image_count)
+                .image_format(properties.surface_format.format)
+                .image_color_space(properties.surface_format.color_space)
+                .image_extent(properties.extent)
+                .image_array_layers(1)
+                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .pre_transform(capabilities.current_transform)
+                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+                .present_mode(properties.present_mode)
+                .clipped(true);
+
+            if queue_indices.len() == 1 {
+                // Only one queue family is being used for graphics and presentation
+                builder
+                    .image_sharing_mode(vk::SharingMode::CONCURRENT)
+                    .queue_family_indices(&queue_indices)
+            } else {
+                builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            }
+        };
+
+        let mut swapchain = Self::new(
+            &context.instance.handle,
+            &context.logical_device.handle,
+            create_info,
+        )?;
+
+        swapchain.create_image_views(
+            context.logical_device.clone(),
+            properties.surface_format.format,
+        )?;
+
+        Ok((swapchain, properties))
     }
 }
 
@@ -184,61 +238,5 @@ impl SwapchainImage {
         let view = ImageView::new(device, create_info)?;
         let swapchain_image = Self { image, view };
         Ok(swapchain_image)
-    }
-}
-
-impl crate::core::Context {
-    pub fn create_swapchain(
-        &self,
-        dimensions: &[u32; 2],
-    ) -> Result<(Swapchain, SwapchainProperties)> {
-        let capabilities = self.physical_device_surface_capabilities()?;
-
-        let image_count = std::cmp::max(
-            capabilities.max_image_count,
-            capabilities.min_image_count + 1,
-        );
-
-        let queue_indices = self.physical_device.queue_indices();
-
-        let properties =
-            SwapchainProperties::new(dimensions, self.physical_device.handle, &self.surface)?;
-
-        let create_info = {
-            let builder = vk::SwapchainCreateInfoKHR::builder()
-                .surface(self.surface.handle_khr)
-                .min_image_count(image_count)
-                .image_format(properties.surface_format.format)
-                .image_color_space(properties.surface_format.color_space)
-                .image_extent(properties.extent)
-                .image_array_layers(1)
-                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .pre_transform(capabilities.current_transform)
-                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(properties.present_mode)
-                .clipped(true);
-
-            if queue_indices.len() == 1 {
-                // Only one queue family is being used for graphics and presentation
-                builder
-                    .image_sharing_mode(vk::SharingMode::CONCURRENT)
-                    .queue_family_indices(&queue_indices)
-            } else {
-                builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            }
-        };
-
-        let mut swapchain = Swapchain::new(
-            &self.instance.handle,
-            &self.logical_device.handle,
-            create_info,
-        )?;
-
-        swapchain.create_image_views(
-            self.logical_device.clone(),
-            properties.surface_format.format,
-        )?;
-
-        Ok((swapchain, properties))
     }
 }

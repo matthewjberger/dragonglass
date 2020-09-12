@@ -25,7 +25,8 @@ impl ForwardSwapchain {
             vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
         )?;
 
-        let (swapchain, swapchain_properties) = context.create_swapchain(dimensions)?;
+        let (swapchain, swapchain_properties) =
+            Swapchain::from_dimensions(context.clone(), dimensions)?;
 
         let device = context.logical_device.clone();
         let surface_format = swapchain_properties.surface_format.format;

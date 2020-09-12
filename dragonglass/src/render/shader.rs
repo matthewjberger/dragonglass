@@ -31,7 +31,7 @@ impl Shader {
         let mut shader_file = std::fs::File::open(path)?;
         let shader_source = ash::util::read_spv(&mut shader_file)?;
         let create_info = vk::ShaderModuleCreateInfo::builder().code(&shader_source);
-        Self::new(device.clone(), create_info)
+        Self::new(device, create_info)
     }
 }
 
