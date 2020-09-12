@@ -68,16 +68,24 @@ impl Buffer {
         self.allocator.unmap_memory(&self.allocation)
     }
 
-    pub fn staging_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
+    pub fn cpu_to_gpu_buffer(
+        allocator: Arc<Allocator>,
+        size: vk::DeviceSize,
+        usage: vk::BufferUsageFlags,
+    ) -> Result<Self> {
         let allocation_create_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::CpuToGpu,
             ..Default::default()
         };
         let buffer_create_info = vk::BufferCreateInfo::builder()
             .size(size)
-            .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+            .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         Self::new(allocator, &allocation_create_info, buffer_create_info)
+    }
+
+    pub fn staging_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
+        Self::cpu_to_gpu_buffer(allocator, size, vk::BufferUsageFlags::TRANSFER_SRC)
     }
 
     pub fn device_local_buffer(
