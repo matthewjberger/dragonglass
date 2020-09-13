@@ -108,21 +108,24 @@ impl RenderingDevice {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
-
-            if let Some(triangle) = self.triangle.as_ref() {
-                let aspect_ratio = self
-                    .forward_swapchain()?
-                    .swapchain_properties
-                    .aspect_ratio();
-                triangle.update_ubo(aspect_ratio)?;
-            }
-
+            self.update()?;
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
             self.check_presentation_result(result, dimensions)?;
             self.reset_command_pool()?;
             self.frame = (1 + self.frame) % Self::MAX_FRAMES_IN_FLIGHT;
+        }
+        Ok(())
+    }
+
+    fn update(&self) -> Result<()> {
+        if let Some(triangle) = self.triangle.as_ref() {
+            let aspect_ratio = self
+                .forward_swapchain()?
+                .swapchain_properties
+                .aspect_ratio();
+            triangle.update_ubo(aspect_ratio)?;
         }
         Ok(())
     }

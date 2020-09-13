@@ -1,6 +1,9 @@
 pub use self::{
     buffer::{Buffer, CpuToGpuBuffer, GeometryBuffer, GpuBuffer},
-    command::{BufferCopyInfo, BufferCopyInfoBuilder, CommandPool},
+    command::{
+        BufferToBufferCopy, BufferToBufferCopyBuilder, BufferToImageCopy, BufferToImageCopyBuilder,
+        CommandPool,
+    },
     image::{Image, ImageView},
     pipeline::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,

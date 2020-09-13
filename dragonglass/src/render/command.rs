@@ -34,7 +34,7 @@ impl CommandPool {
         Ok(command_buffers)
     }
 
-    pub fn copy_buffer_to_buffer(&self, info: &BufferCopyInfo) -> Result<()> {
+    pub fn copy_buffer_to_buffer(&self, info: &BufferToBufferCopy) -> Result<()> {
         let device = self.device.handle.clone();
         self.execute_once(info.graphics_queue, |command_buffer| {
             unsafe {
@@ -43,6 +43,45 @@ impl CommandPool {
             Ok(())
         })
     }
+
+    pub fn copy_buffer_to_image(&self, info: &BufferToImageCopy) -> Result<()> {
+        let device = self.device.handle.clone();
+        self.execute_once(info.graphics_queue, |command_buffer| {
+            unsafe {
+                device.cmd_copy_buffer_to_image(
+                    command_buffer,
+                    info.source,
+                    info.destination,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &info.regions,
+                )
+            };
+            Ok(())
+        })
+    }
+
+    // pub fn transition_image_layout(
+    //     &self,
+    //     image_transition_info: ImageTransition,
+    // ) -> Result<()> {
+    //     self.execute_command_once(, |command_buffer| {
+    //         unsafe {
+    //             self.context
+    //                 .logical_device()
+    //                 .logical_device()
+    //                 .cmd_pipeline_barrier(
+    //                     command_buffer,
+    //                     src_stage_mask,
+    //                     dst_stage_mask,
+    //                     vk::DependencyFlags::empty(),
+    //                     &[],
+    //                     &[],
+    //                     &barriers,
+    //                 )
+    //         };
+    //     })?;
+    //     Ok(())
+    // }
 
     pub fn execute_once<T>(&self, queue: vk::Queue, mut executor: T) -> Result<()>
     where
@@ -89,9 +128,17 @@ impl Drop for CommandPool {
 }
 
 #[derive(Builder)]
-pub struct BufferCopyInfo {
+pub struct BufferToBufferCopy {
     pub graphics_queue: vk::Queue,
     pub source: vk::Buffer,
     pub destination: vk::Buffer,
     pub regions: Vec<vk::BufferCopy>,
+}
+
+#[derive(Builder)]
+pub struct BufferToImageCopy {
+    pub graphics_queue: vk::Queue,
+    pub source: vk::Buffer,
+    pub destination: vk::Image,
+    pub regions: Vec<vk::BufferImageCopy>,
 }

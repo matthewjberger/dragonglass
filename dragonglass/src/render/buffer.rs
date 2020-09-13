@@ -1,4 +1,4 @@
-use super::{BufferCopyInfoBuilder, CommandPool};
+use super::{BufferToBufferCopyBuilder, CommandPool};
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use log::error;
@@ -54,13 +54,13 @@ impl GpuBuffer {
             .dst_offset(offset as _)
             .build();
 
-        let info = BufferCopyInfoBuilder::default()
+        let info = BufferToBufferCopyBuilder::default()
             .graphics_queue(graphics_queue)
             .source(staging_buffer.buffer.handle)
             .destination(self.buffer.handle)
             .regions(vec![region])
             .build()
-            .map_err(|err| anyhow!("{}", err))?;
+            .map_err(|error| anyhow!("{}", error))?;
 
         pool.copy_buffer_to_buffer(&info)?;
 
