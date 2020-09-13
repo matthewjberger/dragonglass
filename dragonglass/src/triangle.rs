@@ -25,7 +25,6 @@ pub struct TriangleRendering {
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub descriptor_set: vk::DescriptorSet,
-    number_of_vertices: usize,
     number_of_indices: usize,
     device: Arc<LogicalDevice>,
 }
@@ -75,7 +74,6 @@ impl TriangleRendering {
             0.5, -0.5, 0.0, 0.0, 1.0,
            -0.5,  0.5, 1.0, 1.0, 1.0,
         ];
-        let number_of_vertices = vertices.len();
 
         let indices: [u32; 6] = [0, 1, 2, 3, 1, 0];
         let number_of_indices = indices.len();
@@ -109,7 +107,6 @@ impl TriangleRendering {
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
-            number_of_vertices,
             number_of_indices,
             device,
         };

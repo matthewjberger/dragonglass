@@ -117,7 +117,7 @@ impl SwapchainProperties {
         }?;
 
         let error_message = "No physical device surface formats are available!";
-        ensure!(formats.len() > 0, error_message);
+        ensure!(!formats.is_empty(), error_message);
 
         let default_format = vk::SurfaceFormatKHR {
             format: vk::Format::R8G8B8A8_UNORM,

@@ -37,9 +37,8 @@ impl ForwardSwapchain {
         let depth_image_view =
             Self::create_depth_image_view(device.clone(), &depth_image, depth_format)?;
 
-        let color_image = Self::create_color_image(allocator.clone(), extent, surface_format)?;
-        let color_image_view =
-            Self::create_color_image_view(device.clone(), &color_image, surface_format)?;
+        let color_image = Self::create_color_image(allocator, extent, surface_format)?;
+        let color_image_view = Self::create_color_image_view(device, &color_image, surface_format)?;
 
         let framebuffers = swapchain
             .images

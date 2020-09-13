@@ -227,7 +227,7 @@ impl GraphicsPipeline {
             let pipeline_layout_create_info_builder = vk::PipelineLayoutCreateInfo::builder()
                 .push_constant_ranges(&push_constant_ranges)
                 .set_layouts(&descriptor_set_layouts);
-            PipelineLayout::new(device.clone(), *pipeline_layout_create_info_builder).unwrap()
+            PipelineLayout::new(device, *pipeline_layout_create_info_builder).unwrap()
         } else {
             let pipeline_layout_create_info_builder =
                 vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_set_layouts);
