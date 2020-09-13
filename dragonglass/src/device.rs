@@ -31,15 +31,11 @@ impl RenderingDevice {
         let device = context.logical_device.clone();
         let frame_locks = Self::create_frame_locks(device)?;
 
-        let command_pool = Self::create_command_pool(
-            context.logical_device.clone(),
-            context.physical_device.graphics_queue_index,
-        )?;
-
-        let transient_command_pool = Self::create_transient_command_pool(
-            context.logical_device.clone(),
-            context.physical_device.graphics_queue_index,
-        )?;
+        let device = context.logical_device.clone();
+        let graphics_queue = context.graphics_queue();
+        let command_pool = Self::create_command_pool(device.clone(), graphics_queue_index)?;
+        let transient_command_pool =
+            Self::create_transient_command_pool(device.clone(), graphics_queue)?;
 
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
 
