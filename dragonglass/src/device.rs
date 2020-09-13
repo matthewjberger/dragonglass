@@ -16,7 +16,7 @@ pub struct RenderingDevice {
     frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
-    _command_pool: CommandPool,
+    command_pool: CommandPool,
     transient_command_pool: CommandPool,
     forward_swapchain: Option<ForwardSwapchain>,
     context: Arc<Context>,
@@ -63,7 +63,7 @@ impl RenderingDevice {
             frame: 0,
             frame_locks,
             command_buffers,
-            _command_pool: command_pool,
+            command_pool,
             transient_command_pool,
             forward_swapchain: Some(forward_swapchain),
             context,
@@ -78,9 +78,7 @@ impl RenderingDevice {
     }
 
     fn create_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
-        let create_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(queue_index)
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+        let create_info = vk::CommandPoolCreateInfo::builder().queue_family_index(queue_index);
         let command_pool = CommandPool::new(device, create_info)?;
         Ok(command_pool)
     }
@@ -124,6 +122,12 @@ impl RenderingDevice {
             let result = self.present_next_frame(image_index)?;
             self.check_presentation_result(result, dimensions)?;
             self.frame = (1 + self.frame) % Self::MAX_FRAMES_IN_FLIGHT;
+            unsafe {
+                self.context.logical_device.handle.reset_command_pool(
+                    self.command_pool.handle,
+                    vk::CommandPoolResetFlags::empty(),
+                )?;
+            }
         }
         Ok(())
     }
@@ -226,7 +230,7 @@ impl RenderingDevice {
 
         self.context.logical_device.clone().record_command_buffer(
             command_buffer,
-            vk::CommandBufferUsageFlags::SIMULTANEOUS_USE,
+            vk::CommandBufferUsageFlags::empty(),
             || {
                 self.record_render_pass(command_buffer, image_index)?;
                 Ok(())
