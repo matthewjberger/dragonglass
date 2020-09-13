@@ -52,7 +52,7 @@ impl CommandPool {
                     command_buffer,
                     info.source,
                     info.destination,
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    info.dst_image_layout,
                     &info.regions,
                 )
             };
@@ -60,28 +60,23 @@ impl CommandPool {
         })
     }
 
-    // pub fn transition_image_layout(
-    //     &self,
-    //     image_transition_info: ImageTransition,
-    // ) -> Result<()> {
-    //     self.execute_command_once(, |command_buffer| {
-    //         unsafe {
-    //             self.context
-    //                 .logical_device()
-    //                 .logical_device()
-    //                 .cmd_pipeline_barrier(
-    //                     command_buffer,
-    //                     src_stage_mask,
-    //                     dst_stage_mask,
-    //                     vk::DependencyFlags::empty(),
-    //                     &[],
-    //                     &[],
-    //                     &barriers,
-    //                 )
-    //         };
-    //     })?;
-    //     Ok(())
-    // }
+    pub fn transition_image_layout(&self, info: &PipelineBarrier) -> Result<()> {
+        let device = self.device.handle.clone();
+        self.execute_once(info.graphics_queue, |command_buffer| {
+            unsafe {
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    info.src_stage_mask,
+                    info.dst_stage_mask,
+                    info.dependency_flags,
+                    &info.memory_barriers,
+                    &info.buffer_memory_barriers,
+                    &info.image_memory_barriers,
+                )
+            };
+            Ok(())
+        })
+    }
 
     pub fn execute_once<T>(&self, queue: vk::Queue, mut executor: T) -> Result<()>
     where
@@ -141,4 +136,17 @@ pub struct BufferToImageCopy {
     pub source: vk::Buffer,
     pub destination: vk::Image,
     pub regions: Vec<vk::BufferImageCopy>,
+    #[builder(default = "vk::ImageLayout::TRANSFER_DST_OPTIMAL")]
+    pub dst_image_layout: vk::ImageLayout,
+}
+
+#[derive(Builder)]
+pub struct PipelineBarrier {
+    pub graphics_queue: vk::Queue,
+    pub src_stage_mask: vk::PipelineStageFlags,
+    pub dst_stage_mask: vk::PipelineStageFlags,
+    pub dependency_flags: vk::DependencyFlags,
+    pub memory_barriers: Vec<vk::MemoryBarrier>,
+    pub buffer_memory_barriers: Vec<vk::BufferMemoryBarrier>,
+    pub image_memory_barriers: Vec<vk::ImageMemoryBarrier>,
 }

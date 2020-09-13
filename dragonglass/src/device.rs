@@ -32,10 +32,10 @@ impl RenderingDevice {
         let frame_locks = Self::create_frame_locks(device)?;
 
         let device = context.logical_device.clone();
-        let graphics_queue = context.graphics_queue();
+        let graphics_queue_index = context.physical_device.graphics_queue_index;
         let command_pool = Self::create_command_pool(device.clone(), graphics_queue_index)?;
         let transient_command_pool =
-            Self::create_transient_command_pool(device.clone(), graphics_queue)?;
+            Self::create_transient_command_pool(device.clone(), graphics_queue_index)?;
 
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
 
@@ -104,12 +104,12 @@ impl RenderingDevice {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
+            self.reset_command_pool()?;
             self.update()?;
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
             self.check_presentation_result(result, dimensions)?;
-            self.reset_command_pool()?;
             self.frame = (1 + self.frame) % Self::MAX_FRAMES_IN_FLIGHT;
         }
         Ok(())

@@ -2,7 +2,7 @@ pub use self::{
     buffer::{Buffer, CpuToGpuBuffer, GeometryBuffer, GpuBuffer},
     command::{
         BufferToBufferCopy, BufferToBufferCopyBuilder, BufferToImageCopy, BufferToImageCopyBuilder,
-        CommandPool,
+        CommandPool, PipelineBarrier, PipelineBarrierBuilder,
     },
     image::{Image, ImageView},
     pipeline::{
