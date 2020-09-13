@@ -1,8 +1,8 @@
 use super::{
     core::{Context, LogicalDevice},
     render::{
-        Buffer, CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
-        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
+        CommandPool, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, GpuBuffer,
+        GraphicsPipeline, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
         ShaderPathSetBuilder,
     },
 };
@@ -20,8 +20,8 @@ pub struct UniformBuffer {
 pub struct TriangleRendering {
     pub pipeline: GraphicsPipeline,
     pub pipeline_layout: PipelineLayout,
-    pub vertex_buffer: Buffer,
-    pub uniform_buffer: Buffer,
+    pub vertex_buffer: GpuBuffer,
+    pub uniform_buffer: CpuToGpuBuffer,
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub descriptor_set: vk::DescriptorSet,
@@ -75,20 +75,13 @@ impl TriangleRendering {
         ];
         let number_of_vertices = vertices.len();
 
-        let vertex_buffer = Buffer::device_local_buffer(
+        let vertex_buffer = GpuBuffer::vertex_buffer(
             context.allocator.clone(),
             (vertices.len() * std::mem::size_of::<f32>()) as _,
-            vk::BufferUsageFlags::VERTEX_BUFFER,
         )?;
+        vertex_buffer.upload_data(&vertices, pool, context.graphics_queue())?;
 
-        pool.upload_to_device_local_buffer(
-            &vertex_buffer,
-            &vertices,
-            context.allocator.clone(),
-            context.graphics_queue(),
-        )?;
-
-        let uniform_buffer = Buffer::uniform_buffer(
+        let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             context.allocator.clone(),
             mem::size_of::<UniformBuffer>() as _,
         )?;
@@ -157,7 +150,7 @@ impl TriangleRendering {
 
     fn update_descriptor_set(&mut self) {
         let buffer_info = vk::DescriptorBufferInfo::builder()
-            .buffer(self.uniform_buffer.handle)
+            .buffer(self.uniform_buffer.handle())
             .offset(0)
             .range(std::mem::size_of::<UniformBuffer>() as _);
 
@@ -209,7 +202,7 @@ impl TriangleRendering {
         self.pipeline.bind(&self.device.handle, command_buffer);
 
         let offsets = [0];
-        let vertex_buffers = [self.vertex_buffer.handle];
+        let vertex_buffers = [self.vertex_buffer.handle()];
         unsafe {
             self.device.handle.cmd_bind_vertex_buffers(
                 command_buffer,

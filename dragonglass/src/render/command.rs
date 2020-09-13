@@ -1,6 +1,6 @@
-use super::{Buffer, Fence};
+use super::Fence;
 use crate::core::LogicalDevice;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use std::sync::Arc;
@@ -75,33 +75,6 @@ impl CommandPool {
             device.queue_wait_idle(queue)?;
             device.free_command_buffers(self.handle, &command_buffers);
         }
-
-        Ok(())
-    }
-
-    pub fn upload_to_device_local_buffer<T: Copy>(
-        &self,
-        device_local_buffer: &Buffer,
-        data: &[T],
-        allocator: Arc<vk_mem::Allocator>,
-        graphics_queue: vk::Queue,
-    ) -> Result<()> {
-        let size = data.len() * std::mem::size_of::<T>();
-
-        let staging_buffer = Buffer::staging_buffer(allocator.clone(), size as _)?;
-        staging_buffer.upload_data(data, 0)?;
-
-        let region = vk::BufferCopy::builder().size(size as _).build();
-
-        let info = BufferCopyInfoBuilder::default()
-            .graphics_queue(graphics_queue)
-            .source(staging_buffer.handle)
-            .destination(device_local_buffer.handle)
-            .regions(vec![region])
-            .build()
-            .map_err(|err| anyhow!("{}", err))?;
-
-        self.copy_buffer_to_buffer(&info)?;
 
         Ok(())
     }
