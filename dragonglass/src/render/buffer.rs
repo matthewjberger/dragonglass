@@ -6,7 +6,7 @@ use std::sync::Arc;
 use vk_mem::Allocator;
 
 pub struct GpuBuffer {
-    pub buffer: Buffer,
+    buffer: Buffer,
     allocator: Arc<Allocator>,
 }
 
@@ -69,7 +69,7 @@ impl GpuBuffer {
 }
 
 pub struct CpuToGpuBuffer {
-    pub buffer: Buffer,
+    buffer: Buffer,
 }
 
 impl CpuToGpuBuffer {
