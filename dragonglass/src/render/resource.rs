@@ -181,7 +181,7 @@ pub struct DescriptorSetLayout {
 impl DescriptorSetLayout {
     pub fn new(
         device: Arc<LogicalDevice>,
-        create_info: vk::DescriptorSetLayoutCreateInfo,
+        create_info: vk::DescriptorSetLayoutCreateInfoBuilder,
     ) -> Result<Self> {
         let handle = unsafe {
             device
@@ -199,6 +199,50 @@ impl Drop for DescriptorSetLayout {
             self.device
                 .handle
                 .destroy_descriptor_set_layout(self.handle, None);
+        }
+    }
+}
+
+pub struct DescriptorPool {
+    pub handle: vk::DescriptorPool,
+    device: Arc<LogicalDevice>,
+}
+
+impl DescriptorPool {
+    pub fn new(
+        device: Arc<LogicalDevice>,
+        create_info: vk::DescriptorPoolCreateInfoBuilder,
+    ) -> Result<Self> {
+        let handle = unsafe { device.handle.create_descriptor_pool(&create_info, None) }?;
+        let descriptor_pool = Self { handle, device };
+        Ok(descriptor_pool)
+    }
+
+    pub fn allocate_descriptor_sets(
+        &self,
+        layout: vk::DescriptorSetLayout,
+        number_of_sets: u32,
+    ) -> Result<Vec<vk::DescriptorSet>> {
+        let layouts = (0..number_of_sets).map(|_| layout).collect::<Vec<_>>();
+        let allocation_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(self.handle)
+            .set_layouts(&layouts)
+            .build();
+        let descriptor_sets = unsafe {
+            self.device
+                .handle
+                .allocate_descriptor_sets(&allocation_info)?
+        };
+        Ok(descriptor_sets)
+    }
+}
+
+impl Drop for DescriptorPool {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .handle
+                .destroy_descriptor_pool(self.handle, None);
         }
     }
 }

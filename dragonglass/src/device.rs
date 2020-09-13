@@ -1,16 +1,12 @@
 use super::{
     core::{Context, LogicalDevice},
     forward::ForwardSwapchain,
-    render::{
-        Buffer, CommandPool, DescriptorSetLayout, Fence, GraphicsPipeline,
-        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, Semaphore, ShaderCache,
-        ShaderPathSetBuilder,
-    },
+    render::{CommandPool, Fence, RenderPass, Semaphore, ShaderCache},
+    triangle::TriangleRendering,
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use log::error;
-use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -31,8 +27,9 @@ impl RenderingDevice {
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
+
         let device = context.logical_device.clone();
-        let frame_locks = Self::create_frame_locks(device.clone())?;
+        let frame_locks = Self::create_frame_locks(device)?;
 
         let command_pool = Self::create_command_pool(
             context.logical_device.clone(),
@@ -113,6 +110,15 @@ impl RenderingDevice {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
+
+            if let Some(triangle) = self.triangle.as_ref() {
+                let aspect_ratio = self
+                    .forward_swapchain()?
+                    .swapchain_properties
+                    .aspect_ratio();
+                triangle.update_ubo(aspect_ratio)?;
+            }
+
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
@@ -382,132 +388,5 @@ impl FrameLock {
             in_flight: Fence::new(device, vk::FenceCreateFlags::SIGNALED)?,
         };
         Ok(handles)
-    }
-}
-
-pub struct UniformBuffer {
-    pub view: glm::Mat4,
-    pub projection: glm::Mat4,
-    pub model: glm::Mat4,
-}
-
-pub struct TriangleRendering {
-    pub pipeline: GraphicsPipeline,
-    pub pipeline_layout: PipelineLayout,
-    pub vertex_buffer: Buffer,
-    number_of_vertices: usize,
-    device: Arc<LogicalDevice>,
-}
-
-impl TriangleRendering {
-    pub fn new(
-        context: Arc<Context>,
-        pool: &CommandPool,
-        render_pass: Arc<RenderPass>,
-        shader_cache: &mut ShaderCache,
-    ) -> Result<Self> {
-        let create_info = vk::DescriptorSetLayoutCreateInfo::builder().build();
-        let descriptor_set_layout =
-            DescriptorSetLayout::new(context.logical_device.clone(), create_info)?;
-        let descriptor_set_layout = Arc::new(descriptor_set_layout);
-
-        let shader_paths = ShaderPathSetBuilder::default()
-            .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
-            .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        let device = context.logical_device.clone();
-        let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
-
-        let descriptions = Self::vertex_input_descriptions();
-        let attributes = Self::vertex_attributes();
-        let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&descriptions)
-            .vertex_attribute_descriptions(&attributes)
-            .build();
-
-        let settings = GraphicsPipelineSettingsBuilder::default()
-            .shader_set(shader_set)
-            .render_pass(render_pass)
-            .vertex_state_info(vertex_state_info)
-            .descriptor_set_layout(descriptor_set_layout)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-
-        let (pipeline, pipeline_layout) =
-            GraphicsPipeline::from_settings(device.clone(), settings)?;
-
-        #[rustfmt::skip]
-        let vertices: [f32; 15] = [
-           -0.5,  -0.5, 1.0, 0.0, 0.0,
-            0.0,  0.5, 0.0, 1.0, 0.0,
-            0.5,  -0.5, 0.0, 0.0, 1.0,
-        ];
-        let number_of_vertices = vertices.len();
-
-        let vertex_buffer = pool.new_gpu_buffer(
-            &vertices,
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-            context.allocator.clone(),
-            context.graphics_queue(),
-        )?;
-
-        let rendering = Self {
-            pipeline,
-            pipeline_layout,
-            vertex_buffer,
-            number_of_vertices,
-            device,
-        };
-
-        Ok(rendering)
-    }
-
-    pub fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 2] {
-        let position_description = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(0)
-            .build();
-
-        let color_description = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(1)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset((std::mem::size_of::<f32>() * 2) as _)
-            .build();
-
-        [position_description, color_description]
-    }
-
-    pub fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
-        let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride((5 * std::mem::size_of::<f32>()) as _)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
-        [vertex_input_binding_description]
-    }
-
-    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
-        self.pipeline.bind(&self.device.handle, command_buffer);
-
-        let offsets = [0];
-        let vertex_buffers = [self.vertex_buffer.handle];
-        unsafe {
-            self.device.handle.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &vertex_buffers,
-                &offsets,
-            );
-
-            self.device
-                .handle
-                .cmd_draw(command_buffer, self.number_of_vertices as _, 1, 0, 0)
-        };
-
-        Ok(())
     }
 }

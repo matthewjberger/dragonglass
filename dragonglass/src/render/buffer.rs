@@ -6,8 +6,8 @@ use vk_mem::Allocator;
 
 pub struct Buffer {
     pub handle: vk::Buffer,
+    pub allocation_info: vk_mem::AllocationInfo,
     allocation: vk_mem::Allocation,
-    allocation_info: vk_mem::AllocationInfo,
     allocator: Arc<Allocator>,
 }
 
@@ -22,8 +22,8 @@ impl Buffer {
 
         let buffer = Self {
             handle,
-            allocation,
             allocation_info,
+            allocation,
             allocator,
         };
 
@@ -86,6 +86,10 @@ impl Buffer {
 
     pub fn staging_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
         Self::cpu_to_gpu_buffer(allocator, size, vk::BufferUsageFlags::TRANSFER_SRC)
+    }
+
+    pub fn uniform_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
+        Self::cpu_to_gpu_buffer(allocator, size, vk::BufferUsageFlags::UNIFORM_BUFFER)
     }
 
     pub fn device_local_buffer(

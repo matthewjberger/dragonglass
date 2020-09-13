@@ -4,7 +4,10 @@ pub use self::{
     pipeline::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,
     },
-    resource::{DescriptorSetLayout, Fence, Framebuffer, Image, ImageView, RenderPass, Semaphore},
+    resource::{
+        DescriptorPool, DescriptorSetLayout, Fence, Framebuffer, Image, ImageView, RenderPass,
+        Semaphore,
+    },
     shader::{Shader, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, ShaderSet},
     swapchain::{Swapchain, SwapchainProperties},
 };

@@ -3,7 +3,7 @@ use crate::core::LogicalDevice;
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 
 pub struct CommandPool {
     pub handle: vk::CommandPool,

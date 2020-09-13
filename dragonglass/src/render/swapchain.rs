@@ -2,7 +2,7 @@ use super::resource::ImageView;
 use crate::core::{LogicalDevice, Surface};
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
-use std::sync::Arc;
+use std::{cmp, sync::Arc};
 
 pub struct Swapchain {
     pub handle_ash: AshSwapchain,
@@ -154,6 +154,10 @@ impl SwapchainProperties {
         };
 
         Ok(present_mode)
+    }
+
+    pub fn aspect_ratio(&self) -> f32 {
+        self.extent.width as f32 / cmp::max(self.extent.height, 1) as f32
     }
 }
 

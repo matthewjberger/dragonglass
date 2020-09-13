@@ -1,0 +1,231 @@
+use super::{
+    core::{Context, LogicalDevice},
+    render::{
+        Buffer, CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
+        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
+        ShaderPathSetBuilder,
+    },
+};
+use anyhow::{anyhow, Result};
+use ash::{version::DeviceV1_0, vk};
+use nalgebra_glm as glm;
+use std::{mem, sync::Arc};
+
+pub struct UniformBuffer {
+    pub view: glm::Mat4,
+    pub projection: glm::Mat4,
+    pub model: glm::Mat4,
+}
+
+pub struct TriangleRendering {
+    pub pipeline: GraphicsPipeline,
+    pub pipeline_layout: PipelineLayout,
+    pub vertex_buffer: Buffer,
+    pub uniform_buffer: Buffer,
+    pub descriptor_pool: DescriptorPool,
+    pub descriptor_set_layout: Arc<DescriptorSetLayout>,
+    pub descriptor_set: vk::DescriptorSet,
+    number_of_vertices: usize,
+    device: Arc<LogicalDevice>,
+}
+
+impl TriangleRendering {
+    pub fn new(
+        context: Arc<Context>,
+        pool: &CommandPool,
+        render_pass: Arc<RenderPass>,
+        shader_cache: &mut ShaderCache,
+    ) -> Result<Self> {
+        let device = context.logical_device.clone();
+        let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
+        let descriptor_pool = Self::descriptor_pool(device.clone())?;
+        let descriptor_set =
+            descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
+
+        let shader_paths = ShaderPathSetBuilder::default()
+            .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
+            .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
+
+        let descriptions = Self::vertex_input_descriptions();
+        let attributes = Self::vertex_attributes();
+        let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&descriptions)
+            .vertex_attribute_descriptions(&attributes)
+            .build();
+
+        let settings = GraphicsPipelineSettingsBuilder::default()
+            .shader_set(shader_set)
+            .render_pass(render_pass)
+            .vertex_state_info(vertex_state_info)
+            .descriptor_set_layout(descriptor_set_layout.clone())
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+
+        let (pipeline, pipeline_layout) =
+            GraphicsPipeline::from_settings(device.clone(), settings)?;
+
+        #[rustfmt::skip]
+        let vertices: [f32; 15] = [
+           -0.5,  -0.5, 1.0, 0.0, 0.0,
+            0.0,  0.5, 0.0, 1.0, 0.0,
+            0.5,  -0.5, 0.0, 0.0, 1.0,
+        ];
+        let number_of_vertices = vertices.len();
+
+        let vertex_buffer = pool.new_gpu_buffer(
+            &vertices,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            context.allocator.clone(),
+            context.graphics_queue(),
+        )?;
+
+        let uniform_buffer = Buffer::uniform_buffer(
+            context.allocator.clone(),
+            mem::size_of::<UniformBuffer>() as _,
+        )?;
+
+        let mut rendering = Self {
+            pipeline,
+            pipeline_layout,
+            vertex_buffer,
+            uniform_buffer,
+            descriptor_pool,
+            descriptor_set_layout,
+            descriptor_set,
+            number_of_vertices,
+            device,
+        };
+
+        rendering.update_descriptor_set();
+
+        Ok(rendering)
+    }
+
+    pub fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 2] {
+        let position_description = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build();
+
+        let color_description = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset((std::mem::size_of::<f32>() * 2) as _)
+            .build();
+
+        [position_description, color_description]
+    }
+
+    pub fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
+        let ubo_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [ubo_pool_size];
+
+        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+            .pool_sizes(&pool_sizes)
+            .max_sets(1);
+
+        DescriptorPool::new(device, pool_info)
+    }
+
+    pub fn descriptor_set_layout(device: Arc<LogicalDevice>) -> Result<DescriptorSetLayout> {
+        let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build();
+        let bindings = [ubo_binding];
+        let create_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
+        DescriptorSetLayout::new(device, create_info)
+    }
+
+    fn update_descriptor_set(&mut self) {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.uniform_buffer.handle)
+            .offset(0)
+            .range(self.uniform_buffer.allocation_info.get_size() as _);
+
+        let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&[buffer_info.build()])
+            .build();
+
+        unsafe {
+            self.device
+                .handle
+                .update_descriptor_sets(&[ubo_descriptor_write], &[])
+        }
+    }
+
+    pub fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
+        let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride((5 * std::mem::size_of::<f32>()) as _)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build();
+        [vertex_input_binding_description]
+    }
+
+    pub fn update_ubo(&self, aspect_ratio: f32) -> Result<()> {
+        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
+        let view = glm::look_at(
+            &glm::vec3(-1.0, 0.0, -1.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::vec3(0.0, 1.0, 0.0),
+        );
+
+        let ubo = UniformBuffer {
+            view,
+            projection,
+            model: glm::Mat4::identity(),
+        };
+
+        self.uniform_buffer.upload_data(&[ubo], 0)?;
+
+        Ok(())
+    }
+
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        self.pipeline.bind(&self.device.handle, command_buffer);
+
+        let offsets = [0];
+        let vertex_buffers = [self.vertex_buffer.handle];
+        unsafe {
+            self.device.handle.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &vertex_buffers,
+                &offsets,
+            );
+
+            self.device.handle.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout.handle,
+                0,
+                &[self.descriptor_set],
+                &[],
+            );
+
+            self.device
+                .handle
+                .cmd_draw(command_buffer, self.number_of_vertices as _, 1, 0, 0)
+        };
+
+        Ok(())
+    }
+}
