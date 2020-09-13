@@ -79,7 +79,7 @@ impl TriangleRendering {
             context.allocator.clone(),
             (vertices.len() * std::mem::size_of::<f32>()) as _,
         )?;
-        vertex_buffer.upload_data(&vertices, pool, context.graphics_queue())?;
+        vertex_buffer.upload_data(&vertices, 0, pool, context.graphics_queue())?;
 
         let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             context.allocator.clone(),

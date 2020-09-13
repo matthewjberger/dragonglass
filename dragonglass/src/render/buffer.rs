@@ -40,6 +40,7 @@ impl GpuBuffer {
     pub fn upload_data<T: Copy>(
         &self,
         data: &[T],
+        offset: usize,
         pool: &CommandPool,
         graphics_queue: vk::Queue,
     ) -> Result<()> {
@@ -48,7 +49,10 @@ impl GpuBuffer {
         let staging_buffer = CpuToGpuBuffer::staging_buffer(self.allocator.clone(), size as _)?;
         staging_buffer.upload_data(data, 0)?;
 
-        let region = vk::BufferCopy::builder().size(size as _).build();
+        let region = vk::BufferCopy::builder()
+            .size(size as _)
+            .dst_offset(offset as _)
+            .build();
 
         let info = BufferCopyInfoBuilder::default()
             .graphics_queue(graphics_queue)
