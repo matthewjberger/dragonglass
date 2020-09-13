@@ -26,6 +26,7 @@ pub struct TriangleRendering {
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub descriptor_set: vk::DescriptorSet,
     number_of_vertices: usize,
+    number_of_indices: usize,
     device: Arc<LogicalDevice>,
 }
 
@@ -68,21 +69,32 @@ impl TriangleRendering {
             GraphicsPipeline::from_settings(device.clone(), settings)?;
 
         #[rustfmt::skip]
-        let vertices: [f32; 15] = [
-           -0.5,  -0.5, 1.0, 0.0, 0.0,
-            0.0,  0.5, 0.0, 1.0, 0.0,
-            0.5,  -0.5, 0.0, 0.0, 1.0,
+        let vertices: [f32; 20] = [
+           -0.5, -0.5, 1.0, 0.0, 0.0,
+            0.5,  0.5, 0.0, 1.0, 0.0,
+            0.5, -0.5, 0.0, 0.0, 1.0,
+           -0.5,  0.5, 1.0, 1.0, 1.0,
         ];
         let number_of_vertices = vertices.len();
+
+        let indices: [u32; 6] = [0, 1, 2, 3, 1, 0];
+        let number_of_indices = indices.len();
 
         let geometry_buffer = GeometryBuffer::new(
             context.allocator.clone(),
             (vertices.len() * std::mem::size_of::<f32>()) as _,
-            None,
+            Some((indices.len() * std::mem::size_of::<u32>()) as _),
         )?;
+
         geometry_buffer
             .vertex_buffer
             .upload_data(&vertices, 0, pool, context.graphics_queue())?;
+
+        geometry_buffer
+            .index_buffer
+            .as_ref()
+            .ok_or_else(|| anyhow!("Failed to access index buffer!"))?
+            .upload_data(&indices, 0, pool, context.graphics_queue())?;
 
         let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             context.allocator.clone(),
@@ -98,6 +110,7 @@ impl TriangleRendering {
             descriptor_set_layout,
             descriptor_set,
             number_of_vertices,
+            number_of_indices,
             device,
         };
 
@@ -185,7 +198,7 @@ impl TriangleRendering {
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
         let view = glm::look_at(
-            &glm::vec3(-1.0, 0.0, -1.0),
+            &glm::vec3(0.0, 0.0, -1.0),
             &glm::vec3(0.0, 0.0, 0.0),
             &glm::vec3(0.0, 1.0, 0.0),
         );
@@ -217,9 +230,14 @@ impl TriangleRendering {
                 &[],
             );
 
-            self.device
-                .handle
-                .cmd_draw(command_buffer, self.number_of_vertices as _, 1, 0, 0)
+            self.device.handle.cmd_draw_indexed(
+                command_buffer,
+                self.number_of_indices as _,
+                1,
+                0,
+                0,
+                0,
+            )
         };
 
         Ok(())
