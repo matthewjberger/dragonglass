@@ -1,4 +1,4 @@
-use super::resource::ImageView;
+use super::ImageView;
 use crate::core::{LogicalDevice, Surface};
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
