@@ -121,13 +121,18 @@ impl RenderingDevice {
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
             self.check_presentation_result(result, dimensions)?;
+            self.reset_command_pool()?;
             self.frame = (1 + self.frame) % Self::MAX_FRAMES_IN_FLIGHT;
-            unsafe {
-                self.context.logical_device.handle.reset_command_pool(
-                    self.command_pool.handle,
-                    vk::CommandPoolResetFlags::empty(),
-                )?;
-            }
+        }
+        Ok(())
+    }
+
+    fn reset_command_pool(&self) -> Result<()> {
+        unsafe {
+            self.context
+                .logical_device
+                .handle
+                .reset_command_pool(self.command_pool.handle, vk::CommandPoolResetFlags::empty())?;
         }
         Ok(())
     }
