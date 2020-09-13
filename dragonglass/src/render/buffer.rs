@@ -1,6 +1,6 @@
 use super::{BufferCopyInfoBuilder, CommandPool};
 use anyhow::{anyhow, Result};
-use ash::vk;
+use ash::{version::DeviceV1_0, vk};
 use log::error;
 use std::sync::Arc;
 use vk_mem::Allocator;
@@ -69,6 +69,10 @@ impl GpuBuffer {
 
     pub fn vertex_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
         Self::new(allocator, size, vk::BufferUsageFlags::VERTEX_BUFFER)
+    }
+
+    pub fn index_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
+        Self::new(allocator, size, vk::BufferUsageFlags::INDEX_BUFFER)
     }
 }
 
@@ -178,5 +182,50 @@ impl Drop for Buffer {
         if let Err(error) = self.allocator.destroy_buffer(self.handle, &self.allocation) {
             error!("{}", error);
         }
+    }
+}
+
+pub struct GeometryBuffer {
+    pub vertex_buffer: GpuBuffer,
+    pub index_buffer: Option<GpuBuffer>,
+}
+
+impl GeometryBuffer {
+    pub fn new(
+        allocator: Arc<Allocator>,
+        vertex_buffer_size: vk::DeviceSize,
+        index_buffer_size: Option<vk::DeviceSize>,
+    ) -> Result<Self> {
+        let vertex_buffer = GpuBuffer::vertex_buffer(allocator.clone(), vertex_buffer_size)?;
+        let index_buffer = if let Some(index_buffer_size) = index_buffer_size {
+            let index_buffer = GpuBuffer::index_buffer(allocator, index_buffer_size)?;
+            Some(index_buffer)
+        } else {
+            None
+        };
+        let geometry_buffer = Self {
+            vertex_buffer,
+            index_buffer,
+        };
+        Ok(geometry_buffer)
+    }
+
+    /// Assumes 32-bit index buffers
+    pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) -> Result<()> {
+        let offsets = [0];
+        let vertex_buffers = [self.vertex_buffer.handle()];
+        unsafe {
+            device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+            if let Some(index_buffer) = self.index_buffer.as_ref() {
+                device.cmd_bind_index_buffer(
+                    command_buffer,
+                    index_buffer.handle(),
+                    0,
+                    vk::IndexType::UINT32,
+                );
+            }
+        };
+
+        Ok(())
     }
 }

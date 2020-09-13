@@ -1,5 +1,5 @@
 pub use self::{
-    buffer::{Buffer, CpuToGpuBuffer, GpuBuffer},
+    buffer::{Buffer, CpuToGpuBuffer, GeometryBuffer, GpuBuffer},
     command::{BufferCopyInfo, BufferCopyInfoBuilder, CommandPool},
     pipeline::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,

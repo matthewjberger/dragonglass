@@ -1,7 +1,7 @@
 use super::{
     core::{Context, LogicalDevice},
     render::{
-        CommandPool, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, GpuBuffer,
+        CommandPool, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, GeometryBuffer,
         GraphicsPipeline, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
         ShaderPathSetBuilder,
     },
@@ -20,7 +20,7 @@ pub struct UniformBuffer {
 pub struct TriangleRendering {
     pub pipeline: GraphicsPipeline,
     pub pipeline_layout: PipelineLayout,
-    pub vertex_buffer: GpuBuffer,
+    pub geometry_buffer: GeometryBuffer,
     pub uniform_buffer: CpuToGpuBuffer,
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
@@ -75,11 +75,14 @@ impl TriangleRendering {
         ];
         let number_of_vertices = vertices.len();
 
-        let vertex_buffer = GpuBuffer::vertex_buffer(
+        let geometry_buffer = GeometryBuffer::new(
             context.allocator.clone(),
             (vertices.len() * std::mem::size_of::<f32>()) as _,
+            None,
         )?;
-        vertex_buffer.upload_data(&vertices, 0, pool, context.graphics_queue())?;
+        geometry_buffer
+            .vertex_buffer
+            .upload_data(&vertices, 0, pool, context.graphics_queue())?;
 
         let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             context.allocator.clone(),
@@ -89,7 +92,7 @@ impl TriangleRendering {
         let mut rendering = Self {
             pipeline,
             pipeline_layout,
-            vertex_buffer,
+            geometry_buffer,
             uniform_buffer,
             descriptor_pool,
             descriptor_set_layout,
@@ -201,16 +204,10 @@ impl TriangleRendering {
     pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.pipeline.bind(&self.device.handle, command_buffer);
 
-        let offsets = [0];
-        let vertex_buffers = [self.vertex_buffer.handle()];
-        unsafe {
-            self.device.handle.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &vertex_buffers,
-                &offsets,
-            );
+        self.geometry_buffer
+            .bind(&self.device.handle, command_buffer)?;
 
+        unsafe {
             self.device.handle.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
