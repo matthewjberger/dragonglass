@@ -75,9 +75,15 @@ impl TriangleRendering {
         ];
         let number_of_vertices = vertices.len();
 
-        let vertex_buffer = pool.new_gpu_buffer(
-            &vertices,
+        let vertex_buffer = Buffer::device_local_buffer(
+            context.allocator.clone(),
+            (vertices.len() * std::mem::size_of::<f32>()) as _,
             vk::BufferUsageFlags::VERTEX_BUFFER,
+        )?;
+
+        pool.upload_to_device_local_buffer(
+            &vertex_buffer,
+            &vertices,
             context.allocator.clone(),
             context.graphics_queue(),
         )?;
@@ -153,7 +159,7 @@ impl TriangleRendering {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle)
             .offset(0)
-            .range(self.uniform_buffer.allocation_info.get_size() as _);
+            .range(std::mem::size_of::<UniformBuffer>() as _);
 
         let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)

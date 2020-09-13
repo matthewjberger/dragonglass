@@ -94,7 +94,7 @@ impl Buffer {
 
     pub fn device_local_buffer(
         allocator: Arc<Allocator>,
-        staging_buffer: &Buffer,
+        size: vk::DeviceSize,
         usage: vk::BufferUsageFlags,
     ) -> Result<Self> {
         let allocation_create_info = vk_mem::AllocationCreateInfo {
@@ -102,7 +102,7 @@ impl Buffer {
             ..Default::default()
         };
         let buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(staging_buffer.allocation_info.get_size() as _)
+            .size(size)
             .usage(vk::BufferUsageFlags::TRANSFER_DST | usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         Self::new(allocator, &allocation_create_info, buffer_create_info)
