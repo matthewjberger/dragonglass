@@ -13,6 +13,6 @@ layout(location = 0) out vec2 outTexCoord;
 
 void main() {
     mat4 mvp = uniformBuffer.projection * uniformBuffer.view * uniformBuffer.model;
-    gl_Position = vec4(inPosition, 0.0, 1.0);
+    gl_Position = mvp * vec4(inPosition, 0.0, 1.0);
     outTexCoord = inTexCoord;
 }

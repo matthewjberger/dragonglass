@@ -2,6 +2,7 @@ use super::{BufferToImageCopyBuilder, CommandPool, CpuToGpuBuffer, PipelineBarri
 use crate::core::LogicalDevice;
 use anyhow::{anyhow, bail, Context, Result};
 use ash::{version::DeviceV1_0, vk};
+use derive_builder::Builder;
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
 use log::error;
 use std::{
@@ -9,6 +10,18 @@ use std::{
     sync::Arc,
 };
 use vk_mem::Allocator;
+
+#[derive(Builder)]
+pub struct ImageLayoutTransition {
+    pub graphics_queue: vk::Queue,
+    pub mip_levels: u32,
+    pub old_layout: vk::ImageLayout,
+    pub new_layout: vk::ImageLayout,
+    pub src_access_mask: vk::AccessFlags,
+    pub dst_access_mask: vk::AccessFlags,
+    pub src_stage_mask: vk::PipelineStageFlags,
+    pub dst_stage_mask: vk::PipelineStageFlags,
+}
 
 pub struct ImageDescription {
     pub format: vk::Format,
@@ -120,38 +133,79 @@ impl Image {
         pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<()> {
-        // Create and upload data to staging buffer
         let buffer = CpuToGpuBuffer::staging_buffer(
             self.allocator.clone(),
             self.allocation_info.get_size() as _,
         )?;
         buffer.upload_data(&description.pixels, 0)?;
 
-        // Transition to transfer_dst_optimal
+        let transition = ImageLayoutTransitionBuilder::default()
+            .graphics_queue(graphics_queue)
+            .mip_levels(description.mip_levels)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
+            .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        self.transition(pool, &transition)?;
+
+        self.copy_to_gpu_buffer(pool, graphics_queue, buffer.handle(), description)?;
+
+        // self.generate_mipmaps(pool, description)?;
+
+        let transition = ImageLayoutTransitionBuilder::default()
+            .graphics_queue(graphics_queue)
+            .mip_levels(description.mip_levels)
+            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        self.transition(pool, &transition)?;
+
+        Ok(())
+    }
+
+    fn transition(&self, pool: &CommandPool, info: &ImageLayoutTransition) -> Result<()> {
         let subresource_range = vk::ImageSubresourceRange::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .level_count(1)
             .layer_count(1)
             .build();
         let image_barrier = vk::ImageMemoryBarrier::builder()
-            .old_layout(vk::ImageLayout::UNDEFINED)
-            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .old_layout(info.old_layout)
+            .new_layout(info.new_layout)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(self.handle)
             .subresource_range(subresource_range)
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .src_access_mask(info.src_access_mask)
+            .dst_access_mask(info.dst_access_mask)
             .build();
         let pipeline_barrier_info = PipelineBarrierBuilder::default()
-            .graphics_queue(graphics_queue)
-            .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
-            .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .graphics_queue(info.graphics_queue)
+            .src_stage_mask(info.src_stage_mask)
+            .dst_stage_mask(info.dst_stage_mask)
             .image_memory_barriers(vec![image_barrier])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         pool.transition_image_layout(&pipeline_barrier_info)?;
+        Ok(())
+    }
 
+    fn copy_to_gpu_buffer(
+        &self,
+        pool: &CommandPool,
+        graphics_queue: vk::Queue,
+        buffer: vk::Buffer,
+        description: &ImageDescription,
+    ) -> Result<()> {
         // Copy the staging buffer to the image
         let extent = vk::Extent3D::builder()
             .width(description.width)
@@ -172,41 +226,12 @@ impl Image {
             .build();
         let copy_info = BufferToImageCopyBuilder::default()
             .graphics_queue(graphics_queue)
-            .source(buffer.handle())
+            .source(buffer)
             .destination(self.handle)
             .regions(vec![region])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         pool.copy_buffer_to_image(&copy_info)?;
-
-        // self.generate_mipmaps(&command_pool, &description)?;
-
-        // Transition to shader_read_only_optimal
-        let subresource_range = vk::ImageSubresourceRange::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .base_mip_level(description.mip_levels - 1)
-            .level_count(1)
-            .layer_count(1)
-            .build();
-        let image_barrier = vk::ImageMemoryBarrier::builder()
-            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(self.handle)
-            .subresource_range(subresource_range)
-            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .build();
-        let pipeline_barrier_info = PipelineBarrierBuilder::default()
-            .graphics_queue(graphics_queue)
-            .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
-            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .image_memory_barriers(vec![image_barrier])
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        pool.transition_image_layout(&pipeline_barrier_info)?;
-
         Ok(())
     }
 
@@ -218,10 +243,9 @@ impl Image {
     //     let format_properties = self
     //         .context
     //         .physical_device_format_properties(texture_description.format);
-
     //     if !format_properties
     //         .optimal_tiling_features
-    //             .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
+    //         .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
     //     {
     //         panic!(
     //             "Linear blitting is not supported for format: {:?}",
@@ -242,7 +266,7 @@ impl Image {
     //             mip_height
     //         };
     //         let barrier = vk::ImageMemoryBarrier::builder()
-    //             .image(self.image())
+    //             .image(self.handle)
     //             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
     //             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
     //             .subresource_range(vk::ImageSubresourceRange {
@@ -252,7 +276,7 @@ impl Image {
     //                 level_count: 1,
     //                 base_mip_level: level - 1,
     //             })
-    //         .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+    //             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
     //             .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
     //             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
     //             .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
@@ -278,23 +302,22 @@ impl Image {
     //                 base_array_layer: 0,
     //                 layer_count: 1,
     //             })
-    //         .dst_offsets([
-    //             vk::Offset3D { x: 0, y: 0, z: 0 },
-    //             vk::Offset3D {
-    //                 x: next_mip_width,
-    //                 y: next_mip_height,
-    //                 z: 1,
-    //             },
-    //         ])
+    //             .dst_offsets([
+    //                 vk::Offset3D { x: 0, y: 0, z: 0 },
+    //                 vk::Offset3D {
+    //                     x: next_mip_width,
+    //                     y: next_mip_height,
+    //                     z: 1,
+    //                 },
+    //             ])
     //             .dst_subresource(vk::ImageSubresourceLayers {
     //                 aspect_mask: vk::ImageAspectFlags::COLOR,
     //                 mip_level: level,
     //                 base_array_layer: 0,
     //                 layer_count: 1,
     //             })
-    //         .build();
+    //             .build();
     //         let blits = [blit];
-
     //         command_pool.execute_command_once(
     //             self.context.graphics_queue(),
     //             |command_buffer| unsafe {
@@ -312,7 +335,6 @@ impl Image {
     //                     )
     //             },
     //         )?;
-
     //         let barrier = vk::ImageMemoryBarrier::builder()
     //             .image(self.image())
     //             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
@@ -324,13 +346,12 @@ impl Image {
     //                 level_count: 1,
     //                 base_mip_level: level - 1,
     //             })
-    //         .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+    //             .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
     //             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
     //             .src_access_mask(vk::AccessFlags::TRANSFER_READ)
     //             .dst_access_mask(vk::AccessFlags::SHADER_READ)
     //             .build();
     //         let barriers = [barrier];
-
     //         command_pool.transition_image_layout(
     //             &barriers,
     //             vk::PipelineStageFlags::TRANSFER,
