@@ -2,7 +2,7 @@ use super::{
     core::{Context, LogicalDevice},
     forward::ForwardSwapchain,
     render::{CommandPool, Fence, RenderPass, Semaphore, ShaderCache},
-    triangle::TriangleRendering,
+    scene::Scene,
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
@@ -11,12 +11,12 @@ use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
-    triangle: Option<TriangleRendering>,
+    scene: Option<Scene>,
     shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
-    command_pool: CommandPool,
+    _command_pool: CommandPool,
     transient_command_pool: CommandPool,
     forward_swapchain: Option<ForwardSwapchain>,
     context: Arc<Context>,
@@ -46,7 +46,7 @@ impl RenderingDevice {
 
         let mut shader_cache = ShaderCache::default();
 
-        let triangle = TriangleRendering::new(
+        let scene = Scene::new(
             context.clone(),
             &transient_command_pool,
             forward_swapchain.render_pass.clone(),
@@ -54,12 +54,12 @@ impl RenderingDevice {
         )?;
 
         let renderer = Self {
-            triangle: Some(triangle),
+            scene: Some(scene),
             shader_cache,
             frame: 0,
             frame_locks,
             command_buffers,
-            command_pool,
+            _command_pool: command_pool,
             transient_command_pool,
             forward_swapchain: Some(forward_swapchain),
             context,
@@ -117,12 +117,12 @@ impl RenderingDevice {
     }
 
     fn update(&self) -> Result<()> {
-        if let Some(triangle) = self.triangle.as_ref() {
+        if let Some(scene) = self.scene.as_ref() {
             let aspect_ratio = self
                 .forward_swapchain()?
                 .swapchain_properties
                 .aspect_ratio();
-            triangle.update_ubo(aspect_ratio)?;
+            scene.update_ubo(aspect_ratio)?;
         }
         Ok(())
     }
@@ -203,14 +203,14 @@ impl RenderingDevice {
         self.forward_swapchain = None;
         self.forward_swapchain = Some(ForwardSwapchain::new(self.context.clone(), dimensions)?);
 
-        self.triangle = None;
-        let triangle = TriangleRendering::new(
+        self.scene = None;
+        let scene = Scene::new(
             self.context.clone(),
             &self.transient_command_pool,
             self.forward_swapchain()?.render_pass.clone(),
             &mut self.shader_cache,
         )?;
-        self.triangle = Some(triangle);
+        self.scene = Some(scene);
 
         Ok(())
     }
@@ -257,8 +257,8 @@ impl RenderingDevice {
             begin_info,
             || {
                 self.update_viewport(command_buffer)?;
-                if let Some(triangle) = self.triangle.as_ref() {
-                    triangle.issue_commands(command_buffer)?;
+                if let Some(scene) = self.scene.as_ref() {
+                    scene.issue_commands(command_buffer)?;
                 }
                 Ok(())
             },

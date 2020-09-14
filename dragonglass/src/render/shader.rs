@@ -24,10 +24,10 @@ impl Shader {
         Ok(shader)
     }
 
-    pub fn from_file<P: AsRef<Path> + Into<PathBuf>>(
-        path: P,
-        device: Arc<LogicalDevice>,
-    ) -> Result<Self> {
+    pub fn from_file<P>(path: P, device: Arc<LogicalDevice>) -> Result<Self>
+    where
+        P: AsRef<Path> + Into<PathBuf>,
+    {
         let mut shader_file = std::fs::File::open(path)?;
         let shader_source = ash::util::read_spv(&mut shader_file)?;
         let create_info = vk::ShaderModuleCreateInfo::builder().code(&shader_source);

@@ -145,8 +145,11 @@ pub struct PipelineBarrier {
     pub graphics_queue: vk::Queue,
     pub src_stage_mask: vk::PipelineStageFlags,
     pub dst_stage_mask: vk::PipelineStageFlags,
+    #[builder(default)]
     pub dependency_flags: vk::DependencyFlags,
+    #[builder(default)]
     pub memory_barriers: Vec<vk::MemoryBarrier>,
+    #[builder(default)]
     pub buffer_memory_barriers: Vec<vk::BufferMemoryBarrier>,
     pub image_memory_barriers: Vec<vk::ImageMemoryBarrier>,
 }

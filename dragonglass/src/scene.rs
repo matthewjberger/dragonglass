@@ -2,8 +2,8 @@ use super::{
     core::{Context, LogicalDevice},
     render::{
         CommandPool, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, GeometryBuffer,
-        GraphicsPipeline, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
-        ShaderPathSetBuilder,
+        GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageBundle, ImageDescription,
+        PipelineLayout, RenderPass, ShaderCache, ShaderPathSetBuilder,
     },
 };
 use anyhow::{anyhow, Result};
@@ -17,7 +17,7 @@ pub struct UniformBuffer {
     pub model: glm::Mat4,
 }
 
-pub struct TriangleRendering {
+pub struct Scene {
     pub pipeline: GraphicsPipeline,
     pub pipeline_layout: PipelineLayout,
     pub geometry_buffer: GeometryBuffer,
@@ -25,11 +25,12 @@ pub struct TriangleRendering {
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub descriptor_set: vk::DescriptorSet,
+    pub image_bundle: ImageBundle,
     number_of_indices: usize,
     device: Arc<LogicalDevice>,
 }
 
-impl TriangleRendering {
+impl Scene {
     pub fn new(
         context: Arc<Context>,
         pool: &CommandPool,
@@ -69,10 +70,10 @@ impl TriangleRendering {
 
         #[rustfmt::skip]
         let vertices: [f32; 20] = [
-           -0.5, -0.5, 1.0, 0.0, 0.0,
+            -0.5, -0.5, 1.0, 0.0, 0.0,
             0.5,  0.5, 0.0, 1.0, 0.0,
             0.5, -0.5, 0.0, 0.0, 1.0,
-           -0.5,  0.5, 1.0, 1.0, 1.0,
+            -0.5,  0.5, 1.0, 1.0, 1.0,
         ];
 
         let indices: [u32; 6] = [0, 1, 2, 3, 1, 0];
@@ -99,6 +100,15 @@ impl TriangleRendering {
             mem::size_of::<UniformBuffer>() as _,
         )?;
 
+        let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
+        let image_bundle = ImageBundle::new(
+            context.logical_device.clone(),
+            context.graphics_queue(),
+            context.allocator.clone(),
+            pool,
+            &description,
+        )?;
+
         let mut rendering = Self {
             pipeline,
             pipeline_layout,
@@ -107,6 +117,7 @@ impl TriangleRendering {
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
+            image_bundle,
             number_of_indices,
             device,
         };
@@ -218,14 +229,14 @@ impl TriangleRendering {
             .bind(&self.device.handle, command_buffer)?;
 
         unsafe {
-            // self.device.handle.cmd_bind_descriptor_sets(
-            //     command_buffer,
-            //     vk::PipelineBindPoint::GRAPHICS,
-            //     self.pipeline_layout.handle,
-            //     0,
-            //     &[self.descriptor_set],
-            //     &[],
-            // );
+            self.device.handle.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout.handle,
+                0,
+                &[self.descriptor_set],
+                &[],
+            );
 
             self.device.handle.cmd_draw_indexed(
                 command_buffer,

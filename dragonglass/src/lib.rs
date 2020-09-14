@@ -4,4 +4,4 @@ mod core;
 mod device;
 mod forward;
 mod render;
-mod triangle;
+mod scene;
