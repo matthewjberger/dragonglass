@@ -69,11 +69,11 @@ impl Scene {
             GraphicsPipeline::from_settings(device.clone(), settings)?;
 
         #[rustfmt::skip]
-        let vertices: [f32; 20] = [
-            -0.5, -0.5, 1.0, 0.0, 0.0,
-            0.5,  0.5, 0.0, 1.0, 0.0,
-            0.5, -0.5, 0.0, 0.0, 1.0,
-            -0.5,  0.5, 1.0, 1.0, 1.0,
+        let vertices: [f32; 16] = [
+           -0.5, -0.5, 0.0, 0.0,
+            0.5,  0.5, 1.0, 1.0,
+            0.5, -0.5, 1.0, 0.0,
+           -0.5,  0.5, 0.0, 1.0,
         ];
 
         let indices: [u32; 6] = [0, 1, 2, 3, 1, 0];
@@ -100,7 +100,8 @@ impl Scene {
             mem::size_of::<UniformBuffer>() as _,
         )?;
 
-        let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
+        let mut description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
+        description.mip_levels = 1;
         let image_bundle = ImageBundle::new(
             context.logical_device.clone(),
             context.graphics_queue(),
@@ -135,23 +136,38 @@ impl Scene {
             .offset(0)
             .build();
 
-        let color_description = vk::VertexInputAttributeDescription::builder()
+        let tex_coord_description = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(1)
-            .format(vk::Format::R32G32B32_SFLOAT)
+            .format(vk::Format::R32G32_SFLOAT)
             .offset((std::mem::size_of::<f32>() * 2) as _)
             .build();
 
-        [position_description, color_description]
+        [position_description, tex_coord_description]
+    }
+
+    pub fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
+        let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride((4 * std::mem::size_of::<f32>()) as _)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build();
+        [vertex_input_binding_description]
     }
 
     pub fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
+        // TODO: Replace with builders
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: 1,
         };
 
-        let pool_sizes = [ubo_pool_size];
+        let sampler_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [ubo_pool_size, sampler_pool_size];
 
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .pool_sizes(&pool_sizes)
@@ -167,7 +183,15 @@ impl Scene {
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             .build();
-        let bindings = [ubo_binding];
+
+        let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let bindings = [ubo_binding, sampler_binding];
         let create_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
         DescriptorSetLayout::new(device, create_info)
     }
@@ -176,30 +200,36 @@ impl Scene {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
             .offset(0)
-            .range(std::mem::size_of::<UniformBuffer>() as _);
+            .range(std::mem::size_of::<UniformBuffer>() as _)
+            .build();
 
         let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(&[buffer_info.build()])
+            .buffer_info(&[buffer_info])
+            .build();
+
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(self.image_bundle.view.handle)
+            .sampler(self.image_bundle.sampler.handle)
+            .build();
+
+        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&[image_info])
             .build();
 
         unsafe {
             self.device
                 .handle
-                .update_descriptor_sets(&[ubo_descriptor_write], &[])
+                .update_descriptor_sets(&[ubo_descriptor_write, sampler_descriptor_write], &[])
         }
-    }
-
-    pub fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
-        let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride((5 * std::mem::size_of::<f32>()) as _)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
-        [vertex_input_binding_description]
     }
 
     pub fn update_ubo(&self, aspect_ratio: f32) -> Result<()> {

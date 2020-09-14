@@ -120,28 +120,29 @@ impl Image {
         pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<()> {
+        // Create and upload data to staging buffer
         let buffer = CpuToGpuBuffer::staging_buffer(
             self.allocator.clone(),
             self.allocation_info.get_size() as _,
         )?;
         buffer.upload_data(&description.pixels, 0)?;
 
+        // Transition to transfer_dst_optimal
         let subresource_range = vk::ImageSubresourceRange::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .level_count(description.mip_levels)
-            .layer_count(1);
-
+            .level_count(1)
+            .layer_count(1)
+            .build();
         let image_barrier = vk::ImageMemoryBarrier::builder()
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(self.handle)
-            .subresource_range(subresource_range.build())
+            .subresource_range(subresource_range)
             .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
             .build();
-
         let pipeline_barrier_info = PipelineBarrierBuilder::default()
             .graphics_queue(graphics_queue)
             .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
@@ -149,27 +150,26 @@ impl Image {
             .image_memory_barriers(vec![image_barrier])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-
         pool.transition_image_layout(&pipeline_barrier_info)?;
 
+        // Copy the staging buffer to the image
         let extent = vk::Extent3D::builder()
             .width(description.width)
             .height(description.height)
-            .depth(1);
-
+            .depth(1)
+            .build();
         let subresource = vk::ImageSubresourceLayers::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .layer_count(1);
-
+            .layer_count(1)
+            .build();
         let region = vk::BufferImageCopy::builder()
             .buffer_offset(0)
             .buffer_row_length(0)
             .buffer_image_height(0)
-            .image_subresource(subresource.build())
+            .image_subresource(subresource)
             .image_offset(vk::Offset3D::default())
-            .image_extent(extent.build())
+            .image_extent(extent)
             .build();
-
         let copy_info = BufferToImageCopyBuilder::default()
             .graphics_queue(graphics_queue)
             .source(buffer.handle())
@@ -177,28 +177,27 @@ impl Image {
             .regions(vec![region])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-
         pool.copy_buffer_to_image(&copy_info)?;
 
         // self.generate_mipmaps(&command_pool, &description)?;
 
+        // Transition to shader_read_only_optimal
         let subresource_range = vk::ImageSubresourceRange::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .base_mip_level(description.mip_levels - 1)
-            .layer_count(description.mip_levels - 1)
-            .layer_count(1);
-
+            .level_count(1)
+            .layer_count(1)
+            .build();
         let image_barrier = vk::ImageMemoryBarrier::builder()
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(self.handle)
-            .subresource_range(subresource_range.build())
+            .subresource_range(subresource_range)
             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .build();
-
         let pipeline_barrier_info = PipelineBarrierBuilder::default()
             .graphics_queue(graphics_queue)
             .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
@@ -206,7 +205,6 @@ impl Image {
             .image_memory_barriers(vec![image_barrier])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-
         pool.transition_image_layout(&pipeline_barrier_info)?;
 
         Ok(())
@@ -464,6 +462,7 @@ impl ImageBundle {
         image: &Image,
         description: &ImageDescription,
     ) -> Result<ImageView> {
+        // TODO: Use builders
         let components = vk::ComponentMapping {
             r: vk::ComponentSwizzle::IDENTITY,
             g: vk::ComponentSwizzle::IDENTITY,
