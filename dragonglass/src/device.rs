@@ -35,7 +35,7 @@ impl RenderingDevice {
         let graphics_queue_index = context.physical_device.graphics_queue_index;
         let command_pool = Self::create_command_pool(device.clone(), graphics_queue_index)?;
         let transient_command_pool =
-            Self::create_transient_command_pool(device.clone(), graphics_queue_index)?;
+            Self::create_transient_command_pool(device, graphics_queue_index)?;
 
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
 
@@ -74,7 +74,9 @@ impl RenderingDevice {
     }
 
     fn create_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
-        let create_info = vk::CommandPoolCreateInfo::builder().queue_family_index(queue_index);
+        let create_info = vk::CommandPoolCreateInfo::builder()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(queue_index);
         let command_pool = CommandPool::new(device, create_info)?;
         Ok(command_pool)
     }
@@ -104,7 +106,6 @@ impl RenderingDevice {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
-            self.reset_command_pool()?;
             self.update()?;
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
@@ -122,16 +123,6 @@ impl RenderingDevice {
                 .swapchain_properties
                 .aspect_ratio();
             triangle.update_ubo(aspect_ratio)?;
-        }
-        Ok(())
-    }
-
-    fn reset_command_pool(&self) -> Result<()> {
-        unsafe {
-            self.context
-                .logical_device
-                .handle
-                .reset_command_pool(self.command_pool.handle, vk::CommandPoolResetFlags::empty())?;
         }
         Ok(())
     }
