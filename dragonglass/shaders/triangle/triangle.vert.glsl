@@ -9,12 +9,10 @@ layout(binding = 0) uniform UniformBuffer {
   mat4 model;
 } uniformBuffer;
 
-layout(location = 0) out vec3 fragColor;
-layout(location = 1) out vec2 outTexCoord;
+layout(location = 0) out vec2 outTexCoord;
 
 void main() {
     mat4 mvp = uniformBuffer.projection * uniformBuffer.view * uniformBuffer.model;
-    gl_Position = mvp * vec4(inPosition, 0.0, 1.0);
-    fragColor = inColor;
+    gl_Position = vec4(inPosition, 0.0, 1.0);
     outTexCoord = inTexCoord;
 }

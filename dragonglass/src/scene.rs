@@ -202,13 +202,14 @@ impl Scene {
             .offset(0)
             .range(std::mem::size_of::<UniformBuffer>() as _)
             .build();
+        let buffer_info_list = [buffer_info];
 
         let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(&[buffer_info])
+            .buffer_info(&buffer_info_list)
             .build();
 
         let image_info = vk::DescriptorImageInfo::builder()
@@ -216,13 +217,14 @@ impl Scene {
             .image_view(self.image_bundle.view.handle)
             .sampler(self.image_bundle.sampler.handle)
             .build();
+        let image_info_list = [image_info];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(1)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&[image_info])
+            .image_info(&image_info_list)
             .build();
 
         unsafe {
