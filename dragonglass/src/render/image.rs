@@ -1,6 +1,8 @@
-use super::{BufferToImageCopyBuilder, CommandPool, CpuToGpuBuffer, PipelineBarrierBuilder};
+use super::{
+    BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, CpuToGpuBuffer, PipelineBarrierBuilder,
+};
 use crate::core::LogicalDevice;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
@@ -14,7 +16,12 @@ use vk_mem::Allocator;
 #[derive(Builder)]
 pub struct ImageLayoutTransition {
     pub graphics_queue: vk::Queue,
-    pub mip_levels: u32,
+    #[builder(default)]
+    pub base_mip_level: u32,
+    #[builder(default = "1")]
+    pub level_count: u32,
+    #[builder(default = "1")]
+    pub layer_count: u32,
     pub old_layout: vk::ImageLayout,
     pub new_layout: vk::ImageLayout,
     pub src_access_mask: vk::AccessFlags,
@@ -138,10 +145,24 @@ impl Image {
             self.allocation_info.get_size() as _,
         )?;
         buffer.upload_data(&description.pixels, 0)?;
+        self.prepare_image_for_transfer(graphics_queue, pool, description.mip_levels)?;
+        self.copy_to_gpu_buffer(graphics_queue, pool, buffer.handle(), description)?;
+        // TODO: Add this check
+        // self.ensure_linear_blitting_supported(format_properties, description.format)?;
+        self.generate_mipmaps(graphics_queue, pool, description)?;
+        self.prepare_image_for_fragment_shader(graphics_queue, pool, description.mip_levels, 0)?;
+        Ok(())
+    }
 
+    fn prepare_image_for_transfer(
+        &self,
+        graphics_queue: vk::Queue,
+        pool: &CommandPool,
+        level_count: u32,
+    ) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
             .graphics_queue(graphics_queue)
-            .mip_levels(description.mip_levels)
+            .level_count(level_count)
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .src_access_mask(vk::AccessFlags::empty())
@@ -150,15 +171,20 @@ impl Image {
             .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-        self.transition(pool, &transition)?;
+        self.transition(pool, &transition)
+    }
 
-        self.copy_to_gpu_buffer(pool, graphics_queue, buffer.handle(), description)?;
-
-        // self.generate_mipmaps(pool, description)?;
-
+    fn prepare_image_for_fragment_shader(
+        &self,
+        graphics_queue: vk::Queue,
+        pool: &CommandPool,
+        level_count: u32,
+        level: u32,
+    ) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
             .graphics_queue(graphics_queue)
-            .mip_levels(description.mip_levels)
+            .base_mip_level(level)
+            .level_count(level_count)
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
@@ -167,15 +193,35 @@ impl Image {
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-        self.transition(pool, &transition)?;
+        self.transition(pool, &transition)
+    }
 
-        Ok(())
+    fn prepare_image_for_mipmapping(
+        &self,
+        graphics_queue: vk::Queue,
+        pool: &CommandPool,
+        base_mip_level: u32,
+    ) -> Result<()> {
+        let transition = ImageLayoutTransitionBuilder::default()
+            .graphics_queue(graphics_queue)
+            .base_mip_level(base_mip_level)
+            .level_count(1)
+            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        self.transition(pool, &transition)
     }
 
     fn transition(&self, pool: &CommandPool, info: &ImageLayoutTransition) -> Result<()> {
         let subresource_range = vk::ImageSubresourceRange::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .level_count(1)
+            .base_mip_level(info.base_mip_level)
+            .level_count(info.level_count)
             .layer_count(1)
             .build();
         let image_barrier = vk::ImageMemoryBarrier::builder()
@@ -201,8 +247,8 @@ impl Image {
 
     fn copy_to_gpu_buffer(
         &self,
-        pool: &CommandPool,
         graphics_queue: vk::Queue,
+        pool: &CommandPool,
         buffer: vk::Buffer,
         description: &ImageDescription,
     ) -> Result<()> {
@@ -235,133 +281,82 @@ impl Image {
         Ok(())
     }
 
-    // pub fn generate_mipmaps(
-    //     &self,
-    //     command_pool: &CommandPool,
-    //     texture_description: &ImageDescription,
-    // ) -> Result<()> {
-    //     let format_properties = self
-    //         .context
-    //         .physical_device_format_properties(texture_description.format);
-    //     if !format_properties
-    //         .optimal_tiling_features
-    //         .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
-    //     {
-    //         panic!(
-    //             "Linear blitting is not supported for format: {:?}",
-    //             texture_description.format
-    //         );
-    //     }
-    //     let mut mip_width = texture_description.width as i32;
-    //     let mut mip_height = texture_description.height as i32;
-    //     for level in 1..texture_description.mip_levels {
-    //         let next_mip_width = if mip_width > 1 {
-    //             mip_width / 2
-    //         } else {
-    //             mip_width
-    //         };
-    //         let next_mip_height = if mip_height > 1 {
-    //             mip_height / 2
-    //         } else {
-    //             mip_height
-    //         };
-    //         let barrier = vk::ImageMemoryBarrier::builder()
-    //             .image(self.handle)
-    //             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-    //             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-    //             .subresource_range(vk::ImageSubresourceRange {
-    //                 aspect_mask: vk::ImageAspectFlags::COLOR,
-    //                 base_array_layer: 0,
-    //                 layer_count: 1,
-    //                 level_count: 1,
-    //                 base_mip_level: level - 1,
-    //             })
-    //             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-    //             .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-    //             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-    //             .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
-    //             .build();
-    //         let barriers = [barrier];
-    //         command_pool.transition_image_layout(
-    //             &barriers,
-    //             vk::PipelineStageFlags::TRANSFER,
-    //             vk::PipelineStageFlags::TRANSFER,
-    //         )?;
-    //         let blit = vk::ImageBlit::builder()
-    //             .src_offsets([
-    //                 vk::Offset3D { x: 0, y: 0, z: 0 },
-    //                 vk::Offset3D {
-    //                     x: mip_width,
-    //                     y: mip_height,
-    //                     z: 1,
-    //                 },
-    //             ])
-    //             .src_subresource(vk::ImageSubresourceLayers {
-    //                 aspect_mask: vk::ImageAspectFlags::COLOR,
-    //                 mip_level: level - 1,
-    //                 base_array_layer: 0,
-    //                 layer_count: 1,
-    //             })
-    //             .dst_offsets([
-    //                 vk::Offset3D { x: 0, y: 0, z: 0 },
-    //                 vk::Offset3D {
-    //                     x: next_mip_width,
-    //                     y: next_mip_height,
-    //                     z: 1,
-    //                 },
-    //             ])
-    //             .dst_subresource(vk::ImageSubresourceLayers {
-    //                 aspect_mask: vk::ImageAspectFlags::COLOR,
-    //                 mip_level: level,
-    //                 base_array_layer: 0,
-    //                 layer_count: 1,
-    //             })
-    //             .build();
-    //         let blits = [blit];
-    //         command_pool.execute_command_once(
-    //             self.context.graphics_queue(),
-    //             |command_buffer| unsafe {
-    //                 self.context
-    //                     .logical_device()
-    //                     .logical_device()
-    //                     .cmd_blit_image(
-    //                         command_buffer,
-    //                         self.image(),
-    //                         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-    //                         self.image(),
-    //                         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-    //                         &blits,
-    //                         vk::Filter::LINEAR,
-    //                     )
-    //             },
-    //         )?;
-    //         let barrier = vk::ImageMemoryBarrier::builder()
-    //             .image(self.image())
-    //             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-    //             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-    //             .subresource_range(vk::ImageSubresourceRange {
-    //                 aspect_mask: vk::ImageAspectFlags::COLOR,
-    //                 base_array_layer: 0,
-    //                 layer_count: 1,
-    //                 level_count: 1,
-    //                 base_mip_level: level - 1,
-    //             })
-    //             .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-    //             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-    //             .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-    //             .dst_access_mask(vk::AccessFlags::SHADER_READ)
-    //             .build();
-    //         let barriers = [barrier];
-    //         command_pool.transition_image_layout(
-    //             &barriers,
-    //             vk::PipelineStageFlags::TRANSFER,
-    //             vk::PipelineStageFlags::FRAGMENT_SHADER,
-    //         )?;
-    //         mip_width = next_mip_width;
-    //         mip_height = next_mip_height;
-    //     }
-    //     Ok(())
-    // }
+    #[allow(dead_code)]
+    fn ensure_linear_blitting_supported(
+        format_properties: vk::FormatProperties,
+        format: vk::Format,
+    ) -> Result<()> {
+        let format_supported = format_properties
+            .optimal_tiling_features
+            .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR);
+
+        ensure!(
+            format_supported,
+            "Linear blitting is not supported for format: {:?}",
+            format
+        );
+
+        Ok(())
+    }
+
+    pub fn generate_mipmaps(
+        &self,
+        graphics_queue: vk::Queue,
+        pool: &CommandPool,
+        description: &ImageDescription,
+    ) -> Result<()> {
+        let mut width = description.width as i32;
+        let mut height = description.height as i32;
+        for level in 1..description.mip_levels {
+            self.prepare_image_for_mipmapping(graphics_queue, pool, level - 1)?;
+            let dimensions = MipmapBlitDimensions::new(width, height);
+            self.blit_mipmap(graphics_queue, pool, &dimensions, level)?;
+            self.prepare_image_for_fragment_shader(graphics_queue, pool, 1, level - 1)?;
+            width = dimensions.next_width;
+            height = dimensions.next_height;
+        }
+        Ok(())
+    }
+
+    fn blit_mipmap(
+        &self,
+        graphics_queue: vk::Queue,
+        pool: &CommandPool,
+        dimensions: &MipmapBlitDimensions,
+        level: u32,
+    ) -> Result<()> {
+        let src_subresource = vk::ImageSubresourceLayers::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .mip_level(level - 1)
+            .layer_count(1)
+            .build();
+
+        let dst_subresource = vk::ImageSubresourceLayers::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .mip_level(level)
+            .layer_count(1)
+            .build();
+
+        let regions = vk::ImageBlit::builder()
+            .src_offsets(dimensions.src_offsets())
+            .src_subresource(src_subresource)
+            .dst_offsets(dimensions.dst_offsets())
+            .dst_subresource(dst_subresource)
+            .build();
+
+        let blit_image_info = BlitImageBuilder::default()
+            .graphics_queue(graphics_queue)
+            .src_image(self.handle)
+            .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .dst_image(self.handle)
+            .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .regions(vec![regions])
+            .filter(vk::Filter::LINEAR)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+
+        pool.blit_image(&blit_image_info)
+    }
 }
 
 impl Drop for Image {
@@ -526,5 +521,45 @@ impl ImageBundle {
             .min_lod(0.0)
             .max_lod(mip_levels as _);
         Sampler::new(device, sampler_info)
+    }
+}
+
+struct MipmapBlitDimensions {
+    pub width: i32,
+    pub height: i32,
+    pub next_width: i32,
+    pub next_height: i32,
+}
+
+impl MipmapBlitDimensions {
+    pub fn new(width: i32, height: i32) -> Self {
+        Self {
+            width,
+            height,
+            next_width: std::cmp::max(width / 2, 1),
+            next_height: std::cmp::max(height / 2, 1),
+        }
+    }
+
+    pub fn src_offsets(&self) -> [vk::Offset3D; 2] {
+        [
+            vk::Offset3D::default(),
+            vk::Offset3D::builder()
+                .x(self.width)
+                .y(self.height)
+                .z(1)
+                .build(),
+        ]
+    }
+
+    pub fn dst_offsets(&self) -> [vk::Offset3D; 2] {
+        [
+            vk::Offset3D::default(),
+            vk::Offset3D::builder()
+                .x(self.next_width)
+                .y(self.next_height)
+                .z(1)
+                .build(),
+        ]
     }
 }

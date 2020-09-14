@@ -100,8 +100,7 @@ impl Scene {
             mem::size_of::<UniformBuffer>() as _,
         )?;
 
-        let mut description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
-        description.mip_levels = 1;
+        let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
         let image_bundle = ImageBundle::new(
             context.logical_device.clone(),
             context.graphics_queue(),

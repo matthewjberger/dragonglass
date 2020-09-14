@@ -78,6 +78,23 @@ impl CommandPool {
         })
     }
 
+    pub fn blit_image(&self, info: &BlitImage) -> Result<()> {
+        self.execute_once(info.graphics_queue, |command_buffer| {
+            unsafe {
+                self.device.handle.cmd_blit_image(
+                    command_buffer,
+                    info.src_image,
+                    info.src_image_layout,
+                    info.dst_image,
+                    info.dst_image_layout,
+                    &info.regions,
+                    info.filter,
+                )
+            }
+            Ok(())
+        })
+    }
+
     pub fn execute_once<T>(&self, queue: vk::Queue, mut executor: T) -> Result<()>
     where
         T: FnMut(vk::CommandBuffer) -> Result<()>,
@@ -152,4 +169,15 @@ pub struct PipelineBarrier {
     #[builder(default)]
     pub buffer_memory_barriers: Vec<vk::BufferMemoryBarrier>,
     pub image_memory_barriers: Vec<vk::ImageMemoryBarrier>,
+}
+
+#[derive(Builder)]
+pub struct BlitImage {
+    pub graphics_queue: vk::Queue,
+    pub src_image: vk::Image,
+    pub src_image_layout: vk::ImageLayout,
+    pub dst_image: vk::Image,
+    pub dst_image_layout: vk::ImageLayout,
+    pub regions: Vec<vk::ImageBlit>,
+    pub filter: vk::Filter,
 }

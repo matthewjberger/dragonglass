@@ -1,8 +1,9 @@
 pub use self::{
     buffer::{Buffer, CpuToGpuBuffer, GeometryBuffer, GpuBuffer},
     command::{
-        BufferToBufferCopy, BufferToBufferCopyBuilder, BufferToImageCopy, BufferToImageCopyBuilder,
-        CommandPool, PipelineBarrier, PipelineBarrierBuilder,
+        BlitImage, BlitImageBuilder, BufferToBufferCopy, BufferToBufferCopyBuilder,
+        BufferToImageCopy, BufferToImageCopyBuilder, CommandPool, PipelineBarrier,
+        PipelineBarrierBuilder,
     },
     image::{Image, ImageBundle, ImageDescription, ImageView},
     pipeline::{
