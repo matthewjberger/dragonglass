@@ -218,14 +218,14 @@ impl TriangleRendering {
             .bind(&self.device.handle, command_buffer)?;
 
         unsafe {
-            self.device.handle.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline_layout.handle,
-                0,
-                &[self.descriptor_set],
-                &[],
-            );
+            // self.device.handle.cmd_bind_descriptor_sets(
+            //     command_buffer,
+            //     vk::PipelineBindPoint::GRAPHICS,
+            //     self.pipeline_layout.handle,
+            //     0,
+            //     &[self.descriptor_set],
+            //     &[],
+            // );
 
             self.device.handle.cmd_draw_indexed(
                 command_buffer,

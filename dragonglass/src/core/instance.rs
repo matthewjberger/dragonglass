@@ -1,4 +1,3 @@
-use super::debug::DebugLayer;
 use anyhow::{anyhow, Result};
 use ash::{
     version::{EntryV1_0, InstanceV1_0},
@@ -50,21 +49,16 @@ impl Instance {
     }
 
     fn extensions<T: HasRawWindowHandle>(window_handle: &T) -> Result<Vec<*const i8>> {
-        let mut extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
+        let extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
             .iter()
             .map(|extension| extension.as_ptr())
             .collect();
-        if DebugLayer::enabled() {
-            extensions.push(DebugLayer::extension_name().as_ptr());
-        }
         Ok(extensions)
     }
 
     pub fn layers() -> Result<Vec<*const i8>> {
-        let mut layers = Vec::new();
-        if DebugLayer::enabled() {
-            layers.push(DebugLayer::layer_name()?.as_ptr());
-        }
+        let layers = Vec::new();
+        // Add layers here
         Ok(layers)
     }
 

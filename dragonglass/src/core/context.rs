@@ -1,4 +1,4 @@
-use super::{debug::DebugLayer, Instance, LogicalDevice, PhysicalDevice};
+use super::{Instance, LogicalDevice, PhysicalDevice};
 use anyhow::{anyhow, Result};
 use ash::{
     extensions::khr::Surface as AshSurface,
@@ -6,7 +6,6 @@ use ash::{
     vk::{self, SurfaceKHR},
 };
 use ash_window::create_surface;
-use log::info;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
@@ -17,7 +16,6 @@ use vk_mem::{Allocator, AllocatorCreateInfo};
 pub struct Context {
     pub allocator: Arc<vk_mem::Allocator>,
     pub logical_device: Arc<LogicalDevice>,
-    pub debug_layer: Option<DebugLayer>,
     pub physical_device: PhysicalDevice,
     pub surface: Surface,
     pub instance: Instance,
@@ -30,12 +28,6 @@ impl Context {
         let instance = Instance::new(&entry, window_handle)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
-        let debug_layer = if DebugLayer::enabled() {
-            info!("Loading debug layer");
-            Some(DebugLayer::new(&entry, &instance.handle)?)
-        } else {
-            None
-        };
         let logical_device = LogicalDevice::from_physical(&instance.handle, &physical_device)?;
         let logical_device = Arc::new(logical_device);
 
@@ -51,7 +43,6 @@ impl Context {
         let context = Self {
             allocator,
             logical_device,
-            debug_layer,
             physical_device,
             surface,
             instance,

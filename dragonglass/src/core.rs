@@ -6,7 +6,6 @@ pub use self::{
 };
 
 mod context;
-mod debug;
 mod instance;
 mod logical_device;
 mod physical_device;
