@@ -145,16 +145,16 @@ impl Image {
             self.allocation_info.get_size() as _,
         )?;
         buffer.upload_data(&description.pixels, 0)?;
-        self.prepare_image_for_transfer(graphics_queue, pool, description.mip_levels)?;
+        self.transition_base_to_transfer_dst(graphics_queue, pool, description.mip_levels)?;
         self.copy_to_gpu_buffer(graphics_queue, pool, buffer.handle(), description)?;
         // TODO: Add this check
         // self.ensure_linear_blitting_supported(format_properties, description.format)?;
         self.generate_mipmaps(graphics_queue, pool, description)?;
-        self.prepare_image_for_fragment_shader(graphics_queue, pool, description.mip_levels - 1)?;
+        self.transition_base_to_shader_read(graphics_queue, pool, description.mip_levels - 1)?;
         Ok(())
     }
 
-    fn prepare_image_for_transfer(
+    fn transition_base_to_transfer_dst(
         &self,
         graphics_queue: vk::Queue,
         pool: &CommandPool,
@@ -174,7 +174,7 @@ impl Image {
         self.transition(pool, &transition)
     }
 
-    fn prepare_image_for_fragment_shader(
+    fn transition_base_to_shader_read(
         &self,
         graphics_queue: vk::Queue,
         pool: &CommandPool,
@@ -194,7 +194,7 @@ impl Image {
         self.transition(pool, &transition)
     }
 
-    fn prepare_image_for_mipmapping(
+    fn transition_mip_transfer_dst_to_src(
         &self,
         graphics_queue: vk::Queue,
         pool: &CommandPool,
@@ -215,7 +215,7 @@ impl Image {
         self.transition(pool, &transition)
     }
 
-    fn prepare_mipmap_for_fragment_shader(
+    fn transition_mip_to_shader_read(
         &self,
         graphics_queue: vk::Queue,
         pool: &CommandPool,
@@ -326,10 +326,10 @@ impl Image {
         let mut width = description.width as i32;
         let mut height = description.height as i32;
         for level in 1..description.mip_levels {
-            self.prepare_image_for_mipmapping(graphics_queue, pool, level - 1)?;
+            self.transition_mip_transfer_dst_to_src(graphics_queue, pool, level - 1)?;
             let dimensions = MipmapBlitDimensions::new(width, height);
             self.blit_mipmap(graphics_queue, pool, &dimensions, level)?;
-            self.prepare_mipmap_for_fragment_shader(graphics_queue, pool, level - 1)?;
+            self.transition_mip_to_shader_read(graphics_queue, pool, level - 1)?;
             width = dimensions.next_width;
             height = dimensions.next_height;
         }
