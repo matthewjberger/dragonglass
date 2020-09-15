@@ -106,6 +106,38 @@ impl ImageDescription {
 
         Ok(())
     }
+
+    fn as_image(&self, allocator: Arc<Allocator>) -> Result<Image> {
+        let extent = vk::Extent3D::builder()
+            .width(self.width)
+            .height(self.height)
+            .depth(1)
+            .build();
+
+        let create_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(extent)
+            .mip_levels(self.mip_levels)
+            .array_layers(1)
+            .format(self.format)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(
+                vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::SAMPLED,
+            )
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty());
+
+        let allocation_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        Image::new(allocator, &allocation_create_info, &create_info)
+    }
 }
 
 pub struct Image {
@@ -445,7 +477,7 @@ impl ImageBundle {
         command_pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<Self> {
-        let image = Self::create_image(allocator, &description)?;
+        let image = description.as_image(allocator)?;
         image.upload_data(graphics_queue, &command_pool, &description)?;
         let view = Self::create_image_view(device.clone(), &image, &description)?;
         let sampler = Self::create_sampler(device, description.mip_levels)?;
@@ -459,65 +491,23 @@ impl ImageBundle {
         Ok(image_bundle)
     }
 
-    fn create_image(allocator: Arc<Allocator>, description: &ImageDescription) -> Result<Image> {
-        let extent = vk::Extent3D {
-            width: description.width,
-            height: description.height,
-            depth: 1,
-        };
-
-        let create_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
-            .extent(extent)
-            .mip_levels(description.mip_levels)
-            .array_layers(1)
-            .format(description.format)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(
-                vk::ImageUsageFlags::TRANSFER_SRC
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::SAMPLED,
-            )
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .flags(vk::ImageCreateFlags::empty());
-
-        let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        Image::new(allocator, &allocation_create_info, &create_info)
-    }
-
     fn create_image_view(
         device: Arc<LogicalDevice>,
         image: &Image,
         description: &ImageDescription,
     ) -> Result<ImageView> {
-        // TODO: Use builders
-        let components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::IDENTITY,
-            g: vk::ComponentSwizzle::IDENTITY,
-            b: vk::ComponentSwizzle::IDENTITY,
-            a: vk::ComponentSwizzle::IDENTITY,
-        };
-
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: description.mip_levels,
-            base_array_layer: 0,
-            layer_count: 1,
-        };
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1)
+            .level_count(description.mip_levels);
 
         let create_info = vk::ImageViewCreateInfo::builder()
             .image(image.handle)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(description.format)
-            .components(components)
-            .subresource_range(subresource_range);
+            .components(vk::ComponentMapping::default())
+            .subresource_range(subresource_range.build());
+
         ImageView::new(device, create_info)
     }
 
