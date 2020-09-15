@@ -31,19 +31,19 @@ impl Instance {
             .enabled_layer_names(&layers);
 
         let handle = unsafe { entry.create_instance(&instance_create_info, None) }?;
-        let instance = Instance { handle };
+        let instance = Self { handle };
         Ok(instance)
     }
 
     fn application_create_info() -> Result<vk::ApplicationInfo> {
-        let app_name = CString::new(Instance::APPLICATION_NAME)?;
-        let engine_name = CString::new(Instance::ENGINE_NAME)?;
+        let app_name = CString::new(Self::APPLICATION_NAME)?;
+        let engine_name = CString::new(Self::ENGINE_NAME)?;
         let app_info = vk::ApplicationInfo::builder()
             .application_name(&app_name)
             .engine_name(&engine_name)
-            .api_version(Instance::API_VERSION)
-            .application_version(Instance::APPLICATION_VERSION)
-            .engine_version(Instance::ENGINE_VERSION)
+            .api_version(Self::API_VERSION)
+            .application_version(Self::APPLICATION_VERSION)
+            .engine_version(Self::ENGINE_VERSION)
             .build();
         Ok(app_info)
     }

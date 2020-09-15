@@ -1,12 +1,9 @@
 #![warn(
     clippy::all,
-    clippy::as_conversions,
     clippy::cognitive_complexity,
     clippy::dbg_macro,
-    clippy::default_trait_access,
     clippy::expect_used,
     clippy::if_not_else,
-    clippy::indexing_slicing,
     clippy::inefficient_to_string,
     clippy::needless_borrow,
     clippy::todo,
@@ -27,7 +24,7 @@ type Result<T, E = Box<dyn Error>> = std::result::Result<T, E>;
 const SHADER_COMPILER_NAME: &str = "glslangValidator";
 
 pub fn compile_shaders(shader_glob: &str) -> Result<()> {
-    for entry in glob(&shader_glob)? {
+    for entry in glob(shader_glob)? {
         if let Ok(shader_path) = entry {
             compile_shader(&shader_path)?;
         }
@@ -56,6 +53,12 @@ fn compile_shader(shader_path: &Path) -> Result<()> {
         .arg(output_name)
         .output();
 
+    log_compilation_result(result)?;
+
+    Ok(())
+}
+
+fn log_compilation_result(result: io::Result<std::process::Output>) -> Result<()> {
     match result {
         Ok(output) if !output.status.success() => {
             error!(
@@ -70,7 +73,6 @@ fn compile_shader(shader_path: &Path) -> Result<()> {
         ),
         Err(error) => error!("Failed to compile shader: {}", error),
         _ => {}
-    }
-
+    };
     Ok(())
 }

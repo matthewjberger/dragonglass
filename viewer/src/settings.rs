@@ -29,19 +29,19 @@ impl Settings {
     pub fn load_current_settings() -> Result<Self> {
         let settings_path = Path::new(Self::SETTINGS_FILE);
         if !settings_path.exists() {
-            Settings::generate_settings_file(settings_path)?;
+            Self::generate_settings_file(settings_path)?;
         }
-        let settings = Settings::from_path(settings_path)?;
+        let settings = Self::from_path(settings_path)?;
         Ok(settings)
     }
 
-    pub fn from_path<P: AsRef<Path> + Into<PathBuf>>(path: P) -> Result<Settings> {
+    pub fn from_path<P: AsRef<Path> + Into<PathBuf>>(path: P) -> Result<Self> {
         let path_str = path.as_ref().display().to_string();
         info!("Loading settings file: {}", &path_str);
         let mut config = config::Config::default();
         let config_file = config::File::with_name(&path_str);
         config.merge(config_file)?;
-        let settings: Settings = config.try_into()?;
+        let settings: Self = config.try_into()?;
         Ok(settings)
     }
 

@@ -43,7 +43,7 @@ impl LogicalDevice {
         let layers = Instance::layers()?;
 
         let create_info = vk::DeviceCreateInfo::builder()
-            .queue_create_infos(&queue_create_info_list.as_slice())
+            .queue_create_infos(queue_create_info_list.as_slice())
             .enabled_extension_names(&extensions)
             .enabled_features(&features)
             .enabled_layer_names(&layers);

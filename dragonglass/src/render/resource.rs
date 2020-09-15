@@ -34,7 +34,7 @@ pub struct RenderPass {
 
 impl RenderPass {
     pub fn new(device: Arc<LogicalDevice>, create_info: &vk::RenderPassCreateInfo) -> Result<Self> {
-        let handle = unsafe { device.handle.create_render_pass(&create_info, None) }?;
+        let handle = unsafe { device.handle.create_render_pass(create_info, None) }?;
         let render_pass = Self { handle, device };
         Ok(render_pass)
     }

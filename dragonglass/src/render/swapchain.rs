@@ -94,15 +94,15 @@ impl SwapchainProperties {
                 .get_physical_device_surface_capabilities(device, surface.handle_khr)
         }?;
 
-        if capabilities.current_extent.width != std::u32::MAX {
-            Ok(capabilities.current_extent)
-        } else {
+        if capabilities.current_extent.width == std::u32::MAX {
             let min = capabilities.min_image_extent;
             let max = capabilities.max_image_extent;
             let width = dimensions[0].min(max.width).max(min.width);
             let height = dimensions[1].min(max.height).max(min.height);
             let extent = vk::Extent2D { width, height };
             Ok(extent)
+        } else {
+            Ok(capabilities.current_extent)
         }
     }
 

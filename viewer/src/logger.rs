@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use simplelog::*;
+use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
 use std::fs::File;
 
 pub const LOG_FILE: &str = "dragonglass.log";

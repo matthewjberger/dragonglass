@@ -164,7 +164,7 @@ impl Buffer {
         buffer_create_info: vk::BufferCreateInfoBuilder,
     ) -> Result<Self> {
         let (handle, allocation, allocation_info) =
-            allocator.create_buffer(&buffer_create_info, &allocation_create_info)?;
+            allocator.create_buffer(&buffer_create_info, allocation_create_info)?;
 
         let buffer = Self {
             handle,

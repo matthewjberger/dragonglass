@@ -26,7 +26,7 @@ impl PhysicalDevice {
         device: vk::PhysicalDevice,
         instance: &ash::Instance,
         surface: &Surface,
-    ) -> Result<Option<PhysicalDevice>> {
+    ) -> Result<Option<Self>> {
         let device_name = Self::device_name(instance, device)?;
         let queue_indices = Self::find_queue_family_indices(instance, device, surface)?;
         let swapchain_supported = Self::swapchain_supported(device, surface)?;

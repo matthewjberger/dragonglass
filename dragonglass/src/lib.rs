@@ -1,12 +1,9 @@
 #![warn(
     clippy::all,
-    clippy::as_conversions,
     clippy::cognitive_complexity,
     clippy::dbg_macro,
-    clippy::default_trait_access,
     clippy::expect_used,
     clippy::if_not_else,
-    clippy::indexing_slicing,
     clippy::inefficient_to_string,
     clippy::needless_borrow,
     clippy::todo,

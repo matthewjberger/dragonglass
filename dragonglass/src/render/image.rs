@@ -111,12 +111,11 @@ impl ImageDescription {
         let extent = vk::Extent3D::builder()
             .width(self.width)
             .height(self.height)
-            .depth(1)
-            .build();
+            .depth(1);
 
         let create_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
-            .extent(extent)
+            .extent(extent.build())
             .mip_levels(self.mip_levels)
             .array_layers(1)
             .format(self.format)
@@ -154,7 +153,7 @@ impl Image {
         image_create_info: &vk::ImageCreateInfoBuilder,
     ) -> Result<Self> {
         let (handle, allocation, allocation_info) =
-            allocator.create_image(&image_create_info, &allocation_create_info)?;
+            allocator.create_image(image_create_info, allocation_create_info)?;
 
         let texture = Self {
             handle,
@@ -478,8 +477,8 @@ impl ImageBundle {
         description: &ImageDescription,
     ) -> Result<Self> {
         let image = description.as_image(allocator)?;
-        image.upload_data(graphics_queue, &command_pool, &description)?;
-        let view = Self::create_image_view(device.clone(), &image, &description)?;
+        image.upload_data(graphics_queue, command_pool, description)?;
+        let view = Self::create_image_view(device.clone(), &image, description)?;
         let sampler = Self::create_sampler(device, description.mip_levels)?;
 
         let image_bundle = Self {
