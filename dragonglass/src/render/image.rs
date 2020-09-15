@@ -150,7 +150,7 @@ impl Image {
         // TODO: Add this check
         // self.ensure_linear_blitting_supported(format_properties, description.format)?;
         self.generate_mipmaps(graphics_queue, pool, description)?;
-        self.prepare_image_for_fragment_shader(graphics_queue, pool, description.mip_levels, 0)?;
+        self.prepare_image_for_fragment_shader(graphics_queue, pool, description.mip_levels - 1)?;
         Ok(())
     }
 
@@ -178,13 +178,11 @@ impl Image {
         &self,
         graphics_queue: vk::Queue,
         pool: &CommandPool,
-        level_count: u32,
-        level: u32,
+        base_mip_level: u32,
     ) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
             .graphics_queue(graphics_queue)
-            .base_mip_level(level)
-            .level_count(level_count)
+            .base_mip_level(base_mip_level)
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
@@ -212,6 +210,26 @@ impl Image {
             .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
             .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        self.transition(pool, &transition)
+    }
+
+    fn prepare_mipmap_for_fragment_shader(
+        &self,
+        graphics_queue: vk::Queue,
+        pool: &CommandPool,
+        base_mip_level: u32,
+    ) -> Result<()> {
+        let transition = ImageLayoutTransitionBuilder::default()
+            .graphics_queue(graphics_queue)
+            .base_mip_level(base_mip_level)
+            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
+            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         self.transition(pool, &transition)
@@ -311,7 +329,7 @@ impl Image {
             self.prepare_image_for_mipmapping(graphics_queue, pool, level - 1)?;
             let dimensions = MipmapBlitDimensions::new(width, height);
             self.blit_mipmap(graphics_queue, pool, &dimensions, level)?;
-            self.prepare_image_for_fragment_shader(graphics_queue, pool, 1, level - 1)?;
+            self.prepare_mipmap_for_fragment_shader(graphics_queue, pool, level - 1)?;
             width = dimensions.next_width;
             height = dimensions.next_height;
         }
