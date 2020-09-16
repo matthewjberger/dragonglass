@@ -27,32 +27,23 @@ impl RenderingDevice {
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
-
         let device = context.logical_device.clone();
-        let frame_locks = Self::create_frame_locks(device)?;
-
+        let frame_locks = Self::frame_locks(device)?;
         let device = context.logical_device.clone();
         let graphics_queue_index = context.physical_device.graphics_queue_index;
-        let command_pool = Self::create_command_pool(device.clone(), graphics_queue_index)?;
-        let transient_command_pool =
-            Self::create_transient_command_pool(device, graphics_queue_index)?;
-
+        let command_pool = Self::command_pool(device.clone(), graphics_queue_index)?;
+        let transient_command_pool = Self::transient_command_pool(device, graphics_queue_index)?;
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
-
-        let command_buffers = command_pool.allocate_command_buffers(
-            forward_swapchain.framebuffers.len() as _,
-            vk::CommandBufferLevel::PRIMARY,
-        )?;
-
         let mut shader_cache = ShaderCache::default();
-
         let scene = Scene::new(
             context.clone(),
             &transient_command_pool,
             forward_swapchain.render_pass.clone(),
             &mut shader_cache,
         )?;
-
+        let number_of_framebuffers = forward_swapchain.framebuffers.len() as _;
+        let command_buffers = command_pool
+            .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
         let renderer = Self {
             scene: Some(scene),
             shader_cache,
@@ -67,13 +58,13 @@ impl RenderingDevice {
         Ok(renderer)
     }
 
-    fn create_frame_locks(device: Arc<LogicalDevice>) -> Result<Vec<FrameLock>> {
+    fn frame_locks(device: Arc<LogicalDevice>) -> Result<Vec<FrameLock>> {
         (0..Self::MAX_FRAMES_IN_FLIGHT)
             .map(|_| FrameLock::new(device.clone()))
             .collect()
     }
 
-    fn create_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
+    fn command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
         let create_info = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_index);
@@ -81,10 +72,7 @@ impl RenderingDevice {
         Ok(command_pool)
     }
 
-    fn create_transient_command_pool(
-        device: Arc<LogicalDevice>,
-        queue_index: u32,
-    ) -> Result<CommandPool> {
+    fn transient_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
         let create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(queue_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);

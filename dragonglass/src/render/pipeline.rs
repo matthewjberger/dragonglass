@@ -29,6 +29,12 @@ impl GraphicsPipeline {
         let pipeline = Self { handle, device };
         Ok(pipeline)
     }
+
+    pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
+        unsafe {
+            device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.handle);
+        }
+    }
 }
 
 impl Drop for GraphicsPipeline {
@@ -140,13 +146,13 @@ impl GraphicsPipelineSettings {
         Ok((pipeline, pipeline_layout))
     }
 
-    pub fn input_assembly_create_info<'a>() -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
+    fn input_assembly_create_info<'a>() -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
         vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false)
     }
 
-    pub fn rasterizer_create_info(&self) -> vk::PipelineRasterizationStateCreateInfoBuilder {
+    fn rasterizer_create_info(&self) -> vk::PipelineRasterizationStateCreateInfoBuilder {
         vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
@@ -160,7 +166,7 @@ impl GraphicsPipelineSettings {
             .depth_bias_slope_factor(0.0)
     }
 
-    pub fn multisampling_create_info(&self) -> vk::PipelineMultisampleStateCreateInfoBuilder {
+    fn multisampling_create_info(&self) -> vk::PipelineMultisampleStateCreateInfoBuilder {
         vk::PipelineMultisampleStateCreateInfo::builder()
             .sample_shading_enable(self.sample_shading_enabled)
             .rasterization_samples(self.rasterization_samples)
@@ -169,7 +175,7 @@ impl GraphicsPipelineSettings {
             .alpha_to_one_enable(false)
     }
 
-    pub fn depth_stencil_info(&self) -> vk::PipelineDepthStencilStateCreateInfoBuilder {
+    fn depth_stencil_info(&self) -> vk::PipelineDepthStencilStateCreateInfoBuilder {
         vk::PipelineDepthStencilStateCreateInfo::builder()
             .depth_test_enable(self.depth_test_enabled)
             .depth_write_enable(self.depth_write_enabled)
@@ -182,7 +188,7 @@ impl GraphicsPipelineSettings {
             .back(self.stencil_back_state)
     }
 
-    pub fn color_blend_attachment_state(&self) -> vk::PipelineColorBlendAttachmentStateBuilder {
+    fn color_blend_attachment_state(&self) -> vk::PipelineColorBlendAttachmentStateBuilder {
         if self.blended {
             Self::blend_attachment_blended()
         } else {
@@ -190,7 +196,7 @@ impl GraphicsPipelineSettings {
         }
     }
 
-    pub fn blend_attachment_opaque<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
+    fn blend_attachment_opaque<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
         vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(false)
@@ -202,7 +208,7 @@ impl GraphicsPipelineSettings {
             .alpha_blend_op(vk::BlendOp::ADD)
     }
 
-    pub fn blend_attachment_blended<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
+    fn blend_attachment_blended<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
         vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(true)
@@ -214,7 +220,7 @@ impl GraphicsPipelineSettings {
             .alpha_blend_op(vk::BlendOp::ADD)
     }
 
-    pub fn color_blend_state(
+    fn color_blend_state(
         attachment: &[vk::PipelineColorBlendAttachmentState],
     ) -> vk::PipelineColorBlendStateCreateInfoBuilder {
         vk::PipelineColorBlendStateCreateInfo::builder()
@@ -224,7 +230,7 @@ impl GraphicsPipelineSettings {
             .blend_constants([0.0, 0.0, 0.0, 0.0])
     }
 
-    pub fn create_pipeline_layout(&self, device: Arc<LogicalDevice>) -> PipelineLayout {
+    fn create_pipeline_layout(&self, device: Arc<LogicalDevice>) -> PipelineLayout {
         let descriptor_set_layouts = [self.descriptor_set_layout.handle];
 
         if let Some(push_constant_range) = self.push_constant_range.as_ref() {
@@ -240,23 +246,15 @@ impl GraphicsPipelineSettings {
         }
     }
 
-    pub fn viewport_create_info<'a>() -> vk::PipelineViewportStateCreateInfoBuilder<'a> {
+    fn viewport_create_info<'a>() -> vk::PipelineViewportStateCreateInfoBuilder<'a> {
         vk::PipelineViewportStateCreateInfo::builder()
             .viewport_count(1)
             .scissor_count(1)
     }
 
-    pub fn dynamic_state(
+    fn dynamic_state(
         dynamic_states: &[vk::DynamicState],
     ) -> vk::PipelineDynamicStateCreateInfoBuilder {
         vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(dynamic_states)
-    }
-}
-
-impl GraphicsPipeline {
-    pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
-        unsafe {
-            device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.handle);
-        }
     }
 }

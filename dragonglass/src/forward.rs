@@ -7,11 +7,14 @@ use ash::vk;
 use std::sync::Arc;
 use vk_mem::Allocator;
 
+pub struct RenderTarget {
+    _image: Image,
+    view: ImageView,
+}
+
 pub struct ForwardSwapchain {
-    pub depth_image: Image,
-    pub depth_image_view: ImageView,
-    pub color_image: Image,
-    pub color_image_view: ImageView,
+    pub depth_target: RenderTarget,
+    pub color_target: RenderTarget,
     pub render_pass: Arc<RenderPass>,
     pub framebuffers: Vec<Framebuffer>,
     pub swapchain: Swapchain,
@@ -20,30 +23,17 @@ pub struct ForwardSwapchain {
 
 impl ForwardSwapchain {
     pub fn new(context: Arc<Context>, dimensions: &[u32; 2]) -> Result<Self> {
-        let depth_format = context.determine_depth_format(
-            vk::ImageTiling::OPTIMAL,
-            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-        )?;
-
         let (swapchain, swapchain_properties) = context.create_swapchain(dimensions)?;
-
-        let device = context.logical_device.clone();
         let surface_format = swapchain_properties.surface_format.format;
-        let render_pass = Self::create_render_pass(device.clone(), surface_format, depth_format)?;
-
-        let allocator = context.allocator.clone();
+        let depth_format = Self::depth_format(context.clone())?;
+        let render_pass = Self::render_pass(context.clone(), surface_format, depth_format)?;
         let extent = swapchain_properties.extent;
-        let depth_image = Self::create_depth_image(allocator.clone(), extent, depth_format)?;
-        let depth_image_view =
-            Self::create_depth_image_view(device.clone(), &depth_image, depth_format)?;
-
-        let color_image = Self::create_color_image(allocator, extent, surface_format)?;
-        let color_image_view = Self::create_color_image_view(device, &color_image, surface_format)?;
-
+        let depth_target = Self::depth_target(context.clone(), depth_format, extent)?;
+        let color_target = Self::color_target(context.clone(), surface_format, extent)?;
         let framebuffers = swapchain
             .images
             .iter()
-            .map(|image| [image.view.handle, depth_image_view.handle])
+            .map(|image| [image.view.handle, depth_target.view.handle])
             .map(|attachments| {
                 let create_info = vk::FramebufferCreateInfo::builder()
                     .render_pass(render_pass.handle)
@@ -54,23 +44,19 @@ impl ForwardSwapchain {
                 Framebuffer::new(context.logical_device.clone(), create_info)
             })
             .collect::<Result<Vec<_>, _>>()?;
-
         let forward_swapchain = Self {
-            depth_image,
-            depth_image_view,
-            color_image,
-            color_image_view,
+            depth_target,
+            color_target,
             render_pass: Arc::new(render_pass),
             framebuffers,
             swapchain,
             swapchain_properties,
         };
-
         Ok(forward_swapchain)
     }
 
-    pub fn create_render_pass(
-        device: Arc<LogicalDevice>,
+    fn render_pass(
+        context: Arc<Context>,
         color_format: vk::Format,
         depth_format: vk::Format,
     ) -> Result<RenderPass> {
@@ -128,10 +114,31 @@ impl ForwardSwapchain {
             .subpasses(&subpass_descriptions)
             .dependencies(&subpass_dependencies);
 
-        RenderPass::new(device, &create_info)
+        RenderPass::new(context.logical_device.clone(), &create_info)
     }
 
-    fn create_depth_image(
+    fn depth_target(
+        context: Arc<Context>,
+        format: vk::Format,
+        extent: vk::Extent2D,
+    ) -> Result<RenderTarget> {
+        let image = Self::depth_image(context.allocator.clone(), extent, format)?;
+        let view = Self::depth_image_view(context.logical_device.clone(), &image, format)?;
+        let target = RenderTarget {
+            _image: image,
+            view,
+        };
+        Ok(target)
+    }
+
+    fn depth_format(context: Arc<Context>) -> Result<vk::Format> {
+        context.determine_depth_format(
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    }
+
+    fn depth_image(
         allocator: Arc<Allocator>,
         swapchain_extent: vk::Extent2D,
         depth_format: vk::Format,
@@ -161,7 +168,7 @@ impl ForwardSwapchain {
         Image::new(allocator, &image_allocation_create_info, &image_create_info)
     }
 
-    fn create_depth_image_view(
+    fn depth_image_view(
         device: Arc<LogicalDevice>,
         depth_image: &Image,
         depth_format: vk::Format,
@@ -186,7 +193,21 @@ impl ForwardSwapchain {
         ImageView::new(device, create_info)
     }
 
-    fn create_color_image(
+    fn color_target(
+        context: Arc<Context>,
+        format: vk::Format,
+        extent: vk::Extent2D,
+    ) -> Result<RenderTarget> {
+        let image = Self::color_image(context.allocator.clone(), extent, format)?;
+        let view = Self::color_image_view(context.logical_device.clone(), &image, format)?;
+        let target = RenderTarget {
+            _image: image,
+            view,
+        };
+        Ok(target)
+    }
+
+    fn color_image(
         allocator: Arc<Allocator>,
         swapchain_extent: vk::Extent2D,
         color_format: vk::Format,
@@ -218,7 +239,7 @@ impl ForwardSwapchain {
         Image::new(allocator, &image_allocation_create_info, &image_create_info)
     }
 
-    fn create_color_image_view(
+    fn color_image_view(
         device: Arc<LogicalDevice>,
         color_image: &Image,
         color_format: vk::Format,
