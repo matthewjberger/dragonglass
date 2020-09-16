@@ -182,10 +182,9 @@ impl GraphicsPipelineSettings {
             .alpha_blend_op(vk::BlendOp::ADD)
     }
 
-    pub fn color_blend_state<'a>(
-        &self,
-        attachment: &'a [vk::PipelineColorBlendAttachmentState],
-    ) -> vk::PipelineColorBlendStateCreateInfoBuilder<'a> {
+    pub fn color_blend_state(
+        attachment: &[vk::PipelineColorBlendAttachmentState],
+    ) -> vk::PipelineColorBlendStateCreateInfoBuilder {
         vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
@@ -209,15 +208,15 @@ impl GraphicsPipelineSettings {
         }
     }
 
-    pub fn viewport_create_info(&self) -> vk::PipelineViewportStateCreateInfoBuilder {
+    pub fn viewport_create_info<'a>() -> vk::PipelineViewportStateCreateInfoBuilder<'a> {
         vk::PipelineViewportStateCreateInfo::builder()
             .viewport_count(1)
             .scissor_count(1)
     }
 
-    pub fn dynamic_state<'a>(
-        dynamic_states: &'a [vk::DynamicState],
-    ) -> vk::PipelineDynamicStateCreateInfoBuilder<'a> {
+    pub fn dynamic_state(
+        dynamic_states: &[vk::DynamicState],
+    ) -> vk::PipelineDynamicStateCreateInfoBuilder {
         vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(dynamic_states)
     }
 }
@@ -234,9 +233,10 @@ impl GraphicsPipeline {
         let multisampling_create_info = settings.multisampling_create_info();
         let depth_stencil_info = settings.depth_stencil_info();
         let color_blend_attachment_state = [settings.color_blend_attachment_state().build()];
-        let color_blend_state = settings.color_blend_state(&color_blend_attachment_state);
+        let color_blend_state =
+            GraphicsPipelineSettings::color_blend_state(&color_blend_attachment_state);
         let pipeline_layout = settings.create_pipeline_layout(device.clone());
-        let viewport_create_info = settings.viewport_create_info();
+        let viewport_create_info = GraphicsPipelineSettings::viewport_create_info();
 
         let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
         let dynamic_state = GraphicsPipelineSettings::dynamic_state(&dynamic_states);
