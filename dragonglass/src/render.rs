@@ -9,7 +9,8 @@ pub use self::{
     pipeline::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,
     },
-    resource::{DescriptorPool, DescriptorSetLayout, Fence, Framebuffer, RenderPass, Semaphore},
+    renderpass::RenderPass,
+    resource::{DescriptorPool, DescriptorSetLayout, Fence, Framebuffer, Semaphore},
     shader::{Shader, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, ShaderSet},
     swapchain::{Swapchain, SwapchainProperties},
 };
@@ -18,6 +19,7 @@ mod buffer;
 mod command;
 mod image;
 mod pipeline;
+mod renderpass;
 mod resource;
 mod shader;
 mod swapchain;
