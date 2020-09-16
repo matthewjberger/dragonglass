@@ -83,6 +83,25 @@ impl PhysicalDevice {
         let queue_family_properties =
             unsafe { instance.get_physical_device_queue_family_properties(device) };
 
+        let (graphics_queue, presentation_queue) =
+            Self::check_queue_families(queue_family_properties, device, surface)?;
+
+        let indices = if let (Some(graphics_queue_index), Some(presentation_queue_index)) =
+            (graphics_queue, presentation_queue)
+        {
+            Some((graphics_queue_index, presentation_queue_index))
+        } else {
+            None
+        };
+
+        Ok(indices)
+    }
+
+    fn check_queue_families(
+        queue_family_properties: Vec<vk::QueueFamilyProperties>,
+        device: vk::PhysicalDevice,
+        surface: &Surface,
+    ) -> Result<(Option<u32>, Option<u32>)> {
         // There may not be a single queue family that supports
         // both graphics and presentation to the surface
         let mut graphics_queue: Option<u32> = None;
@@ -94,7 +113,6 @@ impl PhysicalDevice {
             .enumerate()
         {
             let index = index as u32;
-
             let supports_graphics = family.queue_flags.contains(vk::QueueFlags::GRAPHICS);
             if supports_graphics && graphics_queue.is_none() {
                 graphics_queue.replace(index);
@@ -113,15 +131,7 @@ impl PhysicalDevice {
             }
         }
 
-        let indices = if let (Some(graphics_queue_index), Some(presentation_queue_index)) =
-            (graphics_queue, presentation_queue)
-        {
-            Some((graphics_queue_index, presentation_queue_index))
-        } else {
-            None
-        };
-
-        Ok(indices)
+        Ok((graphics_queue, presentation_queue))
     }
 
     fn features_supported(instance: &ash::Instance, device: vk::PhysicalDevice) -> bool {

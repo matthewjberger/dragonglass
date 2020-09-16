@@ -2,8 +2,9 @@ use super::{
     core::{Context, LogicalDevice},
     render::{
         CommandPool, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, GeometryBuffer,
-        GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageBundle, ImageDescription,
-        PipelineLayout, RenderPass, ShaderCache, ShaderPathSetBuilder,
+        GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, ImageBundle,
+        ImageDescription, PipelineLayout, RenderPass, ShaderCache, ShaderPathSet,
+        ShaderPathSetBuilder,
     },
 };
 use anyhow::{anyhow, Result};
@@ -42,38 +43,38 @@ impl Scene {
         let descriptor_pool = Self::descriptor_pool(device.clone())?;
         let descriptor_set =
             descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
+        let settings = Self::settings(
+            device.clone(),
+            shader_cache,
+            render_pass,
+            descriptor_set_layout.clone(),
+        )?;
+        let (pipeline, pipeline_layout) = settings.create_pipeline(device.clone())?;
+        let (geometry_buffer, number_of_indices) = Self::geometry_buffer(context.clone(), pool)?;
+        let mut rendering = Self {
+            pipeline,
+            pipeline_layout,
+            geometry_buffer,
+            uniform_buffer: Self::uniform_buffer(context.clone())?,
+            descriptor_pool,
+            descriptor_set_layout,
+            descriptor_set,
+            image_bundle: Self::load_image(context, pool)?,
+            number_of_indices,
+            device,
+        };
 
-        let shader_paths = ShaderPathSetBuilder::default()
-            .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
-            .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
+        rendering.update_descriptor_set();
 
-        let descriptions = Self::vertex_input_descriptions();
-        let attributes = Self::vertex_attributes();
-        let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&descriptions)
-            .vertex_attribute_descriptions(&attributes)
-            .build();
+        Ok(rendering)
+    }
 
-        let settings = GraphicsPipelineSettingsBuilder::default()
-            .shader_set(shader_set)
-            .render_pass(render_pass)
-            .vertex_state_info(vertex_state_info)
-            .descriptor_set_layout(descriptor_set_layout.clone())
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-
-        let (pipeline, pipeline_layout) =
-            GraphicsPipeline::from_settings(device.clone(), settings)?;
-
-        #[rustfmt::skip]
+    pub fn geometry_buffer(
+        context: Arc<Context>,
+        pool: &CommandPool,
+    ) -> Result<(GeometryBuffer, usize)> {
         let vertices: [f32; 16] = [
-           -0.5, -0.5, 0.0, 0.0,
-            10.5,  0.5, 1.0, 1.0,
-            10.5, -0.5, 1.0, 0.0,
-           -0.5,  0.5, 0.0, 1.0,
+            -0.5, -0.5, 0.0, 0.0, 10.5, 0.5, 1.0, 1.0, 10.5, -0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 1.0,
         ];
 
         let indices: [u32; 6] = [0, 1, 2, 3, 1, 0];
@@ -95,36 +96,57 @@ impl Scene {
             .ok_or_else(|| anyhow!("Failed to access index buffer!"))?
             .upload_data(&indices, 0, pool, context.graphics_queue())?;
 
-        let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
+        Ok((geometry_buffer, number_of_indices))
+    }
+
+    pub fn shader_paths() -> Result<ShaderPathSet> {
+        let shader_path_set = ShaderPathSetBuilder::default()
+            .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
+            .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        Ok(shader_path_set)
+    }
+
+    pub fn settings(
+        device: Arc<LogicalDevice>,
+        shader_cache: &mut ShaderCache,
+        render_pass: Arc<RenderPass>,
+        descriptor_set_layout: Arc<DescriptorSetLayout>,
+    ) -> Result<GraphicsPipelineSettings> {
+        let shader_paths = Self::shader_paths()?;
+        let shader_set = shader_cache.create_shader_set(device, &shader_paths)?;
+        let descriptions = Self::vertex_input_descriptions();
+        let attributes = Self::vertex_attributes();
+        let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&descriptions)
+            .vertex_attribute_descriptions(&attributes);
+        let settings = GraphicsPipelineSettingsBuilder::default()
+            .shader_set(shader_set)
+            .render_pass(render_pass)
+            .vertex_state_info(vertex_state_info.build())
+            .descriptor_set_layout(descriptor_set_layout)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        Ok(settings)
+    }
+
+    pub fn uniform_buffer(context: Arc<Context>) -> Result<CpuToGpuBuffer> {
+        CpuToGpuBuffer::uniform_buffer(
             context.allocator.clone(),
             mem::size_of::<UniformBuffer>() as _,
-        )?;
+        )
+    }
 
+    pub fn load_image(context: Arc<Context>, pool: &CommandPool) -> Result<ImageBundle> {
         let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
-        let image_bundle = ImageBundle::new(
+        ImageBundle::new(
             context.logical_device.clone(),
             context.graphics_queue(),
             context.allocator.clone(),
             pool,
             &description,
-        )?;
-
-        let mut rendering = Self {
-            pipeline,
-            pipeline_layout,
-            geometry_buffer,
-            uniform_buffer,
-            descriptor_pool,
-            descriptor_set_layout,
-            descriptor_set,
-            image_bundle,
-            number_of_indices,
-            device,
-        };
-
-        rendering.update_descriptor_set();
-
-        Ok(rendering)
+        )
     }
 
     pub fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 2] {
@@ -199,38 +221,31 @@ impl Scene {
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
             .offset(0)
-            .range(std::mem::size_of::<UniformBuffer>() as _)
-            .build();
-        let buffer_info_list = [buffer_info];
+            .range(std::mem::size_of::<UniformBuffer>() as _);
+        let buffer_info_list = [buffer_info.build()];
 
-        let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
+        let ubo_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(&buffer_info_list)
-            .build();
+            .buffer_info(&buffer_info_list);
 
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(self.image_bundle.view.handle)
-            .sampler(self.image_bundle.sampler.handle)
-            .build();
-        let image_info_list = [image_info];
+            .sampler(self.image_bundle.sampler.handle);
+        let image_info_list = [image_info.build()];
 
-        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+        let sampler_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(1)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&image_info_list)
-            .build();
+            .image_info(&image_info_list);
 
-        unsafe {
-            self.device
-                .handle
-                .update_descriptor_sets(&[ubo_descriptor_write, sampler_descriptor_write], &[])
-        }
+        let writes = &[ubo_write.build(), sampler_write.build()];
+        unsafe { self.device.handle.update_descriptor_sets(writes, &[]) }
     }
 
     pub fn update_ubo(&self, aspect_ratio: f32) -> Result<()> {

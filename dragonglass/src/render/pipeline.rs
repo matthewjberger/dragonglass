@@ -108,6 +108,38 @@ pub struct GraphicsPipelineSettings {
 }
 
 impl GraphicsPipelineSettings {
+    pub fn create_pipeline(
+        &self,
+        device: Arc<LogicalDevice>,
+    ) -> Result<(GraphicsPipeline, PipelineLayout)> {
+        let stages = self.shader_set.stages()?;
+        let input_assembly_create_info = Self::input_assembly_create_info();
+        let rasterizer_create_info = self.rasterizer_create_info();
+        let multisampling_create_info = self.multisampling_create_info();
+        let depth_stencil_info = self.depth_stencil_info();
+        let blend_attachment = [self.color_blend_attachment_state().build()];
+        let color_blend_state = Self::color_blend_state(&blend_attachment);
+        let pipeline_layout = self.create_pipeline_layout(device.clone());
+        let viewport_create_info = Self::viewport_create_info();
+        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = Self::dynamic_state(&dynamic_states);
+        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&stages)
+            .vertex_input_state(&self.vertex_state_info)
+            .input_assembly_state(&input_assembly_create_info)
+            .rasterization_state(&rasterizer_create_info)
+            .multisample_state(&multisampling_create_info)
+            .depth_stencil_state(&depth_stencil_info)
+            .color_blend_state(&color_blend_state)
+            .viewport_state(&viewport_create_info)
+            .dynamic_state(&dynamic_state)
+            .layout(pipeline_layout.handle)
+            .render_pass(self.render_pass.handle)
+            .subpass(0);
+        let pipeline = GraphicsPipeline::new(device, pipeline_create_info)?;
+        Ok((pipeline, pipeline_layout))
+    }
+
     pub fn input_assembly_create_info<'a>() -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
         vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
@@ -222,44 +254,6 @@ impl GraphicsPipelineSettings {
 }
 
 impl GraphicsPipeline {
-    pub fn from_settings(
-        device: Arc<LogicalDevice>,
-        settings: GraphicsPipelineSettings,
-    ) -> Result<(Self, PipelineLayout)> {
-        let stages = settings.shader_set.stages()?;
-
-        let input_assembly_create_info = GraphicsPipelineSettings::input_assembly_create_info();
-        let rasterizer_create_info = settings.rasterizer_create_info();
-        let multisampling_create_info = settings.multisampling_create_info();
-        let depth_stencil_info = settings.depth_stencil_info();
-        let color_blend_attachment_state = [settings.color_blend_attachment_state().build()];
-        let color_blend_state =
-            GraphicsPipelineSettings::color_blend_state(&color_blend_attachment_state);
-        let pipeline_layout = settings.create_pipeline_layout(device.clone());
-        let viewport_create_info = GraphicsPipelineSettings::viewport_create_info();
-
-        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = GraphicsPipelineSettings::dynamic_state(&dynamic_states);
-
-        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
-            .stages(&stages)
-            .vertex_input_state(&settings.vertex_state_info)
-            .input_assembly_state(&input_assembly_create_info)
-            .rasterization_state(&rasterizer_create_info)
-            .multisample_state(&multisampling_create_info)
-            .depth_stencil_state(&depth_stencil_info)
-            .color_blend_state(&color_blend_state)
-            .viewport_state(&viewport_create_info)
-            .dynamic_state(&dynamic_state)
-            .layout(pipeline_layout.handle)
-            .render_pass(settings.render_pass.handle)
-            .subpass(0);
-
-        let pipeline = Self::new(device, pipeline_create_info)?;
-
-        Ok((pipeline, pipeline_layout))
-    }
-
     pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
         unsafe {
             device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.handle);
