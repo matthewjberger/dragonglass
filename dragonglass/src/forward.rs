@@ -7,14 +7,161 @@ use ash::vk;
 use std::sync::Arc;
 use vk_mem::Allocator;
 
-pub struct RenderTarget {
+// TODO: Make format, image, and view for render targets a trait
+
+pub struct DepthRenderTarget {
     _image: Image,
-    view: ImageView,
+    pub view: ImageView,
+    pub format: vk::Format,
+}
+
+impl DepthRenderTarget {
+    fn new(context: Arc<Context>, extent: vk::Extent2D) -> Result<Self> {
+        let format = Self::format(context.clone())?;
+        let image = Self::image(context.allocator.clone(), extent, format)?;
+        let view = Self::view(context.logical_device.clone(), &image, format)?;
+        let target = Self {
+            _image: image,
+            view,
+            format,
+        };
+        Ok(target)
+    }
+
+    fn format(context: Arc<Context>) -> Result<vk::Format> {
+        context.determine_depth_format(
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
+        )
+    }
+
+    fn image(
+        allocator: Arc<Allocator>,
+        swapchain_extent: vk::Extent2D,
+        depth_format: vk::Format,
+    ) -> Result<Image> {
+        let image_create_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(vk::Extent3D {
+                width: swapchain_extent.width,
+                height: swapchain_extent.height,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .format(depth_format)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty());
+
+        let image_allocation_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        Image::new(allocator, &image_allocation_create_info, &image_create_info)
+    }
+
+    fn view(device: Arc<LogicalDevice>, image: &Image, format: vk::Format) -> Result<ImageView> {
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image.handle)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .components(vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY,
+            })
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::DEPTH,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+        ImageView::new(device, create_info)
+    }
+}
+
+pub struct ColorRenderTarget {
+    _image: Image,
+    pub view: ImageView,
+    pub format: vk::Format,
+}
+
+impl ColorRenderTarget {
+    fn new(context: Arc<Context>, format: vk::Format, extent: vk::Extent2D) -> Result<Self> {
+        let image = Self::image(context.allocator.clone(), extent, format)?;
+        let view = Self::view(context.logical_device.clone(), &image, format)?;
+        let target = Self {
+            _image: image,
+            view,
+            format,
+        };
+        Ok(target)
+    }
+
+    fn image(
+        allocator: Arc<Allocator>,
+        swapchain_extent: vk::Extent2D,
+        format: vk::Format,
+    ) -> Result<Image> {
+        let image_create_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(vk::Extent3D {
+                width: swapchain_extent.width,
+                height: swapchain_extent.height,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .format(format)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(
+                vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            )
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty());
+
+        let image_allocation_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        Image::new(allocator, &image_allocation_create_info, &image_create_info)
+    }
+
+    fn view(device: Arc<LogicalDevice>, image: &Image, format: vk::Format) -> Result<ImageView> {
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image.handle)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .components(vk::ComponentMapping {
+                r: vk::ComponentSwizzle::IDENTITY,
+                g: vk::ComponentSwizzle::IDENTITY,
+                b: vk::ComponentSwizzle::IDENTITY,
+                a: vk::ComponentSwizzle::IDENTITY,
+            })
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+        ImageView::new(device, create_info)
+    }
 }
 
 pub struct ForwardSwapchain {
-    pub depth_target: RenderTarget,
-    pub color_target: RenderTarget,
+    pub depth_target: DepthRenderTarget,
+    pub color_target: ColorRenderTarget,
     pub render_pass: Arc<RenderPass>,
     pub framebuffers: Vec<Framebuffer>,
     pub swapchain: Swapchain,
@@ -25,11 +172,10 @@ impl ForwardSwapchain {
     pub fn new(context: Arc<Context>, dimensions: &[u32; 2]) -> Result<Self> {
         let (swapchain, swapchain_properties) = context.create_swapchain(dimensions)?;
         let surface_format = swapchain_properties.surface_format.format;
-        let depth_format = Self::depth_format(context.clone())?;
-        let render_pass = Self::render_pass(context.clone(), surface_format, depth_format)?;
         let extent = swapchain_properties.extent;
-        let depth_target = Self::depth_target(context.clone(), depth_format, extent)?;
-        let color_target = Self::color_target(context.clone(), surface_format, extent)?;
+        let depth_target = DepthRenderTarget::new(context.clone(), extent)?;
+        let color_target = ColorRenderTarget::new(context.clone(), surface_format, extent)?;
+        let render_pass = Self::render_pass(context.clone(), surface_format, depth_target.format)?;
         let framebuffers = swapchain
             .images
             .iter()
@@ -60,24 +206,8 @@ impl ForwardSwapchain {
         color_format: vk::Format,
         depth_format: vk::Format,
     ) -> Result<RenderPass> {
-        let color_attachment_description = vk::AttachmentDescription::builder()
-            .format(color_format)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
-
-        let depth_attachment_description = vk::AttachmentDescription::builder()
-            .format(depth_format)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
+        let color_attachment_description = Self::color_attachment_description(color_format);
+        let depth_attachment_description = Self::depth_attachment_description(depth_format);
         let attachment_descriptions = [
             color_attachment_description.build(),
             depth_attachment_description.build(),
@@ -98,16 +228,7 @@ impl ForwardSwapchain {
             .depth_stencil_attachment(&depth_attachment_reference);
         let subpass_descriptions = [subpass_description.build()];
 
-        let subpass_dependency = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            );
-        let subpass_dependencies = [subpass_dependency.build()];
+        let subpass_dependencies = Self::subpass_dependencies();
 
         let create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachment_descriptions)
@@ -117,150 +238,42 @@ impl ForwardSwapchain {
         RenderPass::new(context.logical_device.clone(), &create_info)
     }
 
-    fn depth_target(
-        context: Arc<Context>,
+    fn color_attachment_description<'a>(
         format: vk::Format,
-        extent: vk::Extent2D,
-    ) -> Result<RenderTarget> {
-        let image = Self::depth_image(context.allocator.clone(), extent, format)?;
-        let view = Self::depth_image_view(context.logical_device.clone(), &image, format)?;
-        let target = RenderTarget {
-            _image: image,
-            view,
-        };
-        Ok(target)
-    }
-
-    fn depth_format(context: Arc<Context>) -> Result<vk::Format> {
-        context.determine_depth_format(
-            vk::ImageTiling::OPTIMAL,
-            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-        )
-    }
-
-    fn depth_image(
-        allocator: Arc<Allocator>,
-        swapchain_extent: vk::Extent2D,
-        depth_format: vk::Format,
-    ) -> Result<Image> {
-        let image_create_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
-            .extent(vk::Extent3D {
-                width: swapchain_extent.width,
-                height: swapchain_extent.height,
-                depth: 1,
-            })
-            .mip_levels(1)
-            .array_layers(1)
-            .format(depth_format)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+    ) -> vk::AttachmentDescriptionBuilder<'a> {
+        vk::AttachmentDescription::builder()
+            .format(format)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .flags(vk::ImageCreateFlags::empty());
-
-        let image_allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        Image::new(allocator, &image_allocation_create_info, &image_create_info)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
     }
 
-    fn depth_image_view(
-        device: Arc<LogicalDevice>,
-        depth_image: &Image,
-        depth_format: vk::Format,
-    ) -> Result<ImageView> {
-        let create_info = vk::ImageViewCreateInfo::builder()
-            .image(depth_image.handle)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(depth_format)
-            .components(vk::ComponentMapping {
-                r: vk::ComponentSwizzle::IDENTITY,
-                g: vk::ComponentSwizzle::IDENTITY,
-                b: vk::ComponentSwizzle::IDENTITY,
-                a: vk::ComponentSwizzle::IDENTITY,
-            })
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::DEPTH,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-        ImageView::new(device, create_info)
-    }
-
-    fn color_target(
-        context: Arc<Context>,
+    fn depth_attachment_description<'a>(
         format: vk::Format,
-        extent: vk::Extent2D,
-    ) -> Result<RenderTarget> {
-        let image = Self::color_image(context.allocator.clone(), extent, format)?;
-        let view = Self::color_image_view(context.logical_device.clone(), &image, format)?;
-        let target = RenderTarget {
-            _image: image,
-            view,
-        };
-        Ok(target)
-    }
-
-    fn color_image(
-        allocator: Arc<Allocator>,
-        swapchain_extent: vk::Extent2D,
-        color_format: vk::Format,
-    ) -> Result<Image> {
-        let image_create_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
-            .extent(vk::Extent3D {
-                width: swapchain_extent.width,
-                height: swapchain_extent.height,
-                depth: 1,
-            })
-            .mip_levels(1)
-            .array_layers(1)
-            .format(color_format)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(
-                vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
-            )
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+    ) -> vk::AttachmentDescriptionBuilder<'a> {
+        vk::AttachmentDescription::builder()
+            .format(format)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .flags(vk::ImageCreateFlags::empty());
-
-        let image_allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        Image::new(allocator, &image_allocation_create_info, &image_create_info)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
     }
 
-    fn color_image_view(
-        device: Arc<LogicalDevice>,
-        color_image: &Image,
-        color_format: vk::Format,
-    ) -> Result<ImageView> {
-        let create_info = vk::ImageViewCreateInfo::builder()
-            .image(color_image.handle)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(color_format)
-            .components(vk::ComponentMapping {
-                r: vk::ComponentSwizzle::IDENTITY,
-                g: vk::ComponentSwizzle::IDENTITY,
-                b: vk::ComponentSwizzle::IDENTITY,
-                a: vk::ComponentSwizzle::IDENTITY,
-            })
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-        ImageView::new(device, create_info)
+    fn subpass_dependencies() -> [vk::SubpassDependency; 1] {
+        let subpass_dependency = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            );
+        [subpass_dependency.build()]
     }
 }
