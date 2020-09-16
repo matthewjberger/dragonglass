@@ -107,91 +107,59 @@ pub struct GraphicsPipelineSettings {
     pub front_face: vk::FrontFace,
 }
 
-impl GraphicsPipeline {
-    pub fn from_settings(
-        device: Arc<LogicalDevice>,
-        settings: GraphicsPipelineSettings,
-    ) -> Result<(Self, PipelineLayout)> {
-        let stages = settings.shader_set.stages()?;
-
-        let input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+impl GraphicsPipelineSettings {
+    pub fn input_assembly_create_info<'a>() -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
+        vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .primitive_restart_enable(false);
+            .primitive_restart_enable(false)
+    }
 
-        let rasterizer_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
+    pub fn rasterizer_create_info(&self) -> vk::PipelineRasterizationStateCreateInfoBuilder {
+        vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0)
-            .cull_mode(settings.cull_mode)
-            .front_face(settings.front_face)
+            .cull_mode(self.cull_mode)
+            .front_face(self.front_face)
             .depth_bias_enable(false)
             .depth_bias_constant_factor(0.0)
             .depth_bias_clamp(0.0)
-            .depth_bias_slope_factor(0.0);
+            .depth_bias_slope_factor(0.0)
+    }
 
-        let multisampling_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
-            .sample_shading_enable(settings.sample_shading_enabled)
-            .rasterization_samples(settings.rasterization_samples)
+    pub fn multisampling_create_info(&self) -> vk::PipelineMultisampleStateCreateInfoBuilder {
+        vk::PipelineMultisampleStateCreateInfo::builder()
+            .sample_shading_enable(self.sample_shading_enabled)
+            .rasterization_samples(self.rasterization_samples)
             .min_sample_shading(0.2)
             .alpha_to_coverage_enable(false)
-            .alpha_to_one_enable(false);
+            .alpha_to_one_enable(false)
+    }
 
-        let depth_stencil_info = vk::PipelineDepthStencilStateCreateInfo::builder()
-            .depth_test_enable(settings.depth_test_enabled)
-            .depth_write_enable(settings.depth_write_enabled)
+    pub fn depth_stencil_info(&self) -> vk::PipelineDepthStencilStateCreateInfoBuilder {
+        vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(self.depth_test_enabled)
+            .depth_write_enable(self.depth_write_enabled)
             .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
             .depth_bounds_test_enable(false)
             .min_depth_bounds(0.0)
             .max_depth_bounds(1.0)
-            .stencil_test_enable(settings.stencil_test_enabled)
-            .front(settings.stencil_front_state)
-            .back(settings.stencil_back_state);
-
-        let color_blend_attachments = if settings.blended {
-            Self::create_color_blend_attachments_blended()
-        } else {
-            Self::create_color_blend_attachments_opaque()
-        };
-
-        let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
-            .logic_op_enable(false)
-            .logic_op(vk::LogicOp::COPY)
-            .attachments(&color_blend_attachments)
-            .blend_constants([0.0, 0.0, 0.0, 0.0]);
-
-        let pipeline_layout = Self::create_pipeline_layout(device.clone(), &settings);
-
-        let mut viewport_create_info = vk::PipelineViewportStateCreateInfo::default();
-        viewport_create_info.viewport_count = 1;
-        viewport_create_info.scissor_count = 1;
-
-        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state_create_info = vk::PipelineDynamicStateCreateInfo::builder()
-            .flags(vk::PipelineDynamicStateCreateFlags::empty())
-            .dynamic_states(&dynamic_states);
-
-        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
-            .stages(&stages)
-            .vertex_input_state(&settings.vertex_state_info)
-            .input_assembly_state(&input_assembly_create_info)
-            .rasterization_state(&rasterizer_create_info)
-            .multisample_state(&multisampling_create_info)
-            .depth_stencil_state(&depth_stencil_info)
-            .color_blend_state(&color_blending_info)
-            .viewport_state(&viewport_create_info)
-            .dynamic_state(&dynamic_state_create_info)
-            .layout(pipeline_layout.handle)
-            .render_pass(settings.render_pass.handle)
-            .subpass(0);
-
-        let pipeline = Self::new(device, pipeline_create_info)?;
-
-        Ok((pipeline, pipeline_layout))
+            .stencil_test_enable(self.stencil_test_enabled)
+            .front(self.stencil_front_state)
+            .back(self.stencil_back_state)
     }
 
-    pub fn create_color_blend_attachments_opaque() -> [vk::PipelineColorBlendAttachmentState; 1] {
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
+    pub fn color_blend_attachment_state(&self) -> vk::PipelineColorBlendAttachmentStateBuilder {
+        if self.blended {
+            Self::blend_attachment_blended()
+        } else {
+            Self::blend_attachment_opaque()
+        }
+    }
+
+    pub fn blend_attachment_opaque<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
+        vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::ONE)
@@ -199,12 +167,11 @@ impl GraphicsPipeline {
             .color_blend_op(vk::BlendOp::ADD)
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-            .alpha_blend_op(vk::BlendOp::ADD);
-        [*color_blend_attachment]
+            .alpha_blend_op(vk::BlendOp::ADD)
     }
 
-    pub fn create_color_blend_attachments_blended() -> [vk::PipelineColorBlendAttachmentState; 1] {
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
+    pub fn blend_attachment_blended<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
+        vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
@@ -212,17 +179,24 @@ impl GraphicsPipeline {
             .color_blend_op(vk::BlendOp::ADD)
             .src_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-            .alpha_blend_op(vk::BlendOp::ADD);
-        [*color_blend_attachment]
+            .alpha_blend_op(vk::BlendOp::ADD)
     }
 
-    pub fn create_pipeline_layout(
-        device: Arc<LogicalDevice>,
-        settings: &GraphicsPipelineSettings,
-    ) -> PipelineLayout {
-        let descriptor_set_layouts = [settings.descriptor_set_layout.handle];
+    pub fn color_blend_state<'a>(
+        &self,
+        attachment: &'a [vk::PipelineColorBlendAttachmentState],
+    ) -> vk::PipelineColorBlendStateCreateInfoBuilder<'a> {
+        vk::PipelineColorBlendStateCreateInfo::builder()
+            .logic_op_enable(false)
+            .logic_op(vk::LogicOp::COPY)
+            .attachments(attachment)
+            .blend_constants([0.0, 0.0, 0.0, 0.0])
+    }
 
-        if let Some(push_constant_range) = settings.push_constant_range.as_ref() {
+    pub fn create_pipeline_layout(&self, device: Arc<LogicalDevice>) -> PipelineLayout {
+        let descriptor_set_layouts = [self.descriptor_set_layout.handle];
+
+        if let Some(push_constant_range) = self.push_constant_range.as_ref() {
             let push_constant_ranges = [*push_constant_range];
             let pipeline_layout_create_info_builder = vk::PipelineLayoutCreateInfo::builder()
                 .push_constant_ranges(&push_constant_ranges)
@@ -233,6 +207,57 @@ impl GraphicsPipeline {
                 vk::PipelineLayoutCreateInfo::builder().set_layouts(&descriptor_set_layouts);
             PipelineLayout::new(device, *pipeline_layout_create_info_builder).unwrap()
         }
+    }
+
+    pub fn viewport_create_info(&self) -> vk::PipelineViewportStateCreateInfoBuilder {
+        vk::PipelineViewportStateCreateInfo::builder()
+            .viewport_count(1)
+            .scissor_count(1)
+    }
+
+    pub fn dynamic_state<'a>(
+        dynamic_states: &'a [vk::DynamicState],
+    ) -> vk::PipelineDynamicStateCreateInfoBuilder<'a> {
+        vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(dynamic_states)
+    }
+}
+
+impl GraphicsPipeline {
+    pub fn from_settings(
+        device: Arc<LogicalDevice>,
+        settings: GraphicsPipelineSettings,
+    ) -> Result<(Self, PipelineLayout)> {
+        let stages = settings.shader_set.stages()?;
+
+        let input_assembly_create_info = GraphicsPipelineSettings::input_assembly_create_info();
+        let rasterizer_create_info = settings.rasterizer_create_info();
+        let multisampling_create_info = settings.multisampling_create_info();
+        let depth_stencil_info = settings.depth_stencil_info();
+        let color_blend_attachment_state = [settings.color_blend_attachment_state().build()];
+        let color_blend_state = settings.color_blend_state(&color_blend_attachment_state);
+        let pipeline_layout = settings.create_pipeline_layout(device.clone());
+        let viewport_create_info = settings.viewport_create_info();
+
+        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_state = GraphicsPipelineSettings::dynamic_state(&dynamic_states);
+
+        let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&stages)
+            .vertex_input_state(&settings.vertex_state_info)
+            .input_assembly_state(&input_assembly_create_info)
+            .rasterization_state(&rasterizer_create_info)
+            .multisample_state(&multisampling_create_info)
+            .depth_stencil_state(&depth_stencil_info)
+            .color_blend_state(&color_blend_state)
+            .viewport_state(&viewport_create_info)
+            .dynamic_state(&dynamic_state)
+            .layout(pipeline_layout.handle)
+            .render_pass(settings.render_pass.handle)
+            .subpass(0);
+
+        let pipeline = Self::new(device, pipeline_create_info)?;
+
+        Ok((pipeline, pipeline_layout))
     }
 
     pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
