@@ -1,1 +1,1 @@
-# Default rustfmt settings are good
+max_width = 100
