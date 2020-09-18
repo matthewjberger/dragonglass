@@ -1,8 +1,8 @@
 use super::{
     BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, CpuToGpuBuffer, PipelineBarrierBuilder,
 };
-use crate::core::LogicalDevice;
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use crate::core::{Context, LogicalDevice};
+use anyhow::{anyhow, bail, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
@@ -44,7 +44,8 @@ impl ImageDescription {
         P: AsRef<Path> + Into<PathBuf>,
     {
         let path_display = path.as_ref().display().to_string();
-        let image = image::open(path).with_context(|| format!("path: {}", path_display))?;
+        let image =
+            image::open(path).map_err(|error| anyhow!("{}\npath: {}", error, path_display))?;
         Self::from_image(&image)
     }
 
@@ -167,7 +168,7 @@ impl Image {
 
     pub fn upload_data(
         &self,
-        graphics_queue: vk::Queue,
+        context: &Context,
         pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<()> {
@@ -176,10 +177,10 @@ impl Image {
             self.allocation_info.get_size() as _,
         )?;
         buffer.upload_data(&description.pixels, 0)?;
+        let graphics_queue = context.graphics_queue();
         self.transition_base_to_transfer_dst(graphics_queue, pool, description.mip_levels)?;
         self.copy_to_gpu_buffer(graphics_queue, pool, buffer.handle(), description)?;
-        // TODO: Add this check
-        // self.ensure_linear_blitting_supported(format_properties, description.format)?;
+        context.ensure_linear_blitting_supported(description.format)?;
         self.generate_mipmaps(graphics_queue, pool, description)?;
         self.transition_base_to_shader_read(graphics_queue, pool, description.mip_levels - 1)?;
         Ok(())
@@ -301,7 +302,6 @@ impl Image {
         buffer: vk::Buffer,
         description: &ImageDescription,
     ) -> Result<()> {
-        // Copy the staging buffer to the image
         let extent = vk::Extent3D::builder()
             .width(description.width)
             .height(description.height)
@@ -327,24 +327,6 @@ impl Image {
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         pool.copy_buffer_to_image(&copy_info)?;
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn ensure_linear_blitting_supported(
-        format_properties: vk::FormatProperties,
-        format: vk::Format,
-    ) -> Result<()> {
-        let format_supported = format_properties
-            .optimal_tiling_features
-            .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR);
-
-        ensure!(
-            format_supported,
-            "Linear blitting is not supported for format: {:?}",
-            format
-        );
-
         Ok(())
     }
 
@@ -470,16 +452,14 @@ pub struct ImageBundle {
 
 impl ImageBundle {
     pub fn new(
-        device: Arc<LogicalDevice>,
-        graphics_queue: vk::Queue,
-        allocator: Arc<Allocator>,
+        context: &Context,
         command_pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<Self> {
-        let image = description.as_image(allocator)?;
-        image.upload_data(graphics_queue, command_pool, description)?;
-        let view = Self::create_image_view(device.clone(), &image, description)?;
-        let sampler = Self::create_sampler(device, description.mip_levels)?;
+        let image = description.as_image(context.allocator.clone())?;
+        image.upload_data(context, command_pool, description)?;
+        let view = Self::create_image_view(context.logical_device.clone(), &image, description)?;
+        let sampler = Self::create_sampler(context.logical_device.clone(), description.mip_levels)?;
 
         let image_bundle = Self {
             image,

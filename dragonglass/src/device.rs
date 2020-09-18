@@ -36,7 +36,7 @@ impl RenderingDevice {
         let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
         let mut shader_cache = ShaderCache::default();
         let scene = Scene::new(
-            context.clone(),
+            &context,
             &transient_command_pool,
             forward_swapchain.render_pass.clone(),
             &mut shader_cache,
@@ -197,7 +197,7 @@ impl RenderingDevice {
 
         self.scene = None;
         let scene = Scene::new(
-            self.context.clone(),
+            &self.context,
             &self.transient_command_pool,
             self.forward_swapchain()?.render_pass.clone(),
             &mut self.shader_cache,

@@ -11,6 +11,7 @@ use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
+use vk_mem::Allocator;
 
 pub struct UniformBuffer {
     pub view: glm::Mat4,
@@ -33,7 +34,7 @@ pub struct Scene {
 
 impl Scene {
     pub fn new(
-        context: Arc<Context>,
+        context: &Context,
         pool: &CommandPool,
         render_pass: Arc<RenderPass>,
         shader_cache: &mut ShaderCache,
@@ -50,12 +51,12 @@ impl Scene {
             descriptor_set_layout.clone(),
         )?;
         let (pipeline, pipeline_layout) = settings.create_pipeline(device.clone())?;
-        let (geometry_buffer, number_of_indices) = Self::geometry_buffer(context.clone(), pool)?;
+        let (geometry_buffer, number_of_indices) = Self::geometry_buffer(context, pool)?;
         let mut rendering = Self {
             pipeline,
             pipeline_layout,
             geometry_buffer,
-            uniform_buffer: Self::uniform_buffer(context.clone())?,
+            uniform_buffer: Self::uniform_buffer(context.allocator.clone())?,
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
@@ -70,7 +71,7 @@ impl Scene {
     }
 
     pub fn geometry_buffer(
-        context: Arc<Context>,
+        context: &Context,
         pool: &CommandPool,
     ) -> Result<(GeometryBuffer, usize)> {
         let vertices: [f32; 16] = [
@@ -131,22 +132,13 @@ impl Scene {
         Ok(settings)
     }
 
-    pub fn uniform_buffer(context: Arc<Context>) -> Result<CpuToGpuBuffer> {
-        CpuToGpuBuffer::uniform_buffer(
-            context.allocator.clone(),
-            mem::size_of::<UniformBuffer>() as _,
-        )
+    pub fn uniform_buffer(allocator: Arc<Allocator>) -> Result<CpuToGpuBuffer> {
+        CpuToGpuBuffer::uniform_buffer(allocator, mem::size_of::<UniformBuffer>() as _)
     }
 
-    pub fn load_image(context: Arc<Context>, pool: &CommandPool) -> Result<ImageBundle> {
+    pub fn load_image(context: &Context, pool: &CommandPool) -> Result<ImageBundle> {
         let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
-        ImageBundle::new(
-            context.logical_device.clone(),
-            context.graphics_queue(),
-            context.allocator.clone(),
-            pool,
-            &description,
-        )
+        ImageBundle::new(context, pool, &description)
     }
 
     pub fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 2] {

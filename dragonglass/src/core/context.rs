@@ -1,5 +1,5 @@
 use super::{Instance, LogicalDevice, PhysicalDevice};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use ash::{
     extensions::khr::Surface as AshSurface,
     version::{DeviceV1_0, InstanceV1_0},
@@ -64,6 +64,14 @@ impl Context {
         Ok(capabilities)
     }
 
+    pub fn physical_device_format_properties(&self, format: vk::Format) -> vk::FormatProperties {
+        unsafe {
+            self.instance
+                .handle
+                .get_physical_device_format_properties(self.physical_device.handle, format)
+        }
+    }
+
     pub fn determine_depth_format(
         &self,
         tiling: vk::ImageTiling,
@@ -76,12 +84,7 @@ impl Context {
         ]
         .into_iter()
         .find(|format| {
-            let properties = unsafe {
-                self.instance
-                    .handle
-                    .get_physical_device_format_properties(self.physical_device.handle, *format)
-            };
-
+            let properties = self.physical_device_format_properties(*format);
             match tiling {
                 vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
                 vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
@@ -90,6 +93,22 @@ impl Context {
         });
 
         depth_format.ok_or_else(|| anyhow!("Couldn't determine the depth format!"))
+    }
+
+    pub fn ensure_linear_blitting_supported(&self, format: vk::Format) -> Result<()> {
+        let properties = self.physical_device_format_properties(format);
+
+        let format_supported = properties
+            .optimal_tiling_features
+            .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR);
+
+        ensure!(
+            format_supported,
+            "Linear blitting is not supported for format: {:?}",
+            format
+        );
+
+        Ok(())
     }
 
     pub fn graphics_queue(&self) -> vk::Queue {
