@@ -108,7 +108,7 @@ impl ImageDescription {
         Ok(())
     }
 
-    fn as_image(&self, allocator: Arc<Allocator>) -> Result<Image> {
+    pub fn as_image(&self, allocator: Arc<Allocator>) -> Result<Image> {
         let extent = vk::Extent3D::builder()
             .width(self.width)
             .height(self.height)
@@ -441,73 +441,6 @@ impl Sampler {
 impl Drop for Sampler {
     fn drop(&mut self) {
         unsafe { self.device.handle.destroy_sampler(self.handle, None) };
-    }
-}
-
-pub struct ImageBundle {
-    pub image: Image,
-    pub view: ImageView,
-    pub sampler: Sampler,
-}
-
-impl ImageBundle {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        description: &ImageDescription,
-    ) -> Result<Self> {
-        let image = description.as_image(context.allocator.clone())?;
-        image.upload_data(context, command_pool, description)?;
-        let view = Self::create_image_view(context.logical_device.clone(), &image, description)?;
-        let sampler = Self::create_sampler(context.logical_device.clone(), description.mip_levels)?;
-
-        let image_bundle = Self {
-            image,
-            view,
-            sampler,
-        };
-
-        Ok(image_bundle)
-    }
-
-    fn create_image_view(
-        device: Arc<LogicalDevice>,
-        image: &Image,
-        description: &ImageDescription,
-    ) -> Result<ImageView> {
-        let subresource_range = vk::ImageSubresourceRange::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .layer_count(1)
-            .level_count(description.mip_levels);
-
-        let create_info = vk::ImageViewCreateInfo::builder()
-            .image(image.handle)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(description.format)
-            .components(vk::ComponentMapping::default())
-            .subresource_range(subresource_range.build());
-
-        ImageView::new(device, create_info)
-    }
-
-    fn create_sampler(device: Arc<LogicalDevice>, mip_levels: u32) -> Result<Sampler> {
-        let sampler_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::REPEAT)
-            .address_mode_v(vk::SamplerAddressMode::REPEAT)
-            .address_mode_w(vk::SamplerAddressMode::REPEAT)
-            .anisotropy_enable(true)
-            .max_anisotropy(16.0)
-            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-            .unnormalized_coordinates(false)
-            .compare_enable(false)
-            .compare_op(vk::CompareOp::ALWAYS)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .mip_lod_bias(0.0)
-            .min_lod(0.0)
-            .max_lod(mip_levels as _);
-        Sampler::new(device, sampler_info)
     }
 }
 
