@@ -11,7 +11,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
-    scene: Option<Scene>,
+    scene: Scene,
     shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
@@ -45,7 +45,7 @@ impl RenderingDevice {
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
         let renderer = Self {
-            scene: Some(scene),
+            scene,
             shader_cache,
             frame: 0,
             frame_locks,
@@ -109,13 +109,11 @@ impl RenderingDevice {
     }
 
     fn update(&self) -> Result<()> {
-        if let Some(scene) = self.scene.as_ref() {
-            let aspect_ratio = self
-                .forward_swapchain()?
-                .swapchain_properties
-                .aspect_ratio();
-            scene.update_ubo(aspect_ratio)?;
-        }
+        let aspect_ratio = self
+            .forward_swapchain()?
+            .swapchain_properties
+            .aspect_ratio();
+        self.scene.update_ubo(aspect_ratio)?;
         Ok(())
     }
 
@@ -195,14 +193,13 @@ impl RenderingDevice {
         self.forward_swapchain = None;
         self.forward_swapchain = Some(ForwardSwapchain::new(self.context.clone(), dimensions)?);
 
-        self.scene = None;
-        let scene = Scene::new(
+        let render_pass = self.forward_swapchain()?.render_pass.clone();
+        self.scene = Scene::new(
             &self.context,
             &self.transient_command_pool,
-            self.forward_swapchain()?.render_pass.clone(),
+            render_pass,
             &mut self.shader_cache,
         )?;
-        self.scene = Some(scene);
 
         Ok(())
     }
@@ -249,9 +246,7 @@ impl RenderingDevice {
             begin_info,
             || {
                 self.update_viewport(command_buffer)?;
-                if let Some(scene) = self.scene.as_ref() {
-                    scene.issue_commands(command_buffer)?;
-                }
+                self.scene.issue_commands(command_buffer)?;
                 Ok(())
             },
         )?;
