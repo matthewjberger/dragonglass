@@ -99,9 +99,13 @@ impl RenderingDevice {
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
             self.check_presentation_result(result, dimensions)?;
-            self.frame = (1 + self.frame) % Self::MAX_FRAMES_IN_FLIGHT;
+            self.increment_frame_counter();
         }
         Ok(())
+    }
+
+    fn increment_frame_counter(&mut self) {
+        self.frame = (self.frame + 1) % Self::MAX_FRAMES_IN_FLIGHT;
     }
 
     fn update(&self) -> Result<()> {
