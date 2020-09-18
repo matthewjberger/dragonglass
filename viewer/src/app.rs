@@ -1,6 +1,12 @@
-use crate::{input::Input, settings::Settings, system::System};
+use crate::{
+    camera::{fps_camera_controls_system, orbital_camera_controls_system, OrbitalCamera},
+    input::Input,
+    settings::Settings,
+    system::System,
+};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
+use legion::*;
 use log::{error, info};
 use winit::{
     dpi::PhysicalSize,
@@ -11,9 +17,7 @@ use winit::{
 
 pub struct App {
     _settings: Settings,
-    input: Input,
-    system: System,
-    _window: Window,
+    window: Window,
     rendering_device: RenderingDevice,
     event_loop: EventLoop<()>,
 }
@@ -36,9 +40,7 @@ impl App {
 
         let app = Self {
             _settings: settings,
-            input: Input::default(),
-            system: System::new(window_dimensions),
-            _window: window,
+            window,
             rendering_device,
             event_loop,
         };
@@ -48,12 +50,24 @@ impl App {
 
     pub fn run(self) -> Result<()> {
         let Self {
-            mut input,
-            mut system,
             mut rendering_device,
             event_loop,
             ..
         } = self;
+
+        let logical_size = rendering_device.window.inner_size();
+
+        let mut resources = Resources::default();
+        resources.insert(Input::default());
+        resources.insert(System::new([logical_size.width, logical_size.height]));
+
+        let mut world = World::default();
+        world.push((OrbitalCamera::default(),));
+        let mut update_schedule = Schedule::builder()
+            .add_system(fps_camera_controls_system())
+            .add_system(orbital_camera_controls_system())
+            .flush()
+            .build();
 
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
@@ -66,10 +80,14 @@ impl App {
                 *control_flow = ControlFlow::Exit;
             }
 
-            if let Event::MainEventsCleared = event {
-                if let Err(error) = rendering_device.render(&system.window_dimensions) {
-                    error!("{}", error);
+            match event {
+                Event::NewEvents { .. } => update_schedule.execute(&mut world, &mut resources),
+                Event::MainEventsCleared => {
+                    if let Err(error) = rendering_device.render(&system.window_dimensions) {
+                        error!("{}", error);
+                    }
                 }
+                _ => {}
             }
         });
     }

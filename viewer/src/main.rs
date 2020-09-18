@@ -16,6 +16,7 @@
 )]
 
 mod app;
+mod camera;
 mod input;
 mod logger;
 mod settings;
