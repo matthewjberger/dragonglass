@@ -20,8 +20,8 @@ pub struct UniformBuffer {
 }
 
 pub struct Scene {
-    pub pipeline: GraphicsPipeline,
-    pub pipeline_layout: PipelineLayout,
+    pub pipeline: Option<GraphicsPipeline>,
+    pub pipeline_layout: Option<PipelineLayout>,
     pub geometry_buffer: GeometryBuffer,
     pub uniform_buffer: CpuToGpuBuffer,
     pub descriptor_pool: DescriptorPool,
@@ -44,17 +44,11 @@ impl Scene {
         let descriptor_pool = Self::descriptor_pool(device.clone())?;
         let descriptor_set =
             descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
-        let settings = Self::settings(
-            device.clone(),
-            shader_cache,
-            render_pass,
-            descriptor_set_layout.clone(),
-        )?;
-        let (pipeline, pipeline_layout) = settings.create_pipeline(device.clone())?;
         let (geometry_buffer, number_of_indices) = Self::geometry_buffer(context, pool)?;
+
         let mut rendering = Self {
-            pipeline,
-            pipeline_layout,
+            pipeline: None,
+            pipeline_layout: None,
             geometry_buffer,
             uniform_buffer: Self::uniform_buffer(context.allocator.clone())?,
             descriptor_pool,
@@ -65,15 +59,32 @@ impl Scene {
             device,
         };
 
+        rendering.create_pipeline(render_pass, shader_cache)?;
         rendering.update_descriptor_set();
 
         Ok(rendering)
     }
 
-    pub fn geometry_buffer(
-        context: &Context,
-        pool: &CommandPool,
-    ) -> Result<(GeometryBuffer, usize)> {
+    pub fn create_pipeline(
+        &mut self,
+        render_pass: Arc<RenderPass>,
+        mut shader_cache: &mut ShaderCache,
+    ) -> Result<()> {
+        let settings = Self::settings(
+            self.device.clone(),
+            &mut shader_cache,
+            render_pass,
+            self.descriptor_set_layout.clone(),
+        )?;
+        self.pipeline = None;
+        self.pipeline_layout = None;
+        let (pipeline, pipeline_layout) = settings.create_pipeline(self.device.clone())?;
+        self.pipeline = Some(pipeline);
+        self.pipeline_layout = Some(pipeline_layout);
+        Ok(())
+    }
+
+    fn geometry_buffer(context: &Context, pool: &CommandPool) -> Result<(GeometryBuffer, usize)> {
         let vertices: [f32; 16] = [
             -0.5, -0.5, 0.0, 0.0, 10.5, 0.5, 1.0, 1.0, 10.5, -0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 1.0,
         ];
@@ -100,7 +111,7 @@ impl Scene {
         Ok((geometry_buffer, number_of_indices))
     }
 
-    pub fn shader_paths() -> Result<ShaderPathSet> {
+    fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
             .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
@@ -109,7 +120,7 @@ impl Scene {
         Ok(shader_path_set)
     }
 
-    pub fn settings(
+    fn settings(
         device: Arc<LogicalDevice>,
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
@@ -132,16 +143,16 @@ impl Scene {
         Ok(settings)
     }
 
-    pub fn uniform_buffer(allocator: Arc<Allocator>) -> Result<CpuToGpuBuffer> {
+    fn uniform_buffer(allocator: Arc<Allocator>) -> Result<CpuToGpuBuffer> {
         CpuToGpuBuffer::uniform_buffer(allocator, mem::size_of::<UniformBuffer>() as _)
     }
 
-    pub fn load_image(context: &Context, pool: &CommandPool) -> Result<Texture> {
+    fn load_image(context: &Context, pool: &CommandPool) -> Result<Texture> {
         let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
         Texture::new(context, pool, &description)
     }
 
-    pub fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 2] {
+    fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 2] {
         let position_description = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0)
@@ -159,7 +170,7 @@ impl Scene {
         [position_description, tex_coord_description]
     }
 
-    pub fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
+    fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
         let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride((4 * std::mem::size_of::<f32>()) as _)
@@ -168,7 +179,7 @@ impl Scene {
         [vertex_input_binding_description]
     }
 
-    pub fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
+    fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
         // TODO: Replace with builders
         let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -189,7 +200,7 @@ impl Scene {
         DescriptorPool::new(device, pool_info)
     }
 
-    pub fn descriptor_set_layout(device: Arc<LogicalDevice>) -> Result<DescriptorSetLayout> {
+    fn descriptor_set_layout(device: Arc<LogicalDevice>) -> Result<DescriptorSetLayout> {
         let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -261,7 +272,16 @@ impl Scene {
     }
 
     pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
-        self.pipeline.bind(&self.device.handle, command_buffer);
+        self.pipeline
+            .as_ref()
+            .ok_or_else(|| anyhow!("Failed to get scene pipeline!"))?
+            .bind(&self.device.handle, command_buffer);
+
+        let pipeline_layout = self
+            .pipeline_layout
+            .as_ref()
+            .ok_or_else(|| anyhow!("Failed to get scene pipeline layout!"))?
+            .handle;
 
         self.geometry_buffer
             .bind(&self.device.handle, command_buffer)?;
@@ -270,7 +290,7 @@ impl Scene {
             self.device.handle.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline_layout.handle,
+                pipeline_layout,
                 0,
                 &[self.descriptor_set],
                 &[],

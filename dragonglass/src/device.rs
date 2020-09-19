@@ -1,7 +1,7 @@
 use super::{
     core::{Context, LogicalDevice},
-    forward::ForwardSwapchain,
-    render::{CommandPool, Fence, RenderPass, Semaphore, ShaderCache},
+    forward::RenderPath,
+    render::{CommandPool, Fence, Semaphore, ShaderCache},
     scene::Scene,
 };
 use anyhow::{anyhow, bail, Result};
@@ -17,8 +17,8 @@ pub struct RenderingDevice {
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
     _command_pool: CommandPool,
-    transient_command_pool: CommandPool,
-    forward_swapchain: Option<ForwardSwapchain>,
+    _transient_command_pool: CommandPool,
+    render_path: Option<RenderPath>,
     context: Context,
 }
 
@@ -33,15 +33,15 @@ impl RenderingDevice {
         let graphics_queue_index = context.physical_device.graphics_queue_index;
         let command_pool = Self::command_pool(device.clone(), graphics_queue_index)?;
         let transient_command_pool = Self::transient_command_pool(device, graphics_queue_index)?;
-        let forward_swapchain = ForwardSwapchain::new(&context, dimensions)?;
         let mut shader_cache = ShaderCache::default();
+        let render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
         let scene = Scene::new(
             &context,
             &transient_command_pool,
-            forward_swapchain.render_pass.clone(),
+            render_path.offscreen.render_pass.clone(),
             &mut shader_cache,
         )?;
-        let number_of_framebuffers = forward_swapchain.framebuffers.len() as _;
+        let number_of_framebuffers = render_path.swapchain.framebuffers.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
         let renderer = Self {
@@ -51,8 +51,8 @@ impl RenderingDevice {
             frame_locks,
             command_buffers,
             _command_pool: command_pool,
-            transient_command_pool,
-            forward_swapchain: Some(forward_swapchain),
+            _transient_command_pool: transient_command_pool,
+            render_path: Some(render_path),
             context,
         };
         Ok(renderer)
@@ -80,10 +80,10 @@ impl RenderingDevice {
         Ok(command_pool)
     }
 
-    fn forward_swapchain(&self) -> Result<&ForwardSwapchain> {
-        self.forward_swapchain
+    fn render_path(&self) -> Result<&RenderPath> {
+        self.render_path
             .as_ref()
-            .ok_or_else(|| anyhow!("No forward swapchain was available for rendering!"))
+            .ok_or_else(|| anyhow!("No render path was available!"))
     }
 
     fn device(&self) -> ash::Device {
@@ -110,7 +110,8 @@ impl RenderingDevice {
 
     fn update(&self) -> Result<()> {
         let aspect_ratio = self
-            .forward_swapchain()?
+            .render_path()?
+            .swapchain
             .swapchain_properties
             .aspect_ratio();
         self.scene.update_ubo(aspect_ratio)?;
@@ -131,7 +132,8 @@ impl RenderingDevice {
 
     fn acquire_next_frame(&mut self, dimensions: &[u32; 2]) -> Result<Option<usize>> {
         let result = self
-            .forward_swapchain()?
+            .render_path()?
+            .swapchain
             .swapchain
             .acquire_next_image(self.frame_lock()?.image_available.handle, vk::Fence::null());
 
@@ -147,7 +149,7 @@ impl RenderingDevice {
 
     fn present_next_frame(&mut self, image_index: usize) -> Result<VkResult<bool>> {
         let wait_semaphores = [self.frame_lock()?.render_finished.handle];
-        let swapchains = [self.forward_swapchain()?.swapchain.handle_khr];
+        let swapchains = [self.render_path()?.swapchain.swapchain.handle_khr];
         let image_indices = [image_index as u32];
 
         let present_info = vk::PresentInfoKHR::builder()
@@ -156,7 +158,8 @@ impl RenderingDevice {
             .image_indices(&image_indices);
 
         let presentation_result = unsafe {
-            self.forward_swapchain()?
+            self.render_path()?
+                .swapchain
                 .swapchain
                 .handle_ash
                 .queue_present(self.context.presentation_queue(), &present_info)
@@ -190,17 +193,16 @@ impl RenderingDevice {
 
         unsafe { self.context.logical_device.handle.device_wait_idle() }?;
 
-        self.forward_swapchain = None;
-        self.forward_swapchain = Some(ForwardSwapchain::new(&self.context, dimensions)?);
-
-        let render_pass = self.forward_swapchain()?.render_pass.clone();
-        self.scene = Scene::new(
+        self.render_path = None;
+        self.render_path = Some(RenderPath::new(
             &self.context,
-            &self.transient_command_pool,
-            render_pass,
+            dimensions,
             &mut self.shader_cache,
-        )?;
+        )?);
 
+        let render_pass = self.render_path()?.offscreen.render_pass.clone();
+        self.scene
+            .create_pipeline(render_pass, &mut self.shader_cache)?;
         Ok(())
     }
 
@@ -229,72 +231,11 @@ impl RenderingDevice {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let extent = self.forward_swapchain()?.swapchain_properties.extent;
-        let clear_values = Self::clear_values();
-        let begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(self.forward_swapchain()?.render_pass.handle)
-            .framebuffer(self.framebuffer_at(image_index)?)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .clear_values(&clear_values);
-
-        RenderPass::record(
-            self.context.logical_device.clone(),
-            command_buffer,
-            begin_info,
-            || {
-                self.update_viewport(command_buffer)?;
+        self.render_path()?
+            .record_renderpass(command_buffer, image_index, |command_buffer| {
                 self.scene.issue_commands(command_buffer)?;
                 Ok(())
-            },
-        )?;
-
-        Ok(())
-    }
-
-    fn update_viewport(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
-        let extent = self.forward_swapchain()?.swapchain_properties.extent;
-
-        let viewport = vk::Viewport {
-            x: 0.0,
-            y: extent.height as _,
-            width: extent.width as _,
-            height: (-1.0 * extent.height as f32) as _,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        };
-        let viewports = [viewport];
-
-        let scissor = vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent,
-        };
-        let scissors = [scissor];
-
-        let device = self.context.logical_device.handle.clone();
-        unsafe {
-            device.cmd_set_viewport(command_buffer, 0, &viewports);
-            device.cmd_set_scissor(command_buffer, 0, &scissors);
-        }
-
-        Ok(())
-    }
-
-    fn framebuffer_at(&self, image_index: usize) -> Result<vk::Framebuffer> {
-        let framebuffer = self
-            .forward_swapchain()?
-            .framebuffers
-            .get(image_index)
-            .ok_or_else(|| {
-                anyhow!(
-                    "No framebuffer was found for the forward swapchain at image index: {}",
-                    image_index
-                )
-            })?
-            .handle;
-        Ok(framebuffer)
+            })
     }
 
     fn command_buffer_at(&self, image_index: usize) -> Result<vk::CommandBuffer> {
@@ -313,17 +254,6 @@ impl RenderingDevice {
             .get(self.frame)
             .ok_or_else(|| anyhow!("No frame lock was found at frame index: {}", self.frame,))?;
         Ok(lock)
-    }
-
-    fn clear_values() -> Vec<vk::ClearValue> {
-        let color = vk::ClearColorValue {
-            float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
-        };
-        let depth_stencil = vk::ClearDepthStencilValue {
-            depth: 1.0,
-            stencil: 0,
-        };
-        vec![vk::ClearValue { color }, vk::ClearValue { depth_stencil }]
     }
 
     fn submit_command_buffer(&self, image_index: usize) -> Result<()> {

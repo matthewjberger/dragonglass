@@ -133,6 +133,7 @@ impl SwapchainProperties {
         if default_available || all_formats_undefined {
             Ok(default_format)
         } else {
+            log::info!("Non-default swapchain format selected: {:#?}", formats[0]);
             Ok(formats[0])
         }
     }

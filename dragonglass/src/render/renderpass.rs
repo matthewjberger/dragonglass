@@ -15,6 +15,7 @@ impl RenderPass {
         Ok(render_pass)
     }
 
+    // TODO: Don't pass device here
     pub fn record<T>(
         device: Arc<LogicalDevice>,
         buffer: vk::CommandBuffer,
@@ -22,7 +23,7 @@ impl RenderPass {
         mut action: T,
     ) -> Result<()>
     where
-        T: FnMut() -> Result<()>,
+        T: FnMut(vk::CommandBuffer) -> Result<()>,
     {
         unsafe {
             device
@@ -30,7 +31,7 @@ impl RenderPass {
                 .cmd_begin_render_pass(buffer, &begin_info, vk::SubpassContents::INLINE)
         };
 
-        action()?;
+        action(buffer)?;
 
         unsafe {
             device.handle.cmd_end_render_pass(buffer);
