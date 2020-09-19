@@ -180,17 +180,14 @@ impl Scene {
     }
 
     fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
-        // TODO: Replace with builders
-        let ubo_pool_size = vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
-            descriptor_count: 1,
-        };
-
-        let sampler_pool_size = vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            descriptor_count: 1,
-        };
-
+        let ubo_pool_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .build();
+        let sampler_pool_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .build();
         let pool_sizes = [ubo_pool_size, sampler_pool_size];
 
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
