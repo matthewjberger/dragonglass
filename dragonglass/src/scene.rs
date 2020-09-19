@@ -248,14 +248,8 @@ impl Scene {
         unsafe { self.device.handle.update_descriptor_sets(writes, &[]) }
     }
 
-    pub fn update_ubo(&self, aspect_ratio: f32) -> Result<()> {
+    pub fn update_ubo(&self, aspect_ratio: f32, view: glm::Mat4) -> Result<()> {
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-
-        let view = glm::look_at(
-            &glm::vec3(0.0, 0.0, -0.75),
-            &glm::vec3(0.0, 0.0, 0.0),
-            &glm::vec3(0.0, 1.0, 0.0),
-        );
 
         let ubo = UniformBuffer {
             view,

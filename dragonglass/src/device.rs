@@ -7,6 +7,7 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use log::error;
+use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -90,11 +91,17 @@ impl RenderingDevice {
         self.context.logical_device.handle.clone()
     }
 
-    pub fn render(&mut self, dimensions: &[u32; 2]) -> Result<()> {
+    pub fn render(
+        &mut self,
+        dimensions: &[u32; 2],
+        // TODO: Turn these into a camera trait
+        view: &glm::Mat4,
+        _camera_position: &glm::Vec3,
+    ) -> Result<()> {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
-            self.update()?;
+            self.update(*view)?;
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
@@ -108,13 +115,13 @@ impl RenderingDevice {
         self.frame = (self.frame + 1) % Self::MAX_FRAMES_IN_FLIGHT;
     }
 
-    fn update(&self) -> Result<()> {
+    fn update(&self, view: glm::Mat4) -> Result<()> {
         let aspect_ratio = self
             .render_path()?
             .swapchain
             .swapchain_properties
             .aspect_ratio();
-        self.scene.update_ubo(aspect_ratio)?;
+        self.scene.update_ubo(aspect_ratio, view)?;
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use crate::{input::Input, settings::Settings, system::System};
+use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
 use log::{error, info};
@@ -10,6 +10,7 @@ use winit::{
 };
 
 pub struct App {
+    camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
     system: System,
@@ -35,6 +36,7 @@ impl App {
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
 
         let app = Self {
+            camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
             system: System::new(window_dimensions),
@@ -48,12 +50,15 @@ impl App {
 
     pub fn run(self) -> Result<()> {
         let Self {
+            mut camera,
             mut input,
             mut system,
             mut rendering_device,
             event_loop,
             ..
         } = self;
+
+        input.allowed = true;
 
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
@@ -66,11 +71,28 @@ impl App {
                 *control_flow = ControlFlow::Exit;
             }
 
+            Self::update_camera(&mut camera, &input, &system);
+
             if let Event::MainEventsCleared = event {
-                if let Err(error) = rendering_device.render(&system.window_dimensions) {
+                if let Err(error) = rendering_device.render(
+                    &system.window_dimensions,
+                    &camera.view_matrix(),
+                    &camera.position(),
+                ) {
                     error!("{}", error);
                 }
             }
         });
+    }
+
+    fn update_camera(camera: &mut OrbitalCamera, input: &Input, system: &System) {
+        if !input.allowed {
+            return;
+        }
+        camera.forward(input.mouse.wheel_delta.y * 0.3);
+        if input.mouse.is_left_clicked {
+            let rotation = input.mouse.position_delta * system.delta_time as f32;
+            camera.rotate(&rotation);
+        }
     }
 }
