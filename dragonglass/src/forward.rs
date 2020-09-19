@@ -241,16 +241,11 @@ impl ForwardSwapchain {
         Ok(())
     }
 
-    // TODO: Does this need the depth clear value?
     fn clear_values() -> Vec<vk::ClearValue> {
         let color = vk::ClearColorValue {
             float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
         };
-        let depth_stencil = vk::ClearDepthStencilValue {
-            depth: 1.0,
-            stencil: 0,
-        };
-        vec![vk::ClearValue { color }, vk::ClearValue { depth_stencil }]
+        vec![vk::ClearValue { color }]
     }
 }
 
