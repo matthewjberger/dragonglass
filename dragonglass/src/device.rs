@@ -19,21 +19,21 @@ pub struct RenderingDevice {
     _command_pool: CommandPool,
     transient_command_pool: CommandPool,
     forward_swapchain: Option<ForwardSwapchain>,
-    context: Arc<Context>,
+    context: Context,
 }
 
 impl RenderingDevice {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
-        let context = Arc::new(Context::new(window_handle)?);
+        let context = Context::new(window_handle)?;
         let device = context.logical_device.clone();
         let frame_locks = Self::frame_locks(device)?;
         let device = context.logical_device.clone();
         let graphics_queue_index = context.physical_device.graphics_queue_index;
         let command_pool = Self::command_pool(device.clone(), graphics_queue_index)?;
         let transient_command_pool = Self::transient_command_pool(device, graphics_queue_index)?;
-        let forward_swapchain = ForwardSwapchain::new(context.clone(), dimensions)?;
+        let forward_swapchain = ForwardSwapchain::new(&context, dimensions)?;
         let mut shader_cache = ShaderCache::default();
         let scene = Scene::new(
             &context,
@@ -191,7 +191,7 @@ impl RenderingDevice {
         unsafe { self.context.logical_device.handle.device_wait_idle() }?;
 
         self.forward_swapchain = None;
-        self.forward_swapchain = Some(ForwardSwapchain::new(self.context.clone(), dimensions)?);
+        self.forward_swapchain = Some(ForwardSwapchain::new(&self.context, dimensions)?);
 
         let render_pass = self.forward_swapchain()?.render_pass.clone();
         self.scene = Scene::new(
