@@ -207,35 +207,22 @@ impl RenderingDevice {
     }
 
     fn record_command_buffer(&mut self, image_index: usize) -> Result<()> {
-        let command_buffer = *self.command_buffers.get(image_index).ok_or_else(|| {
-            anyhow!(
-                "No command buffer was found for the forward swapchain at image index: {}",
-                image_index
-            )
-        })?;
-
+        let command_buffer = self.command_buffer_at(image_index)?;
         self.context.logical_device.clone().record_command_buffer(
             command_buffer,
             vk::CommandBufferUsageFlags::empty(),
             || {
-                self.record_render_pass(command_buffer, image_index)?;
-                Ok(())
+                self.render_path()?.record_renderpass(
+                    command_buffer,
+                    image_index,
+                    |command_buffer| {
+                        self.scene.issue_commands(command_buffer)?;
+                        Ok(())
+                    },
+                )
             },
         )?;
-
         Ok(())
-    }
-
-    fn record_render_pass(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) -> Result<()> {
-        self.render_path()?
-            .record_renderpass(command_buffer, image_index, |command_buffer| {
-                self.scene.issue_commands(command_buffer)?;
-                Ok(())
-            })
     }
 
     fn command_buffer_at(&self, image_index: usize) -> Result<vk::CommandBuffer> {

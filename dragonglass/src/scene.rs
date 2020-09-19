@@ -86,7 +86,7 @@ impl Scene {
 
     fn geometry_buffer(context: &Context, pool: &CommandPool) -> Result<(GeometryBuffer, usize)> {
         let vertices: [f32; 16] = [
-            -0.5, -0.5, 0.0, 0.0, 10.5, 0.5, 1.0, 1.0, 10.5, -0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 1.0,
+            -0.5, -0.5, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 0.5, -0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 1.0,
         ];
 
         let indices: [u32; 6] = [0, 1, 2, 3, 1, 0];
@@ -252,7 +252,7 @@ impl Scene {
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
         let view = glm::look_at(
-            &glm::vec3(-1.0, 0.0, -1.0),
+            &glm::vec3(0.0, 0.0, -0.75),
             &glm::vec3(0.0, 0.0, 0.0),
             &glm::vec3(0.0, 1.0, 0.0),
         );

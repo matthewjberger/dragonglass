@@ -56,16 +56,14 @@ impl RenderPath {
             .width(OffscreenBuffer::DIMENSION)
             .height(OffscreenBuffer::DIMENSION)
             .build();
+        self.update_viewport(command_buffer, offscreen_extent)?;
         self.offscreen
-            .record_renderpass(command_buffer, |command_buffer| {
-                self.update_viewport(command_buffer, offscreen_extent)?;
-                action(command_buffer)
-            })?;
+            .record_renderpass(command_buffer, |command_buffer| action(command_buffer))?;
 
         let swapchain_extent = self.swapchain.swapchain_properties.extent;
+        self.update_viewport(command_buffer, swapchain_extent)?;
         self.swapchain
             .record_renderpass(command_buffer, image_index, |command_buffer| {
-                self.update_viewport(command_buffer, swapchain_extent)?;
                 self.pipeline.issue_commands(command_buffer)
             })?;
 
@@ -415,7 +413,7 @@ pub struct OffscreenBuffer {
 }
 
 impl OffscreenBuffer {
-    pub const DIMENSION: u32 = 1024;
+    pub const DIMENSION: u32 = 2048;
     pub const FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
     pub fn new(context: &Context) -> Result<Self> {
