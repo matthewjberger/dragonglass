@@ -1,4 +1,4 @@
-use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
+use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
 use log::{error, info};
@@ -10,11 +10,12 @@ use winit::{
 };
 
 pub struct App {
+    gui: Gui,
     camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
     system: System,
-    _window: Window,
+    window: Window,
     rendering_device: RenderingDevice,
     event_loop: EventLoop<()>,
 }
@@ -31,16 +32,19 @@ impl App {
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
 
+        let gui = Gui::new(&window);
+
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
 
         let app = Self {
+            gui,
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
             system: System::new(window_dimensions),
-            _window: window,
+            window,
             rendering_device,
             event_loop,
         };
@@ -50,22 +54,24 @@ impl App {
 
     pub fn run(self) -> Result<()> {
         let Self {
+            mut gui,
             mut camera,
             mut input,
             mut system,
             mut rendering_device,
+            window,
             event_loop,
             ..
         } = self;
-
-        input.allowed = true;
 
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
+            gui.handle_event(&event, &window);
             system.handle_event(&event);
             input.handle_event(&event, system.window_center());
+            input.allowed = !gui.capturing_input();
 
             if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
                 *control_flow = ControlFlow::Exit;
@@ -74,6 +80,10 @@ impl App {
             Self::update_camera(&mut camera, &input, &system);
 
             if let Event::MainEventsCleared = event {
+                if let Err(error) = gui.render_frame(&window) {
+                    error!("{}", error);
+                }
+
                 if let Err(error) = rendering_device.render(
                     &system.window_dimensions,
                     &camera.view_matrix(),

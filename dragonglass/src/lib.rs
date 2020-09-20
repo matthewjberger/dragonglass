@@ -20,5 +20,6 @@ pub use self::device::RenderingDevice;
 mod core;
 mod device;
 mod forward;
+mod gui;
 mod render;
 mod scene;

@@ -11,6 +11,11 @@ use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
+pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
+    let data_ptr = (data as *const T) as *const u8;
+    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
+}
+
 pub struct RenderingDevice {
     scene: Scene,
     shader_cache: ShaderCache,
