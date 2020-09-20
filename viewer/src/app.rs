@@ -89,7 +89,8 @@ impl App {
         if !input.allowed {
             return;
         }
-        camera.forward(input.mouse.wheel_delta.y * 0.3);
+        let scroll_multiplier = 0.01;
+        camera.forward(input.mouse.wheel_delta.y * scroll_multiplier);
         if input.mouse.is_left_clicked {
             let rotation = input.mouse.position_delta * system.delta_time as f32;
             camera.rotate(&rotation);

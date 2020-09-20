@@ -4,6 +4,8 @@ use nalgebra_glm as glm;
 pub struct OrbitalCamera {
     direction: glm::Vec2,
     r: f32,
+    min: f32,
+    max: f32,
 }
 
 impl OrbitalCamera {
@@ -27,6 +29,12 @@ impl OrbitalCamera {
 
     pub fn forward(&mut self, r: f32) {
         self.r -= r;
+        if self.r < self.min {
+            self.r = self.min;
+        }
+        if self.r > self.max {
+            self.r = self.max;
+        }
     }
 
     pub fn view_matrix(&self) -> glm::Mat4 {
@@ -43,6 +51,8 @@ impl Default for OrbitalCamera {
         Self {
             direction: glm::vec2(0_f32.to_radians(), 45_f32.to_radians()),
             r: 5.0,
+            min: 1.0,
+            max: 100.0,
         }
     }
 }
