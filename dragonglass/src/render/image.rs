@@ -30,6 +30,7 @@ pub struct ImageLayoutTransition {
     pub dst_stage_mask: vk::PipelineStageFlags,
 }
 
+#[derive(Builder)]
 pub struct ImageDescription {
     pub format: vk::Format,
     pub width: u32,

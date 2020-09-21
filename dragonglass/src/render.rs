@@ -5,7 +5,7 @@ pub use self::{
         BufferToImageCopy, BufferToImageCopyBuilder, CommandPool, PipelineBarrier,
         PipelineBarrierBuilder,
     },
-    image::{Image, ImageDescription, ImageView, Sampler},
+    image::{Image, ImageDescription, ImageDescriptionBuilder, ImageView, Sampler},
     pipeline::{
         GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout,
     },

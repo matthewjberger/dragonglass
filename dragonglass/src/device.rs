@@ -1,11 +1,13 @@
 use super::{
     core::{Context, LogicalDevice},
     forward::RenderPath,
+    gui::GuiRenderer,
     render::{CommandPool, Fence, Semaphore, ShaderCache},
     scene::Scene,
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
+use imgui::{Context as ImguiContext, DrawData};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -17,13 +19,14 @@ pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
 }
 
 pub struct RenderingDevice {
+    gui: GuiRenderer,
     scene: Scene,
     shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
     _command_pool: CommandPool,
-    _transient_command_pool: CommandPool,
+    transient_command_pool: CommandPool,
     render_path: Option<RenderPath>,
     context: Context,
 }
@@ -31,7 +34,11 @@ pub struct RenderingDevice {
 impl RenderingDevice {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
+    pub fn new<T: HasRawWindowHandle>(
+        window_handle: &T,
+        dimensions: &[u32; 2],
+        mut gui_context: &mut ImguiContext,
+    ) -> Result<Self> {
         let context = Context::new(window_handle)?;
         let device = context.logical_device.clone();
         let frame_locks = Self::frame_locks(device)?;
@@ -41,6 +48,13 @@ impl RenderingDevice {
         let transient_command_pool = Self::transient_command_pool(device, graphics_queue_index)?;
         let mut shader_cache = ShaderCache::default();
         let render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
+        let gui = GuiRenderer::new(
+            &context,
+            &command_pool,
+            render_path.swapchain.render_pass.clone(),
+            &mut shader_cache,
+            &mut gui_context,
+        )?;
         let scene = Scene::new(
             &context,
             &transient_command_pool,
@@ -51,13 +65,14 @@ impl RenderingDevice {
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
         let renderer = Self {
+            gui,
             scene,
             shader_cache,
             frame: 0,
             frame_locks,
             command_buffers,
             _command_pool: command_pool,
-            _transient_command_pool: transient_command_pool,
+            transient_command_pool,
             render_path: Some(render_path),
             context,
         };
@@ -102,12 +117,13 @@ impl RenderingDevice {
         // TODO: Turn these into a camera trait
         view: &glm::Mat4,
         _camera_position: &glm::Vec3,
+        draw_data: &DrawData,
     ) -> Result<()> {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
             self.update(*view)?;
-            self.record_command_buffer(image_index)?;
+            self.record_command_buffer(image_index, draw_data)?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
             self.check_presentation_result(result, dimensions)?;
@@ -218,17 +234,33 @@ impl RenderingDevice {
         Ok(())
     }
 
-    fn record_command_buffer(&mut self, image_index: usize) -> Result<()> {
+    fn record_command_buffer(&mut self, image_index: usize, draw_data: &DrawData) -> Result<()> {
         let command_buffer = self.command_buffer_at(image_index)?;
-        self.context.logical_device.clone().record_command_buffer(
+        let Self {
+            render_path,
+            context,
+            transient_command_pool,
+            scene,
+            ..
+        } = self;
+        context.logical_device.clone().record_command_buffer(
             command_buffer,
             vk::CommandBufferUsageFlags::empty(),
             || {
-                self.render_path()?.record_renderpass(
+                render_path.as_ref().unwrap().record_renderpass(
                     command_buffer,
                     image_index,
                     |command_buffer| {
                         self.scene.issue_commands(command_buffer)?;
+                        Ok(())
+                    },
+                    |command_buffer| {
+                        self.gui.issue_commands(
+                            &context,
+                            command_buffer,
+                            &transient_command_pool,
+                            &draw_data,
+                        )?;
                         Ok(())
                     },
                 )

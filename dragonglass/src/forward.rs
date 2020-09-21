@@ -43,14 +43,16 @@ impl RenderPath {
         Ok(path)
     }
 
-    pub fn record_renderpass<T>(
+    pub fn record_renderpass<O, F>(
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        mut action: T,
+        offscreen_action: O,
+        mut final_action: F,
     ) -> Result<()>
     where
-        T: FnMut(vk::CommandBuffer) -> Result<()>,
+        O: FnMut(vk::CommandBuffer) -> Result<()>,
+        F: FnMut(vk::CommandBuffer) -> Result<()>,
     {
         let offscreen_extent = vk::Extent2D::builder()
             .width(OffscreenBuffer::DIMENSION)
@@ -58,13 +60,14 @@ impl RenderPath {
             .build();
         self.update_viewport(command_buffer, offscreen_extent)?;
         self.offscreen
-            .record_renderpass(command_buffer, |command_buffer| action(command_buffer))?;
+            .record_renderpass(command_buffer, offscreen_action)?;
 
         let swapchain_extent = self.swapchain.swapchain_properties.extent;
         self.update_viewport(command_buffer, swapchain_extent)?;
         self.swapchain
             .record_renderpass(command_buffer, image_index, |command_buffer| {
-                self.pipeline.issue_commands(command_buffer)
+                self.pipeline.issue_commands(command_buffer)?;
+                final_action(command_buffer)
             })?;
 
         Ok(())

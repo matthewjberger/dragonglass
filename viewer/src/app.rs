@@ -32,11 +32,12 @@ impl App {
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
 
-        let gui = Gui::new(&window);
+        let mut gui = Gui::new(&window);
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
+        let rendering_device =
+            RenderingDevice::new(&window, &window_dimensions, gui.context_mut())?;
 
         let app = Self {
             gui,
