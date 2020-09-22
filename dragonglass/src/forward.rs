@@ -247,13 +247,13 @@ impl ForwardSwapchain {
     }
 }
 
-pub struct DepthRenderTarget {
+pub struct DepthStencil {
     _image: Image,
     pub view: ImageView,
     pub format: vk::Format,
 }
 
-impl DepthRenderTarget {
+impl DepthStencil {
     fn new(
         device: Arc<LogicalDevice>,
         allocator: Arc<Allocator>,
@@ -406,7 +406,7 @@ impl ColorRenderTarget {
 
 pub struct OffscreenBuffer {
     pub color_target: ColorRenderTarget,
-    pub depth_target: DepthRenderTarget,
+    pub depth_stencil: DepthStencil,
     pub render_pass: Arc<RenderPass>,
     pub framebuffer: Framebuffer,
     device: Arc<LogicalDevice>,
@@ -431,18 +431,18 @@ impl OffscreenBuffer {
             vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
         )?;
 
-        let depth_target =
-            DepthRenderTarget::new(device.clone(), allocator.clone(), extent, depth_format)?;
+        let depth_stencil =
+            DepthStencil::new(device.clone(), allocator.clone(), extent, depth_format)?;
         let color_target = ColorRenderTarget::new(device.clone(), allocator, extent, Self::FORMAT)?;
 
         let render_pass = Self::render_pass(
             context.logical_device.clone(),
             Self::FORMAT,
-            depth_target.format,
+            depth_stencil.format,
         )?;
         let render_pass = Arc::new(render_pass);
 
-        let attachments = [color_target.view.handle, depth_target.view.handle];
+        let attachments = [color_target.view.handle, depth_stencil.view.handle];
         let create_info = vk::FramebufferCreateInfo::builder()
             .render_pass(render_pass.handle)
             .attachments(&attachments)
@@ -452,7 +452,7 @@ impl OffscreenBuffer {
         let framebuffer = Framebuffer::new(device.clone(), create_info)?;
 
         let buffer = Self {
-            depth_target,
+            depth_stencil,
             color_target,
             render_pass,
             framebuffer,

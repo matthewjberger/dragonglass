@@ -21,4 +21,5 @@ mod core;
 mod device;
 mod forward;
 mod render;
+mod rendergraph;
 mod scene;
