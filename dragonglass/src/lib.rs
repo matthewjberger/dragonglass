@@ -17,7 +17,10 @@
 
 pub use self::device::RenderingDevice;
 
+mod adapters;
+mod context;
 mod device;
 mod forward;
-mod render;
+mod resources;
 mod scene;
+mod swapchain;

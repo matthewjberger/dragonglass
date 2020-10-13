@@ -1,7 +1,9 @@
-use super::ImageView;
+use crate::{
+    context::{Context, LogicalDevice, Surface},
+    resources::ImageView,
+};
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
-use dragonglass_context::{Context, LogicalDevice, Surface};
 use std::{cmp, sync::Arc};
 
 pub struct Swapchain {

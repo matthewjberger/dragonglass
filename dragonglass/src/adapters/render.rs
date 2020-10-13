@@ -1,6 +1,6 @@
+use crate::context::LogicalDevice;
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_context::LogicalDevice;
 use std::sync::Arc;
 
 pub struct RenderPass {

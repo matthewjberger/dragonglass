@@ -1,14 +1,14 @@
-use super::render::{
-    create_swapchain, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, Image, ImageView,
-    Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Swapchain, SwapchainProperties,
+use crate::{
+    adapters::{
+        DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline,
+        GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
+    },
+    context::{Context, LogicalDevice},
+    resources::{Image, ImageView, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
+    swapchain::{create_swapchain, Swapchain, SwapchainProperties},
 };
-
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_adapters::{
-    DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline, PipelineLayout, RenderPass,
-};
-use dragonglass_context::{Context, LogicalDevice};
 use std::sync::Arc;
 use vk_mem::Allocator;
 

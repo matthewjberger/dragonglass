@@ -1,8 +1,7 @@
-use crate::Fence;
+use crate::{adapters::Fence, context::LogicalDevice};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
-use dragonglass_context::LogicalDevice;
 use std::sync::Arc;
 
 pub struct CommandPool {

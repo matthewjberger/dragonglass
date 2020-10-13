@@ -1,4 +1,9 @@
-use crate::{Instance, LogicalDevice, PhysicalDevice};
+pub use self::{instance::*, logical_device::*, physical_device::*};
+
+mod instance;
+mod logical_device;
+mod physical_device;
+
 use anyhow::{anyhow, ensure, Result};
 use ash::{
     extensions::khr::Surface as AshSurface,

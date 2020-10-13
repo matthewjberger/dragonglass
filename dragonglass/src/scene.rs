@@ -1,13 +1,16 @@
-use super::render::{
-    CpuToGpuBuffer, GeometryBuffer, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder,
-    Image, ImageDescription, ImageView, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+use crate::{
+    adapters::{
+        CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
+        GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
+    },
+    context::{Context, LogicalDevice},
+    resources::{
+        CpuToGpuBuffer, GeometryBuffer, Image, ImageDescription, ImageView, Sampler, ShaderCache,
+        ShaderPathSet, ShaderPathSetBuilder,
+    },
 };
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_adapters::{
-    CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline, PipelineLayout, RenderPass,
-};
-use dragonglass_context::{Context, LogicalDevice};
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
 use vk_mem::Allocator;
