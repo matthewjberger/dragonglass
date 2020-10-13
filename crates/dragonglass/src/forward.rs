@@ -1,12 +1,13 @@
 use super::render::{
-    create_swapchain, DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline,
-    GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, Image, ImageView, PipelineLayout,
-    RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Swapchain,
-    SwapchainProperties,
+    create_swapchain, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, Image, ImageView,
+    Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Swapchain, SwapchainProperties,
 };
 
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_adapters::{
+    DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline, PipelineLayout, RenderPass,
+};
 use dragonglass_context::{Context, LogicalDevice};
 use std::sync::Arc;
 use vk_mem::Allocator;

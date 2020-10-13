@@ -1,0 +1,12 @@
+[package]
+name = "dragonglass-adapters"
+version = "0.1.0"
+authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
+edition = "2018"
+
+[dependencies]
+ash = "0.31.0"
+anyhow = "1.0.32"
+derive_builder = "0.9.0"
+dragonglass-context = { path = "../dragonglass-context" }
+log = "0.4.11"

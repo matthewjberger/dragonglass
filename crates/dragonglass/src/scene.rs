@@ -1,11 +1,12 @@
 use super::render::{
-    CommandPool, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, GeometryBuffer,
-    GraphicsPipeline, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, Image,
-    ImageDescription, ImageView, PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet,
-    ShaderPathSetBuilder,
+    CpuToGpuBuffer, GeometryBuffer, GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder,
+    Image, ImageDescription, ImageView, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
 };
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_adapters::{
+    CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline, PipelineLayout, RenderPass,
+};
 use dragonglass_context::{Context, LogicalDevice};
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};

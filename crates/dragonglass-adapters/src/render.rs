@@ -48,3 +48,27 @@ impl Drop for RenderPass {
         }
     }
 }
+
+pub struct Framebuffer {
+    pub handle: vk::Framebuffer,
+    device: Arc<LogicalDevice>,
+}
+
+impl Framebuffer {
+    pub fn new(
+        device: Arc<LogicalDevice>,
+        create_info: vk::FramebufferCreateInfoBuilder,
+    ) -> Result<Self> {
+        let handle = unsafe { device.handle.create_framebuffer(&create_info, None) }?;
+        let framebuffer = Self { handle, device };
+        Ok(framebuffer)
+    }
+}
+
+impl Drop for Framebuffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.handle.destroy_framebuffer(self.handle, None);
+        }
+    }
+}
