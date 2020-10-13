@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.32"
 config = "0.10.1"
-dragonglass = { path = "../dragonglass" }
+dragonglass = { path = "../crates/dragonglass" }
 log = "0.4.11"
 nalgebra-glm = "0.8.0"
 serde = { version = "1.0.116", features = ["derive"] }

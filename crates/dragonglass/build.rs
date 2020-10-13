@@ -7,7 +7,7 @@ type Result<T, E = Box<dyn Error>> = std::result::Result<T, E>;
 
 fn main() -> Result<()> {
     init_logger()?;
-    if compile_shaders("shaders/**/*.glsl").is_err() {
+    if compile_shaders("assets/shaders/**/*.glsl").is_err() {
         error!("Failed to recompile shaders!");
     }
     Ok(())

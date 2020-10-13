@@ -111,8 +111,8 @@ impl Scene {
 
     fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("dragonglass/shaders/triangle/triangle.vert.spv")
-            .fragment("dragonglass/shaders/triangle/triangle.frag.spv")
+            .vertex("assets/shaders/triangle/triangle.vert.spv")
+            .fragment("assets/shaders/triangle/triangle.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)
@@ -146,7 +146,7 @@ impl Scene {
     }
 
     fn load_image(context: &Context, pool: &CommandPool) -> Result<Texture> {
-        let description = ImageDescription::from_file("dragonglass/textures/stone.png")?;
+        let description = ImageDescription::from_file("assets/textures/stone.png")?;
         Texture::new(context, pool, &description)
     }
 

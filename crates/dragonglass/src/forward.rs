@@ -626,8 +626,8 @@ impl PostProcessingPipeline {
 
     fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("dragonglass/shaders/postprocessing/fullscreen_triangle.vert.spv")
-            .fragment("dragonglass/shaders/postprocessing/postprocess.frag.spv")
+            .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
+            .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)
