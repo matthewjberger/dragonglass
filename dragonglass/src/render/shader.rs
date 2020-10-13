@@ -1,7 +1,7 @@
-use crate::core::LogicalDevice;
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
+use dragonglass_context::LogicalDevice;
 use std::{
     collections::HashMap,
     ffi::CStr,

@@ -17,8 +17,6 @@
 
 pub use self::device::RenderingDevice;
 
-mod core;
-mod cube;
 mod device;
 mod forward;
 mod render;

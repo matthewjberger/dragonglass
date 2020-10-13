@@ -1,4 +1,4 @@
-use super::{instance::Instance, physical_device::PhysicalDevice};
+use crate::{Instance, PhysicalDevice};
 use anyhow::Result;
 use ash::{
     extensions::khr::Swapchain,

@@ -1,14 +1,13 @@
-use super::{
-    core::{Context, LogicalDevice},
-    render::{
-        DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline,
-        GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, Image, ImageView,
-        PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
-        Swapchain, SwapchainProperties,
-    },
+use super::render::{
+    create_swapchain, DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline,
+    GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, Image, ImageView, PipelineLayout,
+    RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Swapchain,
+    SwapchainProperties,
 };
+
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_context::{Context, LogicalDevice};
 use std::sync::Arc;
 use vk_mem::Allocator;
 
@@ -109,7 +108,7 @@ pub struct ForwardSwapchain {
 
 impl ForwardSwapchain {
     pub fn new(context: &Context, dimensions: &[u32; 2]) -> Result<Self> {
-        let (swapchain, swapchain_properties) = context.create_swapchain(dimensions)?;
+        let (swapchain, swapchain_properties) = create_swapchain(context, dimensions)?;
         let surface_format = swapchain_properties.surface_format.format;
 
         let render_pass = Self::render_pass(context.logical_device.clone(), surface_format)?;

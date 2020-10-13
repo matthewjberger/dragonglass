@@ -12,7 +12,7 @@ pub use self::{
     renderpass::RenderPass,
     resource::{DescriptorPool, DescriptorSetLayout, Fence, Framebuffer, Semaphore},
     shader::{Shader, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, ShaderSet},
-    swapchain::{Swapchain, SwapchainProperties},
+    swapchain::{create_swapchain, Swapchain, SwapchainProperties},
 };
 
 mod buffer;

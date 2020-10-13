@@ -1,4 +1,4 @@
-use super::{Instance, LogicalDevice, PhysicalDevice};
+use crate::{Instance, LogicalDevice, PhysicalDevice};
 use anyhow::{anyhow, ensure, Result};
 use ash::{
     extensions::khr::Surface as AshSurface,

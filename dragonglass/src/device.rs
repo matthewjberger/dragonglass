@@ -1,11 +1,11 @@
 use super::{
-    core::{Context, LogicalDevice},
     forward::RenderPath,
     render::{CommandPool, Fence, Semaphore, ShaderCache},
     scene::Scene,
 };
 use anyhow::{anyhow, bail, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
+use dragonglass_context::{Context, LogicalDevice};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
