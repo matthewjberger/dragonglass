@@ -9,7 +9,7 @@ use crate::{
         ShaderPathSet, ShaderPathSetBuilder,
     },
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -107,7 +107,7 @@ impl Scene {
         geometry_buffer
             .index_buffer
             .as_ref()
-            .ok_or_else(|| anyhow!("Failed to access index buffer!"))?
+            .context("Failed to access index buffer!")?
             .upload_data(&indices, 0, pool, context.graphics_queue())?;
 
         Ok((geometry_buffer, number_of_indices))
@@ -267,13 +267,13 @@ impl Scene {
     pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.pipeline
             .as_ref()
-            .ok_or_else(|| anyhow!("Failed to get scene pipeline!"))?
+            .context("Failed to get scene pipeline!")?
             .bind(&self.device.handle, command_buffer);
 
         let pipeline_layout = self
             .pipeline_layout
             .as_ref()
-            .ok_or_else(|| anyhow!("Failed to get scene pipeline layout!"))?
+            .context("Failed to get scene pipeline layout!")?
             .handle;
 
         self.geometry_buffer

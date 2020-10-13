@@ -3,7 +3,7 @@ use crate::{
     adapters::{BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, PipelineBarrierBuilder},
     context::{Context, LogicalDevice},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
@@ -99,7 +99,7 @@ impl ImageDescription {
     fn attach_alpha_channel(&mut self) -> Result<()> {
         let image_buffer: RgbImage =
             ImageBuffer::from_raw(self.width, self.height, self.pixels.to_vec())
-                .ok_or_else(|| anyhow!("Failed to load image rom raw pixels!"))?;
+                .context("Failed to load image from raw pixels!")?;
 
         self.pixels = image_buffer
             .pixels()

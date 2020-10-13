@@ -7,7 +7,7 @@ use crate::{
     resources::{Image, ImageView, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     swapchain::{create_swapchain, Swapchain, SwapchainProperties},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 use vk_mem::Allocator;
@@ -206,12 +206,10 @@ impl ForwardSwapchain {
         let framebuffer = self
             .framebuffers
             .get(image_index)
-            .ok_or_else(|| {
-                anyhow!(
-                    "No framebuffer was found for the forward swapchain at image index: {}",
-                    image_index
-                )
-            })?
+            .context(format!(
+                "No framebuffer was found for the forward swapchain at image index: {}",
+                image_index
+            ))?
             .handle;
         Ok(framebuffer)
     }
@@ -701,7 +699,7 @@ impl PostProcessingPipeline {
         let pipeline = self
             .pipeline
             .as_ref()
-            .ok_or_else(|| anyhow!("Failed to get post-processing pipeline!"))?;
+            .context("Failed to get post-processing pipeline!")?;
         pipeline.bind(&self.device.handle, command_buffer);
 
         unsafe {

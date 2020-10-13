@@ -1,5 +1,5 @@
 use crate::context::LogicalDevice;
-use anyhow::{anyhow, Result};
+use anyhow::{Context, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use std::{
@@ -116,7 +116,7 @@ impl ShaderCache {
         let shader_path = path
             .as_ref()
             .to_str()
-            .ok_or_else(|| anyhow!("The shader path is not a valid UTF-8 sequence"))?
+            .context("The shader path is not a valid UTF-8 sequence")?
             .to_string();
         let shader = self
             .shaders

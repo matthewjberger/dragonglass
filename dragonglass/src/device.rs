@@ -4,7 +4,7 @@ use crate::{
     context::{Context, LogicalDevice},
     resources::ShaderCache,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Context as AnyhowContext, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
@@ -84,7 +84,7 @@ impl RenderingDevice {
     fn render_path(&self) -> Result<&RenderPath> {
         self.render_path
             .as_ref()
-            .ok_or_else(|| anyhow!("No render path was available!"))
+            .context("No render path was available!")
     }
 
     fn device(&self) -> ash::Device {
@@ -233,20 +233,18 @@ impl RenderingDevice {
     }
 
     fn command_buffer_at(&self, image_index: usize) -> Result<vk::CommandBuffer> {
-        let command_buffer = *self.command_buffers.get(image_index).ok_or_else(|| {
-            anyhow!(
-                "No command buffer was found at image index: {}",
-                image_index
-            )
-        })?;
+        let command_buffer = *self.command_buffers.get(image_index).context(format!(
+            "No command buffer was found at image index: {}",
+            image_index
+        ))?;
         Ok(command_buffer)
     }
 
     fn frame_lock(&self) -> Result<&FrameLock> {
-        let lock = &self
-            .frame_locks
-            .get(self.frame)
-            .ok_or_else(|| anyhow!("No frame lock was found at frame index: {}", self.frame,))?;
+        let lock = &self.frame_locks.get(self.frame).context(format!(
+            "No frame lock was found at frame index: {}",
+            self.frame
+        ))?;
         Ok(lock)
     }
 

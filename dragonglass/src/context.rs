@@ -4,7 +4,7 @@ mod instance;
 mod logical_device;
 mod physical_device;
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Context as AnyhowContext, Result};
 use ash::{
     extensions::khr::Surface as AshSurface,
     version::{DeviceV1_0, InstanceV1_0},
@@ -97,7 +97,7 @@ impl Context {
             }
         });
 
-        depth_format.ok_or_else(|| anyhow!("Couldn't determine the depth format!"))
+        depth_format.context("Couldn't determine the depth format!")
     }
 
     pub fn ensure_linear_blitting_supported(&self, format: vk::Format) -> Result<()> {
