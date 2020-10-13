@@ -75,15 +75,12 @@ impl LogicalDevice {
             .collect::<Vec<_>>()
     }
 
-    pub fn record_command_buffer<T>(
+    pub fn record_command_buffer(
         &self,
         buffer: vk::CommandBuffer,
         usage: vk::CommandBufferUsageFlags,
-        mut action: T,
-    ) -> Result<()>
-    where
-        T: FnMut() -> Result<()>,
-    {
+        mut action: impl FnMut() -> Result<()>,
+    ) -> Result<()> {
         let begin_info = vk::CommandBufferBeginInfo::builder().flags(usage);
         unsafe { self.handle.begin_command_buffer(buffer, &begin_info) }?;
         action()?;
