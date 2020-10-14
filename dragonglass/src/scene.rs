@@ -5,8 +5,8 @@ use crate::{
     },
     context::{Context, LogicalDevice},
     resources::{
-        CpuToGpuBuffer, GeometryBuffer, Image, ImageDescription, ImageView, Sampler, ShaderCache,
-        ShaderPathSet, ShaderPathSetBuilder,
+        AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
+        ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -304,7 +304,7 @@ impl Scene {
 }
 
 pub struct Texture {
-    pub image: Image,
+    pub image: AllocatedImage,
     pub view: ImageView,
     pub sampler: Sampler,
 }
@@ -331,7 +331,7 @@ impl Texture {
 
     fn create_image_view(
         device: Arc<LogicalDevice>,
-        image: &Image,
+        image: &AllocatedImage,
         description: &ImageDescription,
     ) -> Result<ImageView> {
         let subresource_range = vk::ImageSubresourceRange::builder()

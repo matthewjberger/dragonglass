@@ -4,7 +4,9 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, LogicalDevice},
-    resources::{Image, ImageView, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
+    resources::{
+        AllocatedImage, ImageView, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+    },
     swapchain::{create_swapchain, Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -246,7 +248,7 @@ impl ForwardSwapchain {
 }
 
 pub struct DepthStencil {
-    _image: Image,
+    _image: AllocatedImage,
     pub view: ImageView,
     pub format: vk::Format,
 }
@@ -268,7 +270,11 @@ impl DepthStencil {
         Ok(target)
     }
 
-    fn image(allocator: Arc<Allocator>, extent: vk::Extent3D, format: vk::Format) -> Result<Image> {
+    fn image(
+        allocator: Arc<Allocator>,
+        extent: vk::Extent3D,
+        format: vk::Format,
+    ) -> Result<AllocatedImage> {
         let create_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(extent)
@@ -287,10 +293,14 @@ impl DepthStencil {
             ..Default::default()
         };
 
-        Image::new(allocator, &allocation_create_info, &create_info)
+        AllocatedImage::new(allocator, &allocation_create_info, &create_info)
     }
 
-    fn view(device: Arc<LogicalDevice>, image: &Image, format: vk::Format) -> Result<ImageView> {
+    fn view(
+        device: Arc<LogicalDevice>,
+        image: &AllocatedImage,
+        format: vk::Format,
+    ) -> Result<ImageView> {
         let create_info = vk::ImageViewCreateInfo::builder()
             .image(image.handle)
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -313,7 +323,7 @@ impl DepthStencil {
 }
 
 pub struct ColorRenderTarget {
-    _image: Image,
+    _image: AllocatedImage,
     pub view: ImageView,
     pub format: vk::Format,
     pub sampler: Sampler,
@@ -338,7 +348,11 @@ impl ColorRenderTarget {
         Ok(target)
     }
 
-    fn image(allocator: Arc<Allocator>, extent: vk::Extent3D, format: vk::Format) -> Result<Image> {
+    fn image(
+        allocator: Arc<Allocator>,
+        extent: vk::Extent3D,
+        format: vk::Format,
+    ) -> Result<AllocatedImage> {
         let create_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(extent)
@@ -357,10 +371,14 @@ impl ColorRenderTarget {
             ..Default::default()
         };
 
-        Image::new(allocator, &allocation_create_info, &create_info)
+        AllocatedImage::new(allocator, &allocation_create_info, &create_info)
     }
 
-    fn view(device: Arc<LogicalDevice>, image: &Image, format: vk::Format) -> Result<ImageView> {
+    fn view(
+        device: Arc<LogicalDevice>,
+        image: &AllocatedImage,
+        format: vk::Format,
+    ) -> Result<ImageView> {
         let create_info = vk::ImageViewCreateInfo::builder()
             .image(image.handle)
             .view_type(vk::ImageViewType::TYPE_2D)

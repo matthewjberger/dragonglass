@@ -109,7 +109,7 @@ impl ImageDescription {
         Ok(())
     }
 
-    pub fn as_image(&self, allocator: Arc<Allocator>) -> Result<Image> {
+    pub fn as_image(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
         let extent = vk::Extent3D::builder()
             .width(self.width)
             .height(self.height)
@@ -137,18 +137,18 @@ impl ImageDescription {
             ..Default::default()
         };
 
-        Image::new(allocator, &allocation_create_info, &create_info)
+        AllocatedImage::new(allocator, &allocation_create_info, &create_info)
     }
 }
 
-pub struct Image {
+pub struct AllocatedImage {
     pub handle: vk::Image,
     allocation: vk_mem::Allocation,
     allocation_info: vk_mem::AllocationInfo,
     allocator: Arc<Allocator>,
 }
 
-impl Image {
+impl AllocatedImage {
     pub fn new(
         allocator: Arc<Allocator>,
         allocation_create_info: &vk_mem::AllocationCreateInfo,
@@ -391,7 +391,7 @@ impl Image {
     }
 }
 
-impl Drop for Image {
+impl Drop for AllocatedImage {
     fn drop(&mut self) {
         if let Err(error) = self.allocator.destroy_image(self.handle, &self.allocation) {
             error!("{}", error);
