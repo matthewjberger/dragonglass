@@ -28,12 +28,12 @@ impl RenderingDevice {
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Context::new(window_handle)?;
-        let device = context.logical_device.clone();
-        let frame_locks = Self::frame_locks(device)?;
-        let device = context.logical_device.clone();
+        let frame_locks = Self::frame_locks(context.logical_device.clone())?;
         let graphics_queue_index = context.physical_device.graphics_queue_index;
-        let command_pool = Self::command_pool(device.clone(), graphics_queue_index)?;
-        let transient_command_pool = Self::transient_command_pool(device, graphics_queue_index)?;
+        let command_pool =
+            Self::command_pool(context.logical_device.clone(), graphics_queue_index)?;
+        let transient_command_pool =
+            Self::transient_command_pool(context.logical_device.clone(), graphics_queue_index)?;
         let mut shader_cache = ShaderCache::default();
         let render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
         let scene = Scene::new(
@@ -45,6 +45,10 @@ impl RenderingDevice {
         let number_of_framebuffers = render_path.swapchain.framebuffers.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
+
+        let mut rendergraph = crate::rendergraph::forward_rendergraph()?;
+        rendergraph.build(context.logical_device.clone())?;
+
         let renderer = Self {
             scene,
             shader_cache,

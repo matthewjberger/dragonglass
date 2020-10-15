@@ -45,27 +45,24 @@ impl RenderPath {
         Ok(path)
     }
 
-    pub fn record_renderpass<T>(
+    pub fn record_renderpass(
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        mut action: T,
-    ) -> Result<()>
-    where
-        T: FnMut(vk::CommandBuffer) -> Result<()>,
-    {
+        action: impl Fn(vk::CommandBuffer) -> Result<()>,
+    ) -> Result<()> {
         let offscreen_extent = vk::Extent2D::builder()
             .width(OffscreenBuffer::DIMENSION)
             .height(OffscreenBuffer::DIMENSION)
             .build();
         self.update_viewport(command_buffer, offscreen_extent)?;
         self.offscreen
-            .record_renderpass(command_buffer, |command_buffer| action(command_buffer))?;
+            .record_renderpass(command_buffer, move |command_buffer| action(command_buffer))?;
 
         let swapchain_extent = self.swapchain.swapchain_properties.extent;
         self.update_viewport(command_buffer, swapchain_extent)?;
         self.swapchain
-            .record_renderpass(command_buffer, image_index, |command_buffer| {
+            .record_renderpass(command_buffer, image_index, move |command_buffer| {
                 self.pipeline.issue_commands(command_buffer)
             })?;
 
@@ -216,15 +213,12 @@ impl ForwardSwapchain {
         Ok(framebuffer)
     }
 
-    fn record_renderpass<T>(
+    fn record_renderpass(
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        action: T,
-    ) -> Result<()>
-    where
-        T: FnMut(vk::CommandBuffer) -> Result<()>,
-    {
+        action: impl Fn(vk::CommandBuffer) -> Result<()>,
+    ) -> Result<()> {
         let extent = self.swapchain_properties.extent;
         let render_area = vk::Rect2D::builder().extent(extent).build();
 
@@ -235,7 +229,8 @@ impl ForwardSwapchain {
             .render_area(render_area)
             .clear_values(&clear_values);
 
-        RenderPass::record(self.device.clone(), command_buffer, begin_info, action)?;
+        self.render_pass
+            .record(command_buffer, begin_info, action)?;
         Ok(())
     }
 
@@ -568,10 +563,11 @@ impl OffscreenBuffer {
         ]
     }
 
-    fn record_renderpass<T>(&self, command_buffer: vk::CommandBuffer, action: T) -> Result<()>
-    where
-        T: FnMut(vk::CommandBuffer) -> Result<()>,
-    {
+    fn record_renderpass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        action: impl Fn(vk::CommandBuffer) -> Result<()>,
+    ) -> Result<()> {
         let extent = vk::Extent2D::builder()
             .width(Self::DIMENSION)
             .height(Self::DIMENSION)
@@ -585,7 +581,8 @@ impl OffscreenBuffer {
             .render_area(render_area)
             .clear_values(&clear_values);
 
-        RenderPass::record(self.device.clone(), command_buffer, begin_info, action)?;
+        self.render_pass
+            .record(command_buffer, begin_info, action)?;
         Ok(())
     }
 
