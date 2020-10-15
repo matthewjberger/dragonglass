@@ -81,7 +81,7 @@ impl RenderGraph {
         let mut index_map = HashMap::new();
 
         for pass in passes.iter() {
-            let pass_index = graph.add_node(Node::Pass(pass.to_string()));
+            let pass_index = graph.add_node(Node::Pass(PassNode::new(pass)));
             index_map.insert(pass.to_string(), pass_index);
         }
 
@@ -125,7 +125,7 @@ impl RenderGraph {
 
         for index in indices.into_iter() {
             match &self.graph[index] {
-                Node::Pass(pass_name) => {
+                Node::Pass(pass_node) => {
                     let should_clear = self.parent_nodes(index)?.is_empty();
 
                     let mut attachment_descriptions = Vec::new();
@@ -165,7 +165,7 @@ impl RenderGraph {
                     }
 
                     let subpass_description = vk::SubpassDescription::builder()
-                        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+                        .pipeline_bind_point(pass_node.bindpoint)
                         .color_attachments(&color_attachment_references);
                     let subpass_descriptions = [subpass_description.build()];
                     let create_info = vk::RenderPassCreateInfo::builder()
@@ -182,9 +182,9 @@ impl RenderGraph {
                         clear_values,
                         callback: Box::new(|_| Ok(())),
                     };
-                    self.passes.insert(pass_name.to_string(), pass);
+                    self.passes.insert(pass_node.name.to_string(), pass);
                 }
-                Node::Image(image) => {}
+                Node::Image(image_node) => {}
             }
         }
 
@@ -211,14 +211,14 @@ impl RenderGraph {
 }
 
 pub enum Node {
-    Pass(String),
+    Pass(PassNode),
     Image(ImageNode),
 }
 
 impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
-            Self::Pass(pass_name) => write!(f, "{}", pass_name),
+            Self::Pass(pass) => write!(f, "{}", pass.name),
             Self::Image(image) => write!(f, "{}", image.name),
         }
     }
@@ -227,6 +227,15 @@ impl fmt::Debug for Node {
 pub struct PassNode {
     pub name: String,
     pub bindpoint: vk::PipelineBindPoint,
+}
+
+impl PassNode {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            bindpoint: vk::PipelineBindPoint::GRAPHICS,
+        }
+    }
 }
 
 pub struct ImageNode {
