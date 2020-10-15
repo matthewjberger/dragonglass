@@ -24,17 +24,17 @@ pub fn forward_rendergraph() -> Result<RenderGraph> {
     let rendergraph = RenderGraph::new(
         &[offscreen, postprocessing],
         vec![
-            Image {
+            ImageNode {
                 name: color.to_string(),
                 extent: offscreen_extent,
                 format: vk::Format::R8G8B8A8_UNORM,
             },
-            Image {
+            ImageNode {
                 name: depth_stencil.to_owned(),
                 extent: offscreen_extent,
                 format: vk::Format::D24_UNORM_S8_UINT,
             },
-            Image {
+            ImageNode {
                 name: backbuffer.to_owned(),
                 extent: swapchain_extent,
                 format: swapchain_format,
@@ -58,7 +58,7 @@ pub struct RenderGraph {
 impl RenderGraph {
     pub fn new<'a>(
         passes: &[&'a str],
-        images: Vec<Image>,
+        images: Vec<ImageNode>,
         links: &[(&'a str, &'a str)],
     ) -> Result<Self> {
         let mut graph: Graph<Node, ()> = Graph::new();
@@ -116,6 +116,8 @@ impl RenderGraph {
                     let mut color_attachment_references = Vec::new();
                     let mut depth_attachment_reference = None;
                     let mut clear_values = Vec::new();
+                    let mut extents = Vec::new();
+
                     let should_clear = self.parent_nodes(index)?.is_empty();
 
                     for child_index in self.child_nodes(index)?.into_iter() {
@@ -174,10 +176,25 @@ impl RenderGraph {
                                     vk::ClearValue { color }
                                 };
                                 clear_values.push(clear_value);
+
+                                // Store the extent
+                                extents.push(image.extent);
                             }
                             _ => bail!("A pass cannot have another pass as an output!"),
                         }
                     }
+
+                    let minimum_width =
+                        extents.iter().map(|extent| extent.width).min().unwrap_or(0);
+                    let minimum_height = extents
+                        .iter()
+                        .map(|extent| extent.height)
+                        .min()
+                        .unwrap_or(0);
+                    let extent = vk::Extent2D::builder()
+                        .width(minimum_width)
+                        .height(minimum_height)
+                        .build();
 
                     // Create subpass
                     let subpass_description = vk::SubpassDescription::builder()
@@ -192,6 +209,13 @@ impl RenderGraph {
                     // .dependencies(&subpass_dependencies);
 
                     let render_pass = RenderPass::new(device.clone(), &create_info)?;
+
+                    let pass = Pass {
+                        render_pass,
+                        extent,
+                        clear_values,
+                        callback: Box::new(|_| Ok(())),
+                    };
                 }
                 Node::Image(image) => {}
             }
@@ -204,7 +228,7 @@ impl RenderGraph {
         &self,
         should_clear: bool,
         child_index: NodeIndex,
-        image: &Image,
+        image: &ImageNode,
     ) -> Result<vk::AttachmentDescription> {
         let load_op = if should_clear {
             vk::AttachmentLoadOp::CLEAR
@@ -264,7 +288,7 @@ impl RenderGraph {
 
 pub enum Node {
     Pass(String),
-    Image(Image),
+    Image(ImageNode),
 }
 
 impl fmt::Debug for Node {
@@ -277,14 +301,14 @@ impl fmt::Debug for Node {
 }
 
 #[derive(Debug)]
-pub struct Image {
+pub struct ImageNode {
     pub name: String,
     pub extent: vk::Extent2D,
     pub format: vk::Format,
 }
 
 pub struct Pass<'a> {
-    pub render_pass: Arc<RenderPass>,
+    pub render_pass: RenderPass,
     extent: vk::Extent2D,
     clear_values: Vec<vk::ClearValue>,
     callback: Box<dyn Fn(vk::CommandBuffer) -> Result<()> + 'a>,
