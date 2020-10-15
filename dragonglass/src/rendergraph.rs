@@ -28,16 +28,32 @@ pub fn forward_rendergraph() -> Result<RenderGraph> {
                 name: color.to_string(),
                 extent: offscreen_extent,
                 format: vk::Format::R8G8B8A8_UNORM,
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
+                    },
+                },
             },
             ImageNode {
                 name: depth_stencil.to_owned(),
                 extent: offscreen_extent,
                 format: vk::Format::D24_UNORM_S8_UINT,
+                clear_value: vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                },
             },
             ImageNode {
                 name: backbuffer.to_owned(),
                 extent: swapchain_extent,
                 format: swapchain_format,
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [1.0, 1.0, 1.0, 1.0],
+                    },
+                },
             },
         ],
         &[
@@ -107,52 +123,31 @@ impl RenderGraph {
             anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
         })?;
 
-        let Self { graph, .. } = &self;
-
         for index in indices.into_iter() {
-            match &graph[index] {
+            match &self.graph[index] {
                 Node::Pass(pass_name) => {
+                    let should_clear = self.parent_nodes(index)?.is_empty();
+
                     let mut attachment_descriptions = Vec::new();
                     let mut color_attachment_references = Vec::new();
                     let mut depth_attachment_reference = None;
                     let mut clear_values = Vec::new();
                     let mut extents = Vec::new();
 
-                    let should_clear = self.parent_nodes(index)?.is_empty();
-
                     for child_index in self.child_nodes(index)?.into_iter() {
-                        match &graph[child_index] {
+                        match &self.graph[child_index] {
                             Node::Image(image) => {
-                                let attachment_description = self.create_attachment_description(
-                                    should_clear,
-                                    child_index,
-                                    image,
-                                )?;
+                                let has_children = self.child_nodes(child_index)?.is_empty();
+                                let attachment_description =
+                                    image.attachment_description(should_clear, has_children)?;
                                 attachment_descriptions.push(attachment_description);
 
-                                // Determine image layout
-                                let is_depth_stencil = image.name == "depth_stencil";
-                                let layout = if is_depth_stencil {
-                                    vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-                                } else {
-                                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
-                                };
-
-                                // Determine attachment offset
-                                let mut attachment_offset =
-                                    color_attachment_references.iter().count() as _;
+                                let mut offset = color_attachment_references.iter().count() as _;
                                 if depth_attachment_reference.is_some() {
-                                    attachment_offset += 1;
+                                    offset += 1;
                                 }
-
-                                // Create attachment reference
-                                let attachment_reference = vk::AttachmentReference::builder()
-                                    .attachment(attachment_offset)
-                                    .layout(layout)
-                                    .build();
-
-                                // Store attachment reference
-                                if is_depth_stencil {
+                                let attachment_reference = image.attachment_reference(offset);
+                                if image.is_depth_stencil() {
                                     ensure!(
                                         depth_attachment_reference.is_none(),
                                         "Multiple depth attachments were specified for a single pass!"
@@ -162,43 +157,14 @@ impl RenderGraph {
                                     color_attachment_references.push(attachment_reference);
                                 }
 
-                                // Setup clear values
-                                let clear_value = if is_depth_stencil {
-                                    let depth_stencil = vk::ClearDepthStencilValue {
-                                        depth: 1.0,
-                                        stencil: 0,
-                                    };
-                                    vk::ClearValue { depth_stencil }
-                                } else {
-                                    let color = vk::ClearColorValue {
-                                        float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
-                                    };
-                                    vk::ClearValue { color }
-                                };
-                                clear_values.push(clear_value);
-
-                                // Store the extent
+                                clear_values.push(image.clear_value);
                                 extents.push(image.extent);
                             }
                             _ => bail!("A pass cannot have another pass as an output!"),
                         }
                     }
 
-                    let minimum_width =
-                        extents.iter().map(|extent| extent.width).min().unwrap_or(0);
-                    let minimum_height = extents
-                        .iter()
-                        .map(|extent| extent.height)
-                        .min()
-                        .unwrap_or(0);
-                    let extent = vk::Extent2D::builder()
-                        .width(minimum_width)
-                        .height(minimum_height)
-                        .build();
-
-                    // Create subpass
                     let subpass_description = vk::SubpassDescription::builder()
-                        // TODO: This will need to be configurable when compute is supported
                         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
                         .color_attachments(&color_attachment_references);
                     let subpass_descriptions = [subpass_description.build()];
@@ -212,59 +178,17 @@ impl RenderGraph {
 
                     let pass = Pass {
                         render_pass,
-                        extent,
+                        extent: minimum_extent(&extents),
                         clear_values,
                         callback: Box::new(|_| Ok(())),
                     };
+                    self.passes.insert(pass_name.to_string(), pass);
                 }
                 Node::Image(image) => {}
             }
         }
 
         Ok(())
-    }
-
-    fn create_attachment_description(
-        &self,
-        should_clear: bool,
-        child_index: NodeIndex,
-        image: &ImageNode,
-    ) -> Result<vk::AttachmentDescription> {
-        let load_op = if should_clear {
-            vk::AttachmentLoadOp::CLEAR
-        } else {
-            vk::AttachmentLoadOp::DONT_CARE
-        };
-        let mut store_op = vk::AttachmentStoreOp::DONT_CARE;
-        let mut final_layout = vk::ImageLayout::UNDEFINED;
-
-        if !self.child_nodes(child_index)?.is_empty() {
-            store_op = vk::AttachmentStoreOp::STORE;
-            final_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
-        }
-
-        if image.name == "backbuffer" {
-            store_op = vk::AttachmentStoreOp::STORE;
-            final_layout = vk::ImageLayout::PRESENT_SRC_KHR;
-        }
-
-        // TODO: Make this a constant
-        if image.name == "depth_stencil" {
-            final_layout = vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        }
-
-        let attachment_description = vk::AttachmentDescription::builder()
-            .format(image.format)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(load_op)
-            .store_op(store_op)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(final_layout)
-            .build();
-
-        Ok(attachment_description)
     }
 
     fn parent_nodes(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
@@ -300,11 +224,82 @@ impl fmt::Debug for Node {
     }
 }
 
-#[derive(Debug)]
+pub struct PassNode {
+    pub name: String,
+    pub bindpoint: vk::PipelineBindPoint,
+}
+
 pub struct ImageNode {
     pub name: String,
     pub extent: vk::Extent2D,
     pub format: vk::Format,
+    pub clear_value: vk::ClearValue,
+}
+
+impl ImageNode {
+    pub fn is_depth_stencil(&self) -> bool {
+        self.name == "depth_stencil"
+    }
+
+    pub fn is_backbuffer(&self) -> bool {
+        self.name == "backbuffer"
+    }
+
+    fn layout(&self) -> vk::ImageLayout {
+        if self.is_depth_stencil() {
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        } else {
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
+        }
+    }
+
+    fn attachment_description(
+        &self,
+        should_clear: bool,
+        has_children: bool,
+    ) -> Result<vk::AttachmentDescription> {
+        let load_op = if should_clear {
+            vk::AttachmentLoadOp::CLEAR
+        } else {
+            vk::AttachmentLoadOp::DONT_CARE
+        };
+        let mut store_op = vk::AttachmentStoreOp::DONT_CARE;
+        let mut final_layout = vk::ImageLayout::UNDEFINED;
+
+        if !has_children {
+            store_op = vk::AttachmentStoreOp::STORE;
+            final_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        if self.is_backbuffer() {
+            store_op = vk::AttachmentStoreOp::STORE;
+            final_layout = vk::ImageLayout::PRESENT_SRC_KHR;
+        }
+
+        if self.is_depth_stencil() {
+            final_layout = vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        }
+
+        let attachment_description = vk::AttachmentDescription::builder()
+            .format(self.format)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(load_op)
+            .store_op(store_op)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(final_layout)
+            .build();
+
+        Ok(attachment_description)
+    }
+
+    pub fn attachment_reference(&self, offset: u32) -> vk::AttachmentReference {
+        vk::AttachmentReference::builder()
+            .attachment(offset)
+            .layout(self.layout())
+            .build()
+    }
 }
 
 pub struct Pass<'a> {
@@ -335,4 +330,17 @@ impl<'a> Pass<'a> {
             .record(command_buffer, begin_info, &self.callback)?;
         Ok(())
     }
+}
+
+fn minimum_extent(extents: &[vk::Extent2D]) -> vk::Extent2D {
+    let minimum_width = extents.iter().map(|extent| extent.width).min().unwrap_or(0);
+    let minimum_height = extents
+        .iter()
+        .map(|extent| extent.height)
+        .min()
+        .unwrap_or(0);
+    vk::Extent2D::builder()
+        .width(minimum_width)
+        .height(minimum_height)
+        .build()
 }
