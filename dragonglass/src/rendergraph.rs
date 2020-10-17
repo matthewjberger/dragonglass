@@ -91,7 +91,7 @@ impl RenderGraph {
             index_map.insert(name, image_index);
         }
 
-        for (src_name, dst_name) in links.iter() {
+        for (src_name, dst_name) in links.into_iter() {
             let src_index = *index_map
                 .get(&src_name.to_string())
                 .context("Failed to get source node index for a rendergraph link!")?;
@@ -126,62 +126,7 @@ impl RenderGraph {
         for index in indices.into_iter() {
             match &self.graph[index] {
                 Node::Pass(pass_node) => {
-                    let should_clear = self.parent_nodes(index)?.is_empty();
-
-                    let mut attachment_descriptions = Vec::new();
-                    let mut color_attachment_references = Vec::new();
-                    let mut depth_attachment_reference = None;
-                    let mut clear_values = Vec::new();
-                    let mut extents = Vec::new();
-
-                    for child_index in self.child_nodes(index)?.into_iter() {
-                        match &self.graph[child_index] {
-                            Node::Image(image) => {
-                                let has_children = self.child_nodes(child_index)?.is_empty();
-                                let attachment_description =
-                                    image.attachment_description(should_clear, has_children)?;
-                                attachment_descriptions.push(attachment_description);
-
-                                let mut offset = color_attachment_references.iter().count() as _;
-                                if depth_attachment_reference.is_some() {
-                                    offset += 1;
-                                }
-                                let attachment_reference = image.attachment_reference(offset);
-                                if image.is_depth_stencil() {
-                                    ensure!(
-                                        depth_attachment_reference.is_none(),
-                                        "Multiple depth attachments were specified for a single pass!"
-                                    );
-                                    depth_attachment_reference = Some(attachment_reference);
-                                } else {
-                                    color_attachment_references.push(attachment_reference);
-                                }
-
-                                clear_values.push(image.clear_value);
-                                extents.push(image.extent);
-                            }
-                            _ => bail!("A pass cannot have another pass as an output!"),
-                        }
-                    }
-
-                    let subpass_description = vk::SubpassDescription::builder()
-                        .pipeline_bind_point(pass_node.bindpoint)
-                        .color_attachments(&color_attachment_references);
-                    let subpass_descriptions = [subpass_description.build()];
-                    let create_info = vk::RenderPassCreateInfo::builder()
-                        .attachments(&attachment_descriptions)
-                        .subpasses(&subpass_descriptions);
-                    // TODO: Add subpass dependencies where necessary
-                    // .dependencies(&subpass_dependencies);
-
-                    let render_pass = RenderPass::new(device.clone(), &create_info)?;
-
-                    let pass = Pass {
-                        render_pass,
-                        extent: minimum_extent(&extents),
-                        clear_values,
-                        callback: Box::new(|_| Ok(())),
-                    };
+                    let pass = self.create_pass(index, pass_node, device.clone())?;
                     self.passes.insert(pass_node.name.to_string(), pass);
                 }
                 Node::Image(image_node) => {}
@@ -189,6 +134,28 @@ impl RenderGraph {
         }
 
         Ok(())
+    }
+
+    fn create_pass<'a>(
+        &self,
+        index: NodeIndex,
+        pass_node: &PassNode,
+        device: Arc<LogicalDevice>,
+    ) -> Result<Pass<'a>> {
+        let should_clear = self.parent_nodes(index)?.is_empty();
+        let mut pass_builder = PassBuilder::default();
+        for child_index in self.child_nodes(index)?.into_iter() {
+            match &self.graph[child_index] {
+                Node::Image(image_node) => {
+                    let has_children = self.child_nodes(child_index)?.is_empty();
+                    let attachment_description =
+                        image_node.attachment_description(should_clear, has_children)?;
+                    pass_builder.visit_image_node(&image_node, attachment_description)?;
+                }
+                _ => bail!("A pass cannot have another pass as an output!"),
+            }
+        }
+        pass_builder.build(device.clone())
     }
 
     fn parent_nodes(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
@@ -327,7 +294,6 @@ impl<'a> Pass<'a> {
         &self,
         command_buffer: vk::CommandBuffer,
         framebuffer: vk::Framebuffer,
-        extent: vk::Extent2D,
     ) -> Result<()> {
         let render_area = vk::Rect2D::builder().extent(self.extent).build();
         let begin_info = vk::RenderPassBeginInfo::builder()
@@ -341,15 +307,87 @@ impl<'a> Pass<'a> {
     }
 }
 
-fn minimum_extent(extents: &[vk::Extent2D]) -> vk::Extent2D {
-    let minimum_width = extents.iter().map(|extent| extent.width).min().unwrap_or(0);
-    let minimum_height = extents
-        .iter()
-        .map(|extent| extent.height)
-        .min()
-        .unwrap_or(0);
-    vk::Extent2D::builder()
-        .width(minimum_width)
-        .height(minimum_height)
-        .build()
+#[derive(Default)]
+pub struct PassBuilder {
+    pub attachment_descriptions: Vec<vk::AttachmentDescription>,
+    pub color_references: Vec<vk::AttachmentReference>,
+    pub depth_reference: Option<vk::AttachmentReference>,
+    pub clear_values: Vec<vk::ClearValue>,
+    pub extents: Vec<vk::Extent2D>,
+    pub bindpoint: vk::PipelineBindPoint,
+}
+
+impl PassBuilder {
+    pub fn visit_image_node(
+        &mut self,
+        image: &ImageNode,
+        attachment_description: vk::AttachmentDescription,
+    ) -> Result<()> {
+        self.attachment_descriptions.push(attachment_description);
+        self.add_attachment(&image)?;
+        self.clear_values.push(image.clear_value);
+        self.extents.push(image.extent);
+        Ok(())
+    }
+
+    pub fn add_attachment(&mut self, image: &ImageNode) -> Result<()> {
+        let mut offset = self.color_references.iter().count() as _;
+        if self.depth_reference.is_some() {
+            offset += 1;
+        }
+        let attachment_reference = image.attachment_reference(offset);
+        if image.is_depth_stencil() {
+            ensure!(
+                self.depth_reference.is_none(),
+                "Multiple depth attachments were specified for a single pass!"
+            );
+            self.depth_reference = Some(attachment_reference);
+        } else {
+            self.color_references.push(attachment_reference);
+        }
+        Ok(())
+    }
+
+    pub fn build<'a>(self, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
+        let subpass_description = vk::SubpassDescription::builder()
+            .pipeline_bind_point(self.bindpoint)
+            .color_attachments(&self.color_references);
+        let subpass_descriptions = [subpass_description.build()];
+        let create_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&self.attachment_descriptions)
+            .subpasses(&subpass_descriptions);
+        // TODO: Add subpass dependencies where necessary
+        // .dependencies(&subpass_dependencies);
+
+        let render_pass = RenderPass::new(device, &create_info)?;
+
+        let extent = self.minimum_extent();
+        let Self { clear_values, .. } = self;
+
+        Ok(Pass {
+            render_pass,
+            extent,
+            clear_values,
+            callback: Box::new(|_| Ok(())),
+        })
+    }
+
+    fn minimum_extent(&self) -> vk::Extent2D {
+        let minimum_width = self
+            .extents
+            .iter()
+            .map(|extent| extent.width)
+            .min()
+            .unwrap_or(0);
+        let minimum_height = self
+            .extents
+            .iter()
+            .map(|extent| extent.height)
+            .min()
+            .unwrap_or(0);
+        vk::Extent2D::builder()
+            .width(minimum_width)
+            .height(minimum_height)
+            .build()
+    }
 }
