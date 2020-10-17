@@ -119,11 +119,7 @@ impl RenderGraph {
             Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
         );
 
-        let indices = toposort(&self.graph, None).map_err(|_| {
-            anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
-        })?;
-
-        for index in indices.into_iter() {
+        for index in self.graph.node_indices() {
             match &self.graph[index] {
                 Node::Pass(pass_node) => {
                     let pass = self.create_pass(index, device.clone())?;
@@ -133,6 +129,19 @@ impl RenderGraph {
             }
         }
 
+        Ok(())
+    }
+
+    pub fn execute(&self) -> Result<()> {
+        self.execute_at_index(0)
+    }
+
+    pub fn execute_at_index(&self, index: usize) -> Result<()> {
+        let indices = toposort(&self.graph, None).map_err(|_| {
+            anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
+        })?;
+
+        for index in indices.into_iter() {}
         Ok(())
     }
 
