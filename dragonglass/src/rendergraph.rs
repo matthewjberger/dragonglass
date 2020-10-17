@@ -126,7 +126,7 @@ impl RenderGraph {
         for index in indices.into_iter() {
             match &self.graph[index] {
                 Node::Pass(pass_node) => {
-                    let pass = self.create_pass(index, pass_node, device.clone())?;
+                    let pass = self.create_pass(index, device.clone())?;
                     self.passes.insert(pass_node.name.to_string(), pass);
                 }
                 Node::Image(image_node) => {}
@@ -136,12 +136,7 @@ impl RenderGraph {
         Ok(())
     }
 
-    fn create_pass<'a>(
-        &self,
-        index: NodeIndex,
-        pass_node: &PassNode,
-        device: Arc<LogicalDevice>,
-    ) -> Result<Pass<'a>> {
+    fn create_pass<'a>(&self, index: NodeIndex, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
         let should_clear = self.parent_nodes(index)?.is_empty();
         let mut pass_builder = PassBuilder::default();
         for child_index in self.child_nodes(index)?.into_iter() {
