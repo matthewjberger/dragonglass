@@ -141,11 +141,29 @@ impl ImageDescription {
     }
 }
 
+pub trait Image {
+    fn handle(&self) -> vk::Image;
+}
+
+pub struct RawImage(vk::Image);
+
+impl Image for RawImage {
+    fn handle(&self) -> vk::Image {
+        self.0
+    }
+}
+
 pub struct AllocatedImage {
     pub handle: vk::Image,
     allocation: vk_mem::Allocation,
     allocation_info: vk_mem::AllocationInfo,
     allocator: Arc<Allocator>,
+}
+
+impl Image for AllocatedImage {
+    fn handle(&self) -> vk::Image {
+        self.handle
+    }
 }
 
 impl AllocatedImage {

@@ -1,6 +1,7 @@
 use crate::{
     adapters::{Framebuffer, RenderPass},
     context::LogicalDevice,
+    resources::{AllocatedImage, Image, ImageView, Sampler},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ash::vk;
@@ -66,9 +67,14 @@ pub fn forward_rendergraph() -> Result<RenderGraph> {
     Ok(rendergraph)
 }
 
+#[derive(Default)]
 pub struct RenderGraph {
     graph: Graph<Node, ()>,
     passes: HashMap<String, Pass<'static>>,
+    images: HashMap<String, Box<dyn Image>>,
+    image_views: HashMap<String, ImageView>,
+    samplers: HashMap<String, Sampler>,
+    framebuffers: HashMap<String, Framebuffer>,
 }
 
 impl RenderGraph {
@@ -103,11 +109,11 @@ impl RenderGraph {
 
         Ok(Self {
             graph,
-            passes: HashMap::new(),
+            ..Default::default()
         })
     }
 
-    pub fn build(&mut self, device: Arc<LogicalDevice>) -> Result<()> {
+    pub fn build(&mut self, device: Arc<LogicalDevice>, allocator: Arc<Allocator>) -> Result<()> {
         // hash the array of passes
         // check if we already have a cached graph with the same hash
         // if not, construct a new one
@@ -125,24 +131,63 @@ impl RenderGraph {
                     let pass = self.create_pass(index, device.clone())?;
                     self.passes.insert(pass_node.name.to_string(), pass);
                 }
-                Node::Image(image_node) => {}
+                Node::Image(image_node) => {
+                    let allocation_result =
+                        self.allocate_image(image_node, device.clone(), allocator.clone())?;
+                    if let Some((image, image_view)) = allocation_result {
+                        self.images
+                            .insert(image_node.name.to_string(), Box::new(image));
+                        self.image_views
+                            .insert(image_node.name.to_string(), image_view);
+                    }
+                }
             }
         }
+
+        let default_sampler = create_default_sampler(device)?;
+        self.samplers.insert("default".to_string(), default_sampler);
 
         Ok(())
     }
 
-    pub fn execute(&self) -> Result<()> {
-        self.execute_at_index(0)
+    // TODO: Have rendergraph handle command buffer generation and submission as well
+    pub fn execute(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        self.execute_at_index(command_buffer, 0)
     }
 
-    pub fn execute_at_index(&self, index: usize) -> Result<()> {
+    pub fn execute_at_index(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        backbuffer_index: usize,
+    ) -> Result<()> {
         let indices = toposort(&self.graph, None).map_err(|_| {
             anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
         })?;
 
-        for index in indices.into_iter() {}
+        for index in indices.into_iter() {
+            if let Node::Pass(pass_node) = &self.graph[index] {
+                let pass = &self.passes[&pass_node.name];
+                // TODO: Could cache this check in the pass
+                let framebuffer = if self.presents_to_backbuffer(index)? {
+                    let backbuffer_name = format!("backbuffer {}", backbuffer_index).to_string();
+                    &self.framebuffers[&backbuffer_name]
+                } else {
+                    &self.framebuffers[&pass_node.name]
+                };
+                pass.execute(command_buffer, framebuffer.handle)?;
+            }
+        }
         Ok(())
+    }
+
+    fn presents_to_backbuffer(&self, index: NodeIndex) -> Result<bool> {
+        Ok(self.child_nodes(index)?.into_iter().any(|child_index| {
+            if let Node::Image(image_node) = &self.graph[child_index] {
+                image_node.is_backbuffer()
+            } else {
+                false
+            }
+        }))
     }
 
     fn create_pass<'a>(&self, index: NodeIndex, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
@@ -154,12 +199,29 @@ impl RenderGraph {
                     let has_children = self.child_nodes(child_index)?.is_empty();
                     let attachment_description =
                         image_node.attachment_description(should_clear, has_children)?;
-                    pass_builder.visit_image_node(&image_node, attachment_description)?;
+                    pass_builder.add_output_image(&image_node, attachment_description)?;
                 }
                 _ => bail!("A pass cannot have another pass as an output!"),
             }
         }
         pass_builder.build(device.clone())
+    }
+
+    fn allocate_image(
+        &self,
+        image_node: &ImageNode,
+        device: Arc<LogicalDevice>,
+        allocator: Arc<Allocator>,
+    ) -> Result<Option<(AllocatedImage, ImageView)>> {
+        if image_node.is_backbuffer() {
+            // The backbuffer image, imageview, and framebuffer must be injected into the rendergraph
+            return Ok(None);
+        }
+
+        let allocated_image = image_node.allocate_image(allocator.clone())?;
+        let image_view = image_node.create_image_view(device.clone(), allocated_image.handle())?;
+
+        Ok(Some((allocated_image, image_view)))
     }
 
     fn parent_nodes(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
@@ -280,6 +342,83 @@ impl ImageNode {
             .layout(self.layout())
             .build()
     }
+
+    pub fn allocate_image(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
+        let extent = vk::Extent3D::builder()
+            .width(self.extent.width)
+            .height(self.extent.height)
+            .depth(1)
+            .build();
+
+        let create_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .format(self.format)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(self.usage())
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1) // TODO: Update this when using multisampling
+            .flags(vk::ImageCreateFlags::empty());
+
+        let allocation_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        AllocatedImage::new(allocator, &allocation_create_info, &create_info)
+    }
+
+    fn usage(&self) -> vk::ImageUsageFlags {
+        let mut usage = vk::ImageUsageFlags::COLOR_ATTACHMENT;
+
+        if !self.is_backbuffer() {
+            usage |= vk::ImageUsageFlags::SAMPLED;
+        }
+
+        if self.is_depth_stencil() {
+            usage = vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+        }
+
+        usage
+    }
+
+    #[allow(dead_code)]
+    fn mip_levels(&self) -> u32 {
+        let shortest_side = self.extent.width.min(self.extent.height);
+        1 + (shortest_side as f32).log2().floor() as u32
+    }
+
+    pub fn create_image_view(
+        &self,
+        device: Arc<LogicalDevice>,
+        image: vk::Image,
+    ) -> Result<ImageView> {
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(self.aspect_mask())
+            .level_count(1)
+            .layer_count(1)
+            .build();
+
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(self.format)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(subresource_range);
+
+        ImageView::new(device, create_info)
+    }
+
+    fn aspect_mask(&self) -> vk::ImageAspectFlags {
+        if self.is_depth_stencil() {
+            vk::ImageAspectFlags::DEPTH
+        } else {
+            vk::ImageAspectFlags::COLOR
+        }
+    }
 }
 
 pub struct Pass<'a> {
@@ -319,10 +458,11 @@ pub struct PassBuilder {
     pub clear_values: Vec<vk::ClearValue>,
     pub extents: Vec<vk::Extent2D>,
     pub bindpoint: vk::PipelineBindPoint,
+    pub creates_framebuffer: bool,
 }
 
 impl PassBuilder {
-    pub fn visit_image_node(
+    pub fn add_output_image(
         &mut self,
         image: &ImageNode,
         attachment_description: vk::AttachmentDescription,
@@ -394,4 +534,24 @@ impl PassBuilder {
             .height(minimum_height)
             .build()
     }
+}
+
+fn create_default_sampler(device: Arc<LogicalDevice>) -> Result<Sampler> {
+    let sampler_info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::LINEAR)
+        .min_filter(vk::Filter::LINEAR)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .anisotropy_enable(true)
+        .max_anisotropy(1.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_WHITE)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(1.0);
+    Sampler::new(device, sampler_info)
 }
