@@ -162,7 +162,7 @@ impl RenderGraph {
         pass: &Pass,
         index: NodeIndex,
     ) -> Result<Framebuffer> {
-        let attachments = self.framebuffer_attachments(pass, index)?;
+        let attachments = self.framebuffer_attachments(index)?;
 
         let create_info = vk::FramebufferCreateInfo::builder()
             .render_pass(pass.render_pass.handle)
@@ -175,7 +175,7 @@ impl RenderGraph {
         Ok(framebuffer)
     }
 
-    fn framebuffer_attachments(&self, pass: &Pass, index: NodeIndex) -> Result<Vec<vk::ImageView>> {
+    fn framebuffer_attachments(&self, index: NodeIndex) -> Result<Vec<vk::ImageView>> {
         self
             .child_node_indices(index)?
             .into_iter()
