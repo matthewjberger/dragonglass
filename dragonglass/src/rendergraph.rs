@@ -1,7 +1,8 @@
 use crate::{
     adapters::{Framebuffer, RenderPass},
     context::LogicalDevice,
-    resources::{AllocatedImage, Image, ImageView, Sampler},
+    resources::{AllocatedImage, Image, ImageView, RawImage, Sampler},
+    swapchain::{Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ash::vk;
@@ -13,16 +14,19 @@ use petgraph::{
 use std::{collections::HashMap, fmt, sync::Arc};
 use vk_mem::Allocator;
 
-pub fn forward_rendergraph() -> Result<RenderGraph> {
+pub fn forward_rendergraph(
+    device: Arc<LogicalDevice>,
+    allocator: Arc<Allocator>,
+    swapchain: &Swapchain,
+    swapchain_properties: &SwapchainProperties,
+) -> Result<RenderGraph> {
     let offscreen = "offscreen";
     let postprocessing = "postprocessing";
     let color = "color";
     let depth_stencil = "depth_stencil";
     let backbuffer = "backbuffer 0";
     let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
-    let swapchain_extent = vk::Extent2D::builder().width(800).height(600).build();
-    let swapchain_format = vk::Format::R8G8B8A8_UNORM;
-    let rendergraph = RenderGraph::new(
+    let mut rendergraph = RenderGraph::new(
         &[offscreen, postprocessing],
         vec![
             ImageNode {
@@ -48,8 +52,8 @@ pub fn forward_rendergraph() -> Result<RenderGraph> {
             },
             ImageNode {
                 name: backbuffer.to_owned(),
-                extent: swapchain_extent,
-                format: swapchain_format,
+                extent: swapchain_properties.extent,
+                format: swapchain_properties.surface_format.format,
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: [1.0, 1.0, 1.0, 1.0],
@@ -64,17 +68,27 @@ pub fn forward_rendergraph() -> Result<RenderGraph> {
             (postprocessing, backbuffer),
         ],
     )?;
+
+    rendergraph.build(device.clone(), allocator)?;
+
+    let swapchain_images = swapchain
+        .images()?
+        .into_iter()
+        .map(|handle| Box::new(RawImage(handle)) as Box<dyn Image>)
+        .collect::<Vec<_>>();
+    rendergraph.insert_backbuffer_images(device, swapchain_images)?;
+
     Ok(rendergraph)
 }
 
 #[derive(Default)]
 pub struct RenderGraph {
-    graph: Graph<Node, ()>,
-    passes: HashMap<String, Pass<'static>>,
-    images: HashMap<String, Box<dyn Image>>,
-    image_views: HashMap<String, ImageView>,
-    samplers: HashMap<String, Sampler>,
-    framebuffers: HashMap<String, Framebuffer>,
+    pub graph: Graph<Node, ()>,
+    pub passes: HashMap<String, Pass<'static>>,
+    pub images: HashMap<String, Box<dyn Image>>,
+    pub image_views: HashMap<String, ImageView>,
+    pub samplers: HashMap<String, Sampler>,
+    pub framebuffers: HashMap<String, Framebuffer>,
 }
 
 impl RenderGraph {
@@ -181,6 +195,49 @@ impl RenderGraph {
             .collect()
     }
 
+    pub fn insert_backbuffer_images(
+        &mut self,
+        device: Arc<LogicalDevice>,
+        images: Vec<Box<dyn Image>>,
+    ) -> Result<()> {
+        let backbuffer_node_index = self
+            .backbuffer_node()
+            .context("Failed to find backbuffer node when inserting backbuffer images")?;
+
+        for (index, image) in images.into_iter().enumerate() {
+            let view = {
+                match &self.graph[backbuffer_node_index] {
+                    Node::Image(image_node) => {
+                        image_node.create_image_view(device.clone(), image.handle())
+                    }
+                    _ => bail!("Backbuffer node is not an Image node"),
+                }
+            }?;
+
+            let framebuffer = self
+                .final_pass()?
+                .create_framebuffer(device.clone(), &[view.handle])?;
+
+            let key = format!("{} {}", ImageNode::BACKBUFFER_PREFIX, index);
+            self.images.insert(key.clone(), image);
+            self.image_views.insert(key.clone(), view);
+            self.framebuffers.insert(key, framebuffer);
+        }
+
+        Ok(())
+    }
+
+    fn backbuffer_node(&self) -> Option<NodeIndex> {
+        for index in self.graph.node_indices().into_iter() {
+            if let Node::Image(image_node) = &self.graph[index] {
+                if image_node.is_backbuffer() {
+                    return Some(index);
+                }
+            }
+        }
+        None
+    }
+
     // TODO: Have rendergraph handle command buffer generation and submission as well
     pub fn execute(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.execute_at_index(command_buffer, 0)
@@ -210,16 +267,30 @@ impl RenderGraph {
         Ok(())
     }
 
+    fn final_pass(&self) -> Result<&Pass> {
+        for index in self.graph.node_indices() {
+            if self.presents_to_backbuffer(index)? {
+                if let Node::Pass(pass_node) = &self.graph[index] {
+                    let pass = self.passes.get(&pass_node.name).context(format!(
+                        "Failed to get rendergraph pass named '{}' that writes to backbuffer",
+                        pass_node.name
+                    ))?;
+                    return Ok(pass);
+                } else {
+                    bail!("The backbuffer rendergraph node was not a pass node!")
+                }
+            }
+        }
+        bail!("No pass in the rendergraph writes to the backbuffer!")
+    }
+
     fn presents_to_backbuffer(&self, index: NodeIndex) -> Result<bool> {
         Ok(self
             .child_node_indices(index)?
             .into_iter()
-            .any(|child_index| {
-                if let Node::Image(image_node) = &self.graph[child_index] {
-                    image_node.is_backbuffer()
-                } else {
-                    false
-                }
+            .any(|child_index| match &self.graph[child_index] {
+                Node::Image(image_node) => image_node.is_backbuffer(),
+                _ => false,
             }))
     }
 

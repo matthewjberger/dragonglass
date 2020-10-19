@@ -145,7 +145,7 @@ pub trait Image {
     fn handle(&self) -> vk::Image;
 }
 
-pub struct RawImage(vk::Image);
+pub struct RawImage(pub vk::Image);
 
 impl Image for RawImage {
     fn handle(&self) -> vk::Image {

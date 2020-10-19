@@ -46,7 +46,12 @@ impl RenderingDevice {
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
 
-        let mut rendergraph = crate::rendergraph::forward_rendergraph()?;
+        let mut rendergraph = crate::rendergraph::forward_rendergraph(
+            context.logical_device.clone(),
+            context.allocator.clone(),
+            &render_path.swapchain.swapchain,
+            &render_path.swapchain.swapchain_properties,
+        )?;
         rendergraph.build(context.logical_device.clone(), context.allocator.clone())?;
 
         let renderer = Self {
