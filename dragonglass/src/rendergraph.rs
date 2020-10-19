@@ -241,12 +241,9 @@ impl RenderGraph {
     }
 
     // TODO: Have rendergraph handle command buffer generation and submission as well
-    pub fn execute(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
-        self.execute_at_index(command_buffer, 0)
-    }
-
     pub fn execute_at_index(
         &self,
+        device: Arc<LogicalDevice>,
         command_buffer: vk::CommandBuffer,
         backbuffer_index: usize,
     ) -> Result<()> {
@@ -263,6 +260,7 @@ impl RenderGraph {
                 } else {
                     &self.framebuffers[&pass_node.name]
                 };
+                device.update_viewport(command_buffer, pass.extent)?;
                 pass.execute(command_buffer, framebuffer.handle)?;
             }
         }

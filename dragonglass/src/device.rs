@@ -9,10 +9,10 @@ use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
-use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 pub struct RenderingDevice {
-    // scene: Scene,
+    scene: Rc<RefCell<Scene>>,
     shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
@@ -35,19 +35,29 @@ impl RenderingDevice {
         let transient_command_pool =
             Self::transient_command_pool(context.logical_device.clone(), graphics_queue_index)?;
         let mut shader_cache = ShaderCache::default();
-        let render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
-        // let scene = Scene::new(
-        //     &context,
-        //     &transient_command_pool,
-        //     render_path.rendergraph.final_pass()?.render_pass.clone(),
-        //     &mut shader_cache,
-        // )?;
+        let mut render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
+        let scene = Scene::new(
+            &context,
+            &transient_command_pool,
+            render_path.rendergraph.final_pass()?.render_pass.clone(),
+            &mut shader_cache,
+        )?;
         let number_of_framebuffers = render_path.swapchain.images()?.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
 
+        let scene = Rc::new(RefCell::new(scene));
+
+        let scene_ptr = scene.clone();
+        render_path
+            .rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set scene callback")?
+            .set_callback(move |command_buffer| scene_ptr.borrow().issue_commands(command_buffer));
+
         let renderer = Self {
-            // scene,
+            scene,
             shader_cache,
             frame: 0,
             frame_locks,
@@ -118,7 +128,7 @@ impl RenderingDevice {
 
     fn update(&self, view: glm::Mat4) -> Result<()> {
         let aspect_ratio = self.render_path()?.swapchain_properties.aspect_ratio();
-        // self.scene.update_ubo(aspect_ratio, view)?;
+        self.scene.borrow().update_ubo(aspect_ratio, view)?;
         Ok(())
     }
 
@@ -196,33 +206,35 @@ impl RenderingDevice {
         unsafe { self.context.logical_device.handle.device_wait_idle() }?;
 
         self.render_path = None;
-        self.render_path = Some(RenderPath::new(
-            &self.context,
-            dimensions,
-            &mut self.shader_cache,
-        )?);
+        let mut render_path = RenderPath::new(&self.context, dimensions, &mut self.shader_cache)?;
 
-        // let render_pass = self
-        //     .render_path()?
-        //     .rendergraph
-        //     .final_pass()?
-        //     .render_pass
-        //     .clone();
-        // self.scene
-        //     .create_pipeline(render_pass, &mut self.shader_cache)?;
+        let render_pass = render_path.rendergraph.final_pass()?.render_pass.clone();
+        self.scene
+            .borrow_mut()
+            .create_pipeline(render_pass, &mut self.shader_cache)?;
 
+        let scene_ptr = self.scene.clone();
+        render_path
+            .rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set scene callback")?
+            .set_callback(move |command_buffer| scene_ptr.borrow().issue_commands(command_buffer));
+        self.render_path = Some(render_path);
         Ok(())
     }
 
     fn record_command_buffer(&mut self, image_index: usize) -> Result<()> {
         let command_buffer = self.command_buffer_at(image_index)?;
-        self.context.logical_device.clone().record_command_buffer(
+        self.context.logical_device.record_command_buffer(
             command_buffer,
             vk::CommandBufferUsageFlags::empty(),
             || {
-                self.render_path()?
-                    .rendergraph
-                    .execute_at_index(command_buffer, image_index)
+                self.render_path()?.rendergraph.execute_at_index(
+                    self.context.logical_device.clone(),
+                    command_buffer,
+                    image_index,
+                )
             },
         )?;
         Ok(())
