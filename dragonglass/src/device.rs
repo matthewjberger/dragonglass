@@ -12,7 +12,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
-    scene: Scene,
+    // scene: Scene,
     shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
@@ -36,26 +36,18 @@ impl RenderingDevice {
             Self::transient_command_pool(context.logical_device.clone(), graphics_queue_index)?;
         let mut shader_cache = ShaderCache::default();
         let render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
-        let scene = Scene::new(
-            &context,
-            &transient_command_pool,
-            render_path.offscreen.render_pass.clone(),
-            &mut shader_cache,
-        )?;
-        let number_of_framebuffers = render_path.swapchain.framebuffers.len() as _;
+        // let scene = Scene::new(
+        //     &context,
+        //     &transient_command_pool,
+        //     render_path.rendergraph.final_pass()?.render_pass.clone(),
+        //     &mut shader_cache,
+        // )?;
+        let number_of_framebuffers = render_path.swapchain.images()?.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
 
-        let mut rendergraph = crate::rendergraph::forward_rendergraph(
-            context.logical_device.clone(),
-            context.allocator.clone(),
-            &render_path.swapchain.swapchain,
-            &render_path.swapchain.swapchain_properties,
-        )?;
-        rendergraph.build(context.logical_device.clone(), context.allocator.clone())?;
-
         let renderer = Self {
-            scene,
+            // scene,
             shader_cache,
             frame: 0,
             frame_locks,
@@ -125,12 +117,8 @@ impl RenderingDevice {
     }
 
     fn update(&self, view: glm::Mat4) -> Result<()> {
-        let aspect_ratio = self
-            .render_path()?
-            .swapchain
-            .swapchain_properties
-            .aspect_ratio();
-        self.scene.update_ubo(aspect_ratio, view)?;
+        let aspect_ratio = self.render_path()?.swapchain_properties.aspect_ratio();
+        // self.scene.update_ubo(aspect_ratio, view)?;
         Ok(())
     }
 
@@ -150,7 +138,6 @@ impl RenderingDevice {
         let result = self
             .render_path()?
             .swapchain
-            .swapchain
             .acquire_next_image(self.frame_lock()?.image_available.handle, vk::Fence::null());
 
         match result {
@@ -165,7 +152,7 @@ impl RenderingDevice {
 
     fn present_next_frame(&mut self, image_index: usize) -> Result<VkResult<bool>> {
         let wait_semaphores = [self.frame_lock()?.render_finished.handle];
-        let swapchains = [self.render_path()?.swapchain.swapchain.handle_khr];
+        let swapchains = [self.render_path()?.swapchain.handle_khr];
         let image_indices = [image_index as u32];
 
         let present_info = vk::PresentInfoKHR::builder()
@@ -175,7 +162,6 @@ impl RenderingDevice {
 
         let presentation_result = unsafe {
             self.render_path()?
-                .swapchain
                 .swapchain
                 .handle_ash
                 .queue_present(self.context.presentation_queue(), &present_info)
@@ -216,9 +202,15 @@ impl RenderingDevice {
             &mut self.shader_cache,
         )?);
 
-        let render_pass = self.render_path()?.offscreen.render_pass.clone();
-        self.scene
-            .create_pipeline(render_pass, &mut self.shader_cache)?;
+        // let render_pass = self
+        //     .render_path()?
+        //     .rendergraph
+        //     .final_pass()?
+        //     .render_pass
+        //     .clone();
+        // self.scene
+        //     .create_pipeline(render_pass, &mut self.shader_cache)?;
+
         Ok(())
     }
 
@@ -228,14 +220,9 @@ impl RenderingDevice {
             command_buffer,
             vk::CommandBufferUsageFlags::empty(),
             || {
-                self.render_path()?.record_renderpass(
-                    command_buffer,
-                    image_index,
-                    |command_buffer| {
-                        self.scene.issue_commands(command_buffer)?;
-                        Ok(())
-                    },
-                )
+                self.render_path()?
+                    .rendergraph
+                    .execute_at_index(command_buffer, image_index)
             },
         )?;
         Ok(())

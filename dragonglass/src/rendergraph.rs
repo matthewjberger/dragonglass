@@ -83,7 +83,7 @@ pub fn forward_rendergraph(
 
 #[derive(Default)]
 pub struct RenderGraph {
-    pub graph: Graph<Node, ()>,
+    graph: Graph<Node, ()>,
     pub passes: HashMap<String, Pass<'static>>,
     pub images: HashMap<String, Box<dyn Image>>,
     pub image_views: HashMap<String, ImageView>,
@@ -214,9 +214,11 @@ impl RenderGraph {
                 }
             }?;
 
-            let framebuffer = self
-                .final_pass()?
-                .create_framebuffer(device.clone(), &[view.handle])?;
+            let (_, final_pass_index) = self.final_pass_node()?;
+            let mut attachments = vec![view.handle];
+            attachments.extend_from_slice(&self.framebuffer_attachments(final_pass_index)?);
+            let final_pass = self.final_pass()?;
+            let framebuffer = final_pass.create_framebuffer(device.clone(), &attachments)?;
 
             let key = format!("{} {}", ImageNode::BACKBUFFER_PREFIX, index);
             self.images.insert(key.clone(), image);
@@ -264,24 +266,30 @@ impl RenderGraph {
                 pass.execute(command_buffer, framebuffer.handle)?;
             }
         }
+
         Ok(())
     }
 
-    fn final_pass(&self) -> Result<&Pass> {
+    pub fn final_pass_node(&self) -> Result<(&PassNode, NodeIndex)> {
         for index in self.graph.node_indices() {
             if self.presents_to_backbuffer(index)? {
-                if let Node::Pass(pass_node) = &self.graph[index] {
-                    let pass = self.passes.get(&pass_node.name).context(format!(
-                        "Failed to get rendergraph pass named '{}' that writes to backbuffer",
-                        pass_node.name
-                    ))?;
-                    return Ok(pass);
+                if let Node::Pass(node) = &self.graph[index] {
+                    return Ok((node, index));
                 } else {
                     bail!("The backbuffer rendergraph node was not a pass node!")
                 }
             }
         }
         bail!("No pass in the rendergraph writes to the backbuffer!")
+    }
+
+    pub fn final_pass(&self) -> Result<&Pass> {
+        let (node, _) = self.final_pass_node()?;
+        let pass = self.passes.get(&node.name).context(format!(
+            "Failed to get rendergraph pass named '{}' that writes to backbuffer",
+            node.name
+        ))?;
+        Ok(pass)
     }
 
     fn presents_to_backbuffer(&self, index: NodeIndex) -> Result<bool> {
@@ -529,7 +537,7 @@ impl ImageNode {
 }
 
 pub struct Pass<'a> {
-    pub render_pass: RenderPass,
+    pub render_pass: Arc<RenderPass>,
     extent: vk::Extent2D,
     clear_values: Vec<vk::ClearValue>,
     callback: Box<dyn Fn(vk::CommandBuffer) -> Result<()> + 'a>,
@@ -623,7 +631,7 @@ impl PassBuilder {
         // TODO: Add subpass dependencies where necessary
         // .dependencies(&subpass_dependencies);
 
-        let render_pass = RenderPass::new(device, &create_info)?;
+        let render_pass = Arc::new(RenderPass::new(device, &create_info)?);
 
         let extent = self.minimum_extent();
         let Self { clear_values, .. } = self;
