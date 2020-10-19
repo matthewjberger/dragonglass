@@ -129,6 +129,12 @@ impl RenderGraph {
             match &self.graph[index] {
                 Node::Pass(pass_node) => {
                     let pass = self.create_pass(index, device.clone())?;
+                    if !self.presents_to_backbuffer(index)? {
+                        let framebuffer =
+                            self.framebuffer_for_pass(device.clone(), &pass, index)?;
+                        self.framebuffers
+                            .insert(pass_node.name.to_string(), framebuffer);
+                    }
                     self.passes.insert(pass_node.name.to_string(), pass);
                 }
                 Node::Image(image_node) => {
@@ -150,6 +156,50 @@ impl RenderGraph {
         Ok(())
     }
 
+    fn framebuffer_for_pass(
+        &self,
+        device: Arc<LogicalDevice>,
+        pass: &Pass,
+        index: NodeIndex,
+    ) -> Result<Framebuffer> {
+        let attachments = self.framebuffer_attachments(pass, index)?;
+
+        let create_info = vk::FramebufferCreateInfo::builder()
+            .render_pass(pass.render_pass.handle)
+            .attachments(attachments.as_slice())
+            .width(pass.extent.width)
+            .height(pass.extent.height)
+            .layers(1);
+
+        let framebuffer = Framebuffer::new(device, create_info)?;
+        Ok(framebuffer)
+    }
+
+    fn framebuffer_attachments(&self, pass: &Pass, index: NodeIndex) -> Result<Vec<vk::ImageView>> {
+        self
+            .child_node_indices(index)?
+            .into_iter()
+            .filter_map(|child_index| {
+                if let Node::Image(image_node) = &self.graph[child_index] {
+                    if image_node.is_backbuffer() {
+                        return None
+                    }
+
+                    let handle =
+                        self.image_views
+                        .get(&image_node.name)
+                        .context(format!("Failed to get an image view with the name '{}' to use as a framebuffer attachment", image_node.name))
+                        .ok()?
+                        .handle;
+
+                    Some(Ok(handle))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     // TODO: Have rendergraph handle command buffer generation and submission as well
     pub fn execute(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.execute_at_index(command_buffer, 0)
@@ -167,7 +217,6 @@ impl RenderGraph {
         for index in indices.into_iter() {
             if let Node::Pass(pass_node) = &self.graph[index] {
                 let pass = &self.passes[&pass_node.name];
-                // TODO: Could cache this check in the pass
                 let framebuffer = if self.presents_to_backbuffer(index)? {
                     let backbuffer_name = format!("backbuffer {}", backbuffer_index).to_string();
                     &self.framebuffers[&backbuffer_name]
@@ -181,22 +230,25 @@ impl RenderGraph {
     }
 
     fn presents_to_backbuffer(&self, index: NodeIndex) -> Result<bool> {
-        Ok(self.child_nodes(index)?.into_iter().any(|child_index| {
-            if let Node::Image(image_node) = &self.graph[child_index] {
-                image_node.is_backbuffer()
-            } else {
-                false
-            }
-        }))
+        Ok(self
+            .child_node_indices(index)?
+            .into_iter()
+            .any(|child_index| {
+                if let Node::Image(image_node) = &self.graph[child_index] {
+                    image_node.is_backbuffer()
+                } else {
+                    false
+                }
+            }))
     }
 
     fn create_pass<'a>(&self, index: NodeIndex, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
-        let should_clear = self.parent_nodes(index)?.is_empty();
+        let should_clear = self.parent_node_indices(index)?.is_empty();
         let mut pass_builder = PassBuilder::default();
-        for child_index in self.child_nodes(index)?.into_iter() {
+        for child_index in self.child_node_indices(index)?.into_iter() {
             match &self.graph[child_index] {
                 Node::Image(image_node) => {
-                    let has_children = self.child_nodes(child_index)?.is_empty();
+                    let has_children = self.child_node_indices(child_index)?.is_empty();
                     let attachment_description =
                         image_node.attachment_description(should_clear, has_children)?;
                     pass_builder.add_output_image(&image_node, attachment_description)?;
@@ -224,7 +276,7 @@ impl RenderGraph {
         Ok(Some((allocated_image, image_view)))
     }
 
-    fn parent_nodes(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
+    fn parent_node_indices(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
         let mut incoming_walker = self.graph.neighbors_directed(index, Incoming).detach();
         let mut indices = Vec::new();
         while let Some(index) = incoming_walker.next_node(&self.graph) {
@@ -233,7 +285,7 @@ impl RenderGraph {
         Ok(indices)
     }
 
-    fn child_nodes(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
+    fn child_node_indices(&self, index: NodeIndex) -> Result<Vec<NodeIndex>> {
         let mut outgoing_walker = self.graph.neighbors_directed(index, Outgoing).detach();
         let mut indices = Vec::new();
         while let Some(index) = outgoing_walker.next_node(&self.graph) {
@@ -458,7 +510,6 @@ pub struct PassBuilder {
     pub clear_values: Vec<vk::ClearValue>,
     pub extents: Vec<vk::Extent2D>,
     pub bindpoint: vk::PipelineBindPoint,
-    pub creates_framebuffer: bool,
 }
 
 impl PassBuilder {
