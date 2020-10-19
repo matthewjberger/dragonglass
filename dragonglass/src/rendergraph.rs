@@ -18,7 +18,7 @@ pub fn forward_rendergraph() -> Result<RenderGraph> {
     let postprocessing = "postprocessing";
     let color = "color";
     let depth_stencil = "depth_stencil";
-    let backbuffer = "backbuffer";
+    let backbuffer = "backbuffer 0";
     let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
     let swapchain_extent = vk::Extent2D::builder().width(800).height(600).build();
     let swapchain_format = vk::Format::R8G8B8A8_UNORM;
@@ -312,12 +312,15 @@ pub struct ImageNode {
 }
 
 impl ImageNode {
+    pub const BACKBUFFER_PREFIX: &'static str = &"backbuffer";
+    pub const DEPTH_STENCIL: &'static str = &"depth_stencil";
+
     pub fn is_depth_stencil(&self) -> bool {
-        self.name == "depth_stencil"
+        self.name == Self::DEPTH_STENCIL
     }
 
     pub fn is_backbuffer(&self) -> bool {
-        self.name == "backbuffer"
+        self.name.starts_with(Self::BACKBUFFER_PREFIX)
     }
 
     fn layout(&self) -> vk::ImageLayout {
