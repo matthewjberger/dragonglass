@@ -130,8 +130,8 @@ impl RenderGraph {
                 Node::Pass(pass_node) => {
                     let pass = self.create_pass(index, device.clone())?;
                     if !self.presents_to_backbuffer(index)? {
-                        let framebuffer =
-                            self.framebuffer_for_pass(device.clone(), &pass, index)?;
+                        let attachments = self.framebuffer_attachments(index)?;
+                        let framebuffer = pass.create_framebuffer(device.clone(), &attachments)?;
                         self.framebuffers
                             .insert(pass_node.name.to_string(), framebuffer);
                     }
@@ -154,25 +154,6 @@ impl RenderGraph {
         self.samplers.insert("default".to_string(), default_sampler);
 
         Ok(())
-    }
-
-    fn framebuffer_for_pass(
-        &self,
-        device: Arc<LogicalDevice>,
-        pass: &Pass,
-        index: NodeIndex,
-    ) -> Result<Framebuffer> {
-        let attachments = self.framebuffer_attachments(index)?;
-
-        let create_info = vk::FramebufferCreateInfo::builder()
-            .render_pass(pass.render_pass.handle)
-            .attachments(attachments.as_slice())
-            .width(pass.extent.width)
-            .height(pass.extent.height)
-            .layers(1);
-
-        let framebuffer = Framebuffer::new(device, create_info)?;
-        Ok(framebuffer)
     }
 
     fn framebuffer_attachments(&self, index: NodeIndex) -> Result<Vec<vk::ImageView>> {
@@ -499,6 +480,20 @@ impl<'a> Pass<'a> {
         self.render_pass
             .record(command_buffer, begin_info, &self.callback)?;
         Ok(())
+    }
+
+    fn create_framebuffer(
+        &self,
+        device: Arc<LogicalDevice>,
+        attachments: &[vk::ImageView],
+    ) -> Result<Framebuffer> {
+        let create_info = vk::FramebufferCreateInfo::builder()
+            .render_pass(self.render_pass.handle)
+            .attachments(attachments)
+            .width(self.extent.width)
+            .height(self.extent.height)
+            .layers(1);
+        Framebuffer::new(device, create_info)
     }
 }
 
