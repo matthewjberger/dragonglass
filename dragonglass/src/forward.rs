@@ -1,7 +1,7 @@
 use crate::{
     adapters::{
-        DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline,
-        GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
+        DescriptorPool, DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettings,
+        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, LogicalDevice},
     rendergraph::{ImageNode, RenderGraph},
@@ -71,8 +71,6 @@ impl RenderPath {
         let offscreen = "offscreen";
         let postprocessing = "postprocessing";
         let color = "color";
-        let depth_stencil = "depth_stencil";
-        let backbuffer = "backbuffer 0";
         let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
         let mut rendergraph = RenderGraph::new(
             &[offscreen, postprocessing],
@@ -88,7 +86,7 @@ impl RenderPath {
                     },
                 },
                 ImageNode {
-                    name: depth_stencil.to_owned(),
+                    name: RenderGraph::DEPTH_STENCIL.to_owned(),
                     extent: offscreen_extent,
                     format: vk::Format::D24_UNORM_S8_UINT,
                     clear_value: vk::ClearValue {
@@ -99,7 +97,7 @@ impl RenderPath {
                     },
                 },
                 ImageNode {
-                    name: backbuffer.to_owned(),
+                    name: RenderGraph::backbuffer_name(0),
                     extent: swapchain_properties.extent,
                     format: swapchain_properties.surface_format.format,
                     clear_value: vk::ClearValue {
@@ -111,9 +109,9 @@ impl RenderPath {
             ],
             &[
                 (offscreen, color),
-                (offscreen, depth_stencil),
+                (offscreen, RenderGraph::DEPTH_STENCIL),
                 (color, postprocessing),
-                (postprocessing, backbuffer),
+                (postprocessing, &RenderGraph::backbuffer_name(0)),
             ],
         )?;
 

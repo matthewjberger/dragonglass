@@ -25,6 +25,13 @@ pub struct RenderGraph {
 }
 
 impl RenderGraph {
+    pub const BACKBUFFER_PREFIX: &'static str = &"backbuffer";
+    pub const DEPTH_STENCIL: &'static str = &"depth_stencil";
+
+    pub fn backbuffer_name(index: usize) -> String {
+        format!("{} {}", RenderGraph::BACKBUFFER_PREFIX, index)
+    }
+
     pub fn new<'a>(
         passes: &[&'a str],
         images: Vec<ImageNode>,
@@ -168,7 +175,7 @@ impl RenderGraph {
             let final_pass = self.final_pass()?;
             let framebuffer = final_pass.create_framebuffer(device.clone(), &attachments)?;
 
-            let key = format!("{} {}", ImageNode::BACKBUFFER_PREFIX, index);
+            let key = format!("{} {}", RenderGraph::BACKBUFFER_PREFIX, index);
             self.images.insert(key.clone(), image);
             self.image_views.insert(key.clone(), view);
             self.framebuffers.insert(key, framebuffer);
@@ -337,15 +344,12 @@ pub struct ImageNode {
 }
 
 impl ImageNode {
-    pub const BACKBUFFER_PREFIX: &'static str = &"backbuffer";
-    pub const DEPTH_STENCIL: &'static str = &"depth_stencil";
-
     pub fn is_depth_stencil(&self) -> bool {
-        self.name == Self::DEPTH_STENCIL
+        self.name == RenderGraph::DEPTH_STENCIL
     }
 
     pub fn is_backbuffer(&self) -> bool {
-        self.name.starts_with(Self::BACKBUFFER_PREFIX)
+        self.name.starts_with(RenderGraph::BACKBUFFER_PREFIX)
     }
 
     fn layout(&self) -> vk::ImageLayout {
