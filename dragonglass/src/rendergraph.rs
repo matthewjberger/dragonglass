@@ -1,8 +1,8 @@
 use crate::{
     adapters::{Framebuffer, RenderPass},
     context::LogicalDevice,
-    resources::{AllocatedImage, Image, ImageView, RawImage, Sampler},
-    swapchain::{Swapchain, SwapchainProperties},
+    resources::AllocatedImage,
+    resources::{Image, ImageView, Sampler},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ash::vk;
@@ -13,73 +13,6 @@ use petgraph::{
 };
 use std::{collections::HashMap, fmt, sync::Arc};
 use vk_mem::Allocator;
-
-pub fn forward_rendergraph(
-    device: Arc<LogicalDevice>,
-    allocator: Arc<Allocator>,
-    swapchain: &Swapchain,
-    swapchain_properties: &SwapchainProperties,
-) -> Result<RenderGraph> {
-    let offscreen = "offscreen";
-    let postprocessing = "postprocessing";
-    let color = "color";
-    let depth_stencil = "depth_stencil";
-    let backbuffer = "backbuffer 0";
-    let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
-    let mut rendergraph = RenderGraph::new(
-        &[offscreen, postprocessing],
-        vec![
-            ImageNode {
-                name: color.to_string(),
-                extent: offscreen_extent,
-                format: vk::Format::R8G8B8A8_UNORM,
-                clear_value: vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
-                    },
-                },
-            },
-            ImageNode {
-                name: depth_stencil.to_owned(),
-                extent: offscreen_extent,
-                format: vk::Format::D24_UNORM_S8_UINT,
-                clear_value: vk::ClearValue {
-                    depth_stencil: vk::ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
-                    },
-                },
-            },
-            ImageNode {
-                name: backbuffer.to_owned(),
-                extent: swapchain_properties.extent,
-                format: swapchain_properties.surface_format.format,
-                clear_value: vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [1.0, 1.0, 1.0, 1.0],
-                    },
-                },
-            },
-        ],
-        &[
-            (offscreen, color),
-            (offscreen, depth_stencil),
-            (color, postprocessing),
-            (postprocessing, backbuffer),
-        ],
-    )?;
-
-    rendergraph.build(device.clone(), allocator)?;
-
-    let swapchain_images = swapchain
-        .images()?
-        .into_iter()
-        .map(|handle| Box::new(RawImage(handle)) as Box<dyn Image>)
-        .collect::<Vec<_>>();
-    rendergraph.insert_backbuffer_images(device, swapchain_images)?;
-
-    Ok(rendergraph)
-}
 
 #[derive(Default)]
 pub struct RenderGraph {
@@ -139,6 +72,39 @@ impl RenderGraph {
             Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
         );
 
+        self.process_images(device.clone(), allocator)?;
+        self.process_passes(device.clone())?;
+
+        let default_sampler = create_default_sampler(device)?;
+        self.samplers.insert("default".to_string(), default_sampler);
+
+        Ok(())
+    }
+
+    fn process_images(
+        &mut self,
+        device: Arc<LogicalDevice>,
+        allocator: Arc<Allocator>,
+    ) -> Result<()> {
+        for index in self.graph.node_indices() {
+            match &self.graph[index] {
+                Node::Image(image_node) => {
+                    let allocation_result =
+                        self.allocate_image(image_node, device.clone(), allocator.clone())?;
+                    if let Some((image, image_view)) = allocation_result {
+                        self.images
+                            .insert(image_node.name.to_string(), Box::new(image));
+                        self.image_views
+                            .insert(image_node.name.to_string(), image_view);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn process_passes(&mut self, device: Arc<LogicalDevice>) -> Result<()> {
         for index in self.graph.node_indices() {
             match &self.graph[index] {
                 Node::Pass(pass_node) => {
@@ -151,48 +117,30 @@ impl RenderGraph {
                     }
                     self.passes.insert(pass_node.name.to_string(), pass);
                 }
-                Node::Image(image_node) => {
-                    let allocation_result =
-                        self.allocate_image(image_node, device.clone(), allocator.clone())?;
-                    if let Some((image, image_view)) = allocation_result {
-                        self.images
-                            .insert(image_node.name.to_string(), Box::new(image));
-                        self.image_views
-                            .insert(image_node.name.to_string(), image_view);
-                    }
-                }
+                _ => {}
             }
         }
-
-        let default_sampler = create_default_sampler(device)?;
-        self.samplers.insert("default".to_string(), default_sampler);
-
         Ok(())
     }
 
     fn framebuffer_attachments(&self, index: NodeIndex) -> Result<Vec<vk::ImageView>> {
-        self
-            .child_node_indices(index)?
-            .into_iter()
-            .filter_map(|child_index| {
-                if let Node::Image(image_node) = &self.graph[child_index] {
-                    if image_node.is_backbuffer() {
-                        return None
-                    }
-
-                    let handle =
-                        self.image_views
-                        .get(&image_node.name)
-                        .context(format!("Failed to get an image view with the name '{}' to use as a framebuffer attachment", image_node.name))
-                        .ok()?
-                        .handle;
-
-                    Some(Ok(handle))
-                } else {
-                    None
+        let mut attachments = Vec::new();
+        for child_index in self.child_node_indices(index)?.into_iter() {
+            if let Node::Image(image_node) = &self.graph[child_index] {
+                if image_node.is_backbuffer() {
+                    continue;
                 }
-            })
-            .collect()
+                let error_message =
+                    format!("Failed to get an image view with the name '{}' to use as a framebuffer attachment", image_node.name);
+                let handle = self
+                    .image_views
+                    .get(&image_node.name)
+                    .context(error_message)?
+                    .handle;
+                attachments.push(handle);
+            }
+        }
+        Ok(attachments)
     }
 
     pub fn insert_backbuffer_images(
@@ -619,9 +567,13 @@ impl PassBuilder {
     }
 
     pub fn build<'a>(self, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
-        let subpass_description = vk::SubpassDescription::builder()
+        let mut subpass_description = vk::SubpassDescription::builder()
             .pipeline_bind_point(self.bindpoint)
             .color_attachments(&self.color_references);
+        if let Some(depth_stencil_reference) = self.depth_reference.as_ref() {
+            subpass_description =
+                subpass_description.depth_stencil_attachment(&depth_stencil_reference);
+        }
         let subpass_descriptions = [subpass_description.build()];
         let create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&self.attachment_descriptions)
