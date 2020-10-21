@@ -1,12 +1,13 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
+use image::ImageFormat;
 use log::{error, info};
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    window::{Icon, Window, WindowBuilder},
 };
 
 pub struct App {
@@ -22,11 +23,28 @@ pub struct App {
 impl App {
     pub const TITLE: &'static str = "Dragonglass - GLTF Model Viewer";
 
+    fn load_icon(icon_bytes: &[u8], format: ImageFormat) -> Result<Icon> {
+        let (rgba, width, height) = {
+            let image = image::load_from_memory_with_format(icon_bytes, format)?.into_rgba();
+            let (width, height) = image.dimensions();
+            let rgba = image.into_raw();
+            (rgba, width, height)
+        };
+        let icon = Icon::from_rgba(rgba, width, height)?;
+        Ok(icon)
+    }
+
     pub fn new() -> Result<Self> {
         let settings = Settings::load_current_settings()?;
 
+        let icon = Self::load_icon(
+            include_bytes!("../../assets/icon/icon.png"),
+            ImageFormat::Png,
+        )?;
+
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
+            .with_window_icon(Some(icon))
             .with_title(Self::TITLE)
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
