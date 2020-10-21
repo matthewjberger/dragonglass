@@ -36,10 +36,17 @@ impl RenderingDevice {
             Self::transient_command_pool(context.logical_device.clone(), graphics_queue_index)?;
         let mut shader_cache = ShaderCache::default();
         let mut render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
+        let offscreen_renderpass = render_path
+            .rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene")?
+            .render_pass
+            .clone();
         let scene = Scene::new(
             &context,
             &transient_command_pool,
-            render_path.rendergraph.final_pass()?.render_pass.clone(),
+            offscreen_renderpass,
             &mut shader_cache,
         )?;
         let number_of_framebuffers = render_path.swapchain.images()?.len() as _;
@@ -208,7 +215,13 @@ impl RenderingDevice {
         self.render_path = None;
         let mut render_path = RenderPath::new(&self.context, dimensions, &mut self.shader_cache)?;
 
-        let render_pass = render_path.rendergraph.final_pass()?.render_pass.clone();
+        let render_pass = render_path
+            .rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene callback")?
+            .render_pass
+            .clone();
         self.scene
             .borrow_mut()
             .create_pipeline(render_pass, &mut self.shader_cache)?;
