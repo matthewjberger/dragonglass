@@ -1620,6 +1620,7 @@ dependencies = [
  "anyhow",
  "config",
  "dragonglass",
+ "image",
  "log",
  "nalgebra-glm",
  "serde 1.0.116",
