@@ -53,10 +53,10 @@ impl RenderGraph {
 
         for (src_name, dst_name) in links.iter() {
             let src_index = *index_map
-                .get(&src_name.to_string())
+                .get(&(*src_name).to_string())
                 .context("Failed to get source node index for a rendergraph link!")?;
             let dst_index = *index_map
-                .get(&dst_name.to_string())
+                .get(&(*dst_name).to_string())
                 .context("Failed to get destination node index for a rendergraph link!")?;
             graph.add_edge(src_index, dst_index, ());
         }
@@ -263,7 +263,7 @@ impl RenderGraph {
                 _ => bail!("A pass cannot have another pass as an output!"),
             }
         }
-        pass_builder.build(device.clone())
+        pass_builder.build(device)
     }
 
     fn allocate_image(
@@ -539,7 +539,7 @@ impl PassBuilder {
         attachment_description: vk::AttachmentDescription,
     ) -> Result<()> {
         self.attachment_descriptions.push(attachment_description);
-        self.add_attachment(&image)?;
+        self.add_attachment(image)?;
         self.clear_values.push(image.clear_value);
         self.extents.push(image.extent);
         Ok(())
@@ -569,7 +569,7 @@ impl PassBuilder {
             .color_attachments(&self.color_references);
         if let Some(depth_stencil_reference) = self.depth_reference.as_ref() {
             subpass_description =
-                subpass_description.depth_stencil_attachment(&depth_stencil_reference);
+                subpass_description.depth_stencil_attachment(depth_stencil_reference);
         }
         let subpass_descriptions = [subpass_description.build()];
         let create_info = vk::RenderPassCreateInfo::builder()
