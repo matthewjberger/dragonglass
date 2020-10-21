@@ -25,11 +25,11 @@ pub struct RenderGraph {
 }
 
 impl RenderGraph {
-    pub const BACKBUFFER_PREFIX: &'static str = &"backbuffer";
-    pub const DEPTH_STENCIL: &'static str = &"depth_stencil";
+    pub const BACKBUFFER_PREFIX: &'static str = "backbuffer";
+    pub const DEPTH_STENCIL: &'static str = "depth_stencil";
 
     pub fn backbuffer_name(index: usize) -> String {
-        format!("{} {}", RenderGraph::BACKBUFFER_PREFIX, index)
+        format!("{} {}", Self::BACKBUFFER_PREFIX, index)
     }
 
     pub fn new<'a>(
@@ -42,7 +42,7 @@ impl RenderGraph {
 
         for pass in passes.iter() {
             let pass_index = graph.add_node(Node::Pass(PassNode::new(pass)));
-            index_map.insert(pass.to_string(), pass_index);
+            index_map.insert((*pass).to_string(), pass_index);
         }
 
         for image in images.into_iter() {
@@ -51,7 +51,7 @@ impl RenderGraph {
             index_map.insert(name, image_index);
         }
 
-        for (src_name, dst_name) in links.into_iter() {
+        for (src_name, dst_name) in links.iter() {
             let src_index = *index_map
                 .get(&src_name.to_string())
                 .context("Failed to get source node index for a rendergraph link!")?;
@@ -94,18 +94,15 @@ impl RenderGraph {
         allocator: Arc<Allocator>,
     ) -> Result<()> {
         for index in self.graph.node_indices() {
-            match &self.graph[index] {
-                Node::Image(image_node) => {
-                    let allocation_result =
-                        self.allocate_image(image_node, device.clone(), allocator.clone())?;
-                    if let Some((image, image_view)) = allocation_result {
-                        self.images
-                            .insert(image_node.name.to_string(), Box::new(image));
-                        self.image_views
-                            .insert(image_node.name.to_string(), image_view);
-                    }
+            if let Node::Image(image_node) = &self.graph[index] {
+                let allocation_result =
+                    Self::allocate_image(image_node, device.clone(), allocator.clone())?;
+                if let Some((image, image_view)) = allocation_result {
+                    self.images
+                        .insert(image_node.name.to_string(), Box::new(image));
+                    self.image_views
+                        .insert(image_node.name.to_string(), image_view);
                 }
-                _ => {}
             }
         }
         Ok(())
@@ -113,18 +110,15 @@ impl RenderGraph {
 
     fn process_passes(&mut self, device: Arc<LogicalDevice>) -> Result<()> {
         for index in self.graph.node_indices() {
-            match &self.graph[index] {
-                Node::Pass(pass_node) => {
-                    let pass = self.create_pass(index, device.clone())?;
-                    if !self.presents_to_backbuffer(index)? {
-                        let attachments = self.framebuffer_attachments(index)?;
-                        let framebuffer = pass.create_framebuffer(device.clone(), &attachments)?;
-                        self.framebuffers
-                            .insert(pass_node.name.to_string(), framebuffer);
-                    }
-                    self.passes.insert(pass_node.name.to_string(), pass);
+            if let Node::Pass(pass_node) = &self.graph[index] {
+                let pass = self.create_pass(index, device.clone())?;
+                if !self.presents_to_backbuffer(index)? {
+                    let attachments = self.framebuffer_attachments(index)?;
+                    let framebuffer = pass.create_framebuffer(device.clone(), &attachments)?;
+                    self.framebuffers
+                        .insert(pass_node.name.to_string(), framebuffer);
                 }
-                _ => {}
+                self.passes.insert(pass_node.name.to_string(), pass);
             }
         }
         Ok(())
@@ -175,7 +169,7 @@ impl RenderGraph {
             let final_pass = self.final_pass()?;
             let framebuffer = final_pass.create_framebuffer(device.clone(), &attachments)?;
 
-            let key = format!("{} {}", RenderGraph::BACKBUFFER_PREFIX, index);
+            let key = format!("{} {}", Self::BACKBUFFER_PREFIX, index);
             self.images.insert(key.clone(), image);
             self.image_views.insert(key.clone(), view);
             self.framebuffers.insert(key, framebuffer);
@@ -264,7 +258,7 @@ impl RenderGraph {
                     let has_children = self.child_node_indices(child_index)?.is_empty();
                     let attachment_description =
                         image_node.attachment_description(should_clear, has_children)?;
-                    pass_builder.add_output_image(&image_node, attachment_description)?;
+                    pass_builder.add_output_image(image_node, attachment_description)?;
                 }
                 _ => bail!("A pass cannot have another pass as an output!"),
             }
@@ -273,7 +267,6 @@ impl RenderGraph {
     }
 
     fn allocate_image(
-        &self,
         image_node: &ImageNode,
         device: Arc<LogicalDevice>,
         allocator: Arc<Allocator>,
@@ -283,8 +276,8 @@ impl RenderGraph {
             return Ok(None);
         }
 
-        let allocated_image = image_node.allocate_image(allocator.clone())?;
-        let image_view = image_node.create_image_view(device.clone(), allocated_image.handle())?;
+        let allocated_image = image_node.allocate_image(allocator)?;
+        let image_view = image_node.create_image_view(device, allocated_image.handle())?;
 
         Ok(Some((allocated_image, image_view)))
     }

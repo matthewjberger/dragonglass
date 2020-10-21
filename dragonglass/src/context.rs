@@ -77,6 +77,7 @@ impl Context {
         }
     }
 
+    #[allow(dead_code)]
     pub fn determine_depth_format(
         &self,
         tiling: vk::ImageTiling,
