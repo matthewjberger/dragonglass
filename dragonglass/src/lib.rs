@@ -21,6 +21,7 @@ mod adapters;
 mod context;
 mod device;
 mod forward;
+mod rendergraph;
 mod resources;
 mod scene;
 mod swapchain;

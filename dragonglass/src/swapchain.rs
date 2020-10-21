@@ -1,6 +1,6 @@
 use crate::{
     context::{Context, LogicalDevice, Surface},
-    resources::ImageView,
+    resources::{Image, ImageView},
 };
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
@@ -28,15 +28,20 @@ impl Swapchain {
         Ok(swapchain)
     }
 
+    pub fn images(&self) -> Result<Vec<vk::Image>> {
+        let images = unsafe { self.handle_ash.get_swapchain_images(self.handle_khr) }?;
+        Ok(images)
+    }
+
     pub fn create_image_views(
         &mut self,
         device: Arc<LogicalDevice>,
         format: vk::Format,
     ) -> Result<()> {
-        let images = unsafe { self.handle_ash.get_swapchain_images(self.handle_khr) }?;
-        self.images = images
-            .iter()
-            .map(|image| SwapchainImage::new(*image, device.clone(), format))
+        self.images = self
+            .images()?
+            .into_iter()
+            .map(|image| SwapchainImage::new(image, device.clone(), format))
             .collect::<Result<Vec<_>>>()?;
         Ok(())
     }
@@ -167,6 +172,12 @@ impl SwapchainProperties {
 pub struct SwapchainImage {
     pub image: vk::Image,
     pub view: ImageView,
+}
+
+impl Image for SwapchainImage {
+    fn handle(&self) -> vk::Image {
+        self.image
+    }
 }
 
 impl SwapchainImage {

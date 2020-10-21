@@ -87,6 +87,30 @@ impl LogicalDevice {
         unsafe { self.handle.end_command_buffer(buffer) }?;
         Ok(())
     }
+
+    pub fn update_viewport(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        extent: vk::Extent2D,
+    ) -> Result<()> {
+        let viewport = vk::Viewport::builder()
+            .y(extent.height as _)
+            .width(extent.width as _)
+            .height((-1.0 * extent.height as f32) as _)
+            .max_depth(1.0)
+            .build();
+        let viewports = [viewport];
+
+        let scissor = vk::Rect2D::builder().extent(extent).build();
+        let scissors = [scissor];
+
+        unsafe {
+            self.handle.cmd_set_viewport(command_buffer, 0, &viewports);
+            self.handle.cmd_set_scissor(command_buffer, 0, &scissors);
+        }
+
+        Ok(())
+    }
 }
 
 impl Drop for LogicalDevice {
