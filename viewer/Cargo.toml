@@ -13,4 +13,4 @@ nalgebra-glm = "0.8.0"
 serde = { version = "1.0.116", features = ["derive"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
 toml = "0.5.6"
-winit = "0.22.2"
+winit = "0.23.0"
