@@ -1,24 +1,20 @@
-use super::{forward::RenderPath, scene::Scene};
+use super::forward::RenderPath;
 use crate::{
     adapters::{CommandPool, Fence, Semaphore},
     context::{Context, LogicalDevice},
-    resources::ShaderCache,
 };
 use anyhow::{bail, Context as AnyhowContext, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 pub struct RenderingDevice {
-    scene: Rc<RefCell<Scene>>,
-    shader_cache: ShaderCache,
     frame: usize,
     frame_locks: Vec<FrameLock>,
     command_buffers: Vec<vk::CommandBuffer>,
     _command_pool: CommandPool,
-    _transient_command_pool: CommandPool,
     render_path: Option<RenderPath>,
     context: Context,
 }
@@ -32,45 +28,16 @@ impl RenderingDevice {
         let graphics_queue_index = context.physical_device.graphics_queue_index;
         let command_pool =
             Self::command_pool(context.logical_device.clone(), graphics_queue_index)?;
-        let transient_command_pool =
-            Self::transient_command_pool(context.logical_device.clone(), graphics_queue_index)?;
-        let mut shader_cache = ShaderCache::default();
-        let mut render_path = RenderPath::new(&context, dimensions, &mut shader_cache)?;
-        let offscreen_renderpass = render_path
-            .rendergraph
-            .passes
-            .get("offscreen")
-            .context("Failed to get offscreen pass to create scene")?
-            .render_pass
-            .clone();
-        let scene = Scene::new(
-            &context,
-            &transient_command_pool,
-            offscreen_renderpass,
-            &mut shader_cache,
-        )?;
+        let render_path = RenderPath::new(&context, dimensions)?;
         let number_of_framebuffers = render_path.swapchain.images()?.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
 
-        let scene = Rc::new(RefCell::new(scene));
-
-        let scene_ptr = scene.clone();
-        render_path
-            .rendergraph
-            .passes
-            .get_mut("offscreen")
-            .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| scene_ptr.borrow().issue_commands(command_buffer));
-
         let renderer = Self {
-            scene,
-            shader_cache,
             frame: 0,
             frame_locks,
             command_buffers,
             _command_pool: command_pool,
-            _transient_command_pool: transient_command_pool,
             render_path: Some(render_path),
             context,
         };
@@ -87,14 +54,6 @@ impl RenderingDevice {
         let create_info = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_index);
-        let command_pool = CommandPool::new(device, create_info)?;
-        Ok(command_pool)
-    }
-
-    fn transient_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
-        let create_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(queue_index)
-            .flags(vk::CommandPoolCreateFlags::TRANSIENT);
         let command_pool = CommandPool::new(device, create_info)?;
         Ok(command_pool)
     }
@@ -119,7 +78,10 @@ impl RenderingDevice {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
-            self.update(*view)?;
+            if let Some(render_path) = self.render_path.as_ref() {
+                let aspect_ratio = self.render_path()?.swapchain_properties.aspect_ratio();
+                render_path.scene.borrow().update_ubo(aspect_ratio, *view)?;
+            }
             self.record_command_buffer(image_index)?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
@@ -131,12 +93,6 @@ impl RenderingDevice {
 
     fn increment_frame_counter(&mut self) {
         self.frame = (self.frame + 1) % Self::MAX_FRAMES_IN_FLIGHT;
-    }
-
-    fn update(&self, view: glm::Mat4) -> Result<()> {
-        let aspect_ratio = self.render_path()?.swapchain_properties.aspect_ratio();
-        self.scene.borrow().update_ubo(aspect_ratio, view)?;
-        Ok(())
     }
 
     fn reset_in_flight_fence(&self) -> Result<()> {
@@ -213,27 +169,7 @@ impl RenderingDevice {
         unsafe { self.context.logical_device.handle.device_wait_idle() }?;
 
         self.render_path = None;
-        let mut render_path = RenderPath::new(&self.context, dimensions, &mut self.shader_cache)?;
-
-        let render_pass = render_path
-            .rendergraph
-            .passes
-            .get("offscreen")
-            .context("Failed to get offscreen pass to create scene callback")?
-            .render_pass
-            .clone();
-        self.scene
-            .borrow_mut()
-            .create_pipeline(render_pass, &mut self.shader_cache)?;
-
-        let scene_ptr = self.scene.clone();
-        render_path
-            .rendergraph
-            .passes
-            .get_mut("offscreen")
-            .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| scene_ptr.borrow().issue_commands(command_buffer));
-        self.render_path = Some(render_path);
+        self.render_path = Some(RenderPath::new(&self.context, dimensions)?);
         Ok(())
     }
 

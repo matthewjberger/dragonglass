@@ -1,11 +1,12 @@
 use crate::{
     adapters::{
-        DescriptorPool, DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettings,
-        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
+        CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
+        GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, LogicalDevice},
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
+    scene::Scene,
     swapchain::{create_swapchain, Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -14,6 +15,9 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 use vk_mem::Allocator;
 
 pub struct RenderPath {
+    _transient_command_pool: CommandPool,
+    pub shader_cache: ShaderCache,
+    pub scene: Rc<RefCell<Scene>>,
     pub rendergraph: RenderGraph,
     pub swapchain: Swapchain,
     pub swapchain_properties: SwapchainProperties,
@@ -21,11 +25,12 @@ pub struct RenderPath {
 }
 
 impl RenderPath {
-    pub fn new(
-        context: &Context,
-        dimensions: &[u32; 2],
-        shader_cache: &mut ShaderCache,
-    ) -> Result<Self> {
+    pub fn new(context: &Context, dimensions: &[u32; 2]) -> Result<Self> {
+        let transient_command_pool = Self::transient_command_pool(
+            context.logical_device.clone(),
+            context.physical_device.graphics_queue_index,
+        )?;
+
         let (swapchain, swapchain_properties) = create_swapchain(context, dimensions)?;
 
         let mut rendergraph = Self::create_rendergraph(
@@ -35,14 +40,37 @@ impl RenderPath {
             &swapchain_properties,
         )?;
 
+        let mut shader_cache = ShaderCache::default();
+        let offscreen_renderpass = rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene")?
+            .render_pass
+            .clone();
+
+        let scene = Scene::new(
+            context,
+            &transient_command_pool,
+            offscreen_renderpass,
+            &mut shader_cache,
+        )?;
+        let scene = Rc::new(RefCell::new(scene));
+
         let pipeline = PostProcessingPipeline::new(
             context,
             rendergraph.final_pass()?.render_pass.clone(),
-            shader_cache,
+            &mut shader_cache,
             rendergraph.image_views["color"].handle,
             rendergraph.samplers["default"].handle,
         )?;
         let pipeline = Rc::new(RefCell::new(pipeline));
+
+        let scene_ptr = scene.clone();
+        rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set scene callback")?
+            .set_callback(move |command_buffer| scene_ptr.borrow().issue_commands(command_buffer));
 
         let pipeline_ptr = pipeline.clone();
         rendergraph
@@ -54,12 +82,24 @@ impl RenderPath {
             });
 
         let path = Self {
+            scene,
+            _transient_command_pool: transient_command_pool,
+            shader_cache,
             rendergraph,
             swapchain,
             swapchain_properties,
             pipeline,
         };
+
         Ok(path)
+    }
+
+    fn transient_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
+        let create_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(queue_index)
+            .flags(vk::CommandPoolCreateFlags::TRANSIENT);
+        let command_pool = CommandPool::new(device, create_info)?;
+        Ok(command_pool)
     }
 
     pub fn create_rendergraph(
