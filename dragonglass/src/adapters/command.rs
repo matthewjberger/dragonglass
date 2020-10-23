@@ -94,17 +94,18 @@ impl CommandPool {
         })
     }
 
-    pub fn execute_once<T>(&self, queue: vk::Queue, mut executor: T) -> Result<()>
-    where
-        T: FnMut(vk::CommandBuffer) -> Result<()>,
-    {
+    pub fn execute_once(
+        &self,
+        queue: vk::Queue,
+        executor: impl FnMut(vk::CommandBuffer) -> Result<()>,
+    ) -> Result<()> {
         let command_buffer = self.allocate_command_buffers(1, vk::CommandBufferLevel::PRIMARY)?[0];
         let command_buffers = [command_buffer];
 
         self.device.record_command_buffer(
             command_buffer,
             vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-            || executor(command_buffer),
+            executor,
         )?;
 
         let submit_info = vk::SubmitInfo::builder()
