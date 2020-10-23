@@ -240,15 +240,20 @@ pub struct Swapchain {
 
 impl Swapchain {
     pub fn new(context: &Context, dimensions: &[u32; 2], frames_in_flight: usize) -> Result<Self> {
-        let frame_locks = Self::frame_locks(context.logical_device.clone(), frames_in_flight)?;
+        let frame_locks = (0..frames_in_flight)
+            .map(|_| FrameLock::new(context.logical_device.clone()))
+            .collect::<Result<Vec<_>>>()?;
 
         let graphics_queue_index = context.physical_device.graphics_queue_index;
-        let command_pool =
-            Self::command_pool(context.logical_device.clone(), graphics_queue_index)?;
+        let command_pool = CommandPool::new(
+            context.logical_device.clone(),
+            vk::CommandPoolCreateInfo::builder()
+                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                .queue_family_index(graphics_queue_index),
+        )?;
 
-        let (swapchain, swapchain_properties) = create_swapchain(context, dimensions)?;
+        let (swapchain, properties) = create_swapchain(context, dimensions)?;
         let number_of_framebuffers = swapchain.images()?.len() as _;
-
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
 
@@ -259,25 +264,11 @@ impl Swapchain {
             _command_pool: command_pool,
             frames_in_flight,
             swapchain,
-            properties: swapchain_properties,
+            properties,
             device: context.logical_device.clone(),
             presentation_queue: context.presentation_queue(),
             graphics_queue: context.graphics_queue(),
         })
-    }
-
-    fn frame_locks(device: Arc<LogicalDevice>, frames_in_flight: usize) -> Result<Vec<FrameLock>> {
-        (0..frames_in_flight)
-            .map(|_| FrameLock::new(device.clone()))
-            .collect()
-    }
-
-    fn command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
-        let create_info = vk::CommandPoolCreateInfo::builder()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(queue_index);
-        let command_pool = CommandPool::new(device, create_info)?;
-        Ok(command_pool)
     }
 
     pub fn render_frame(
