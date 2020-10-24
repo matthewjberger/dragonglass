@@ -1,15 +1,11 @@
-use crate::{
-    context::{Context, LogicalDevice, Surface},
-    resources::{Image, ImageView},
-};
+use crate::context::{Context, Surface};
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
-use std::{cmp, sync::Arc};
+use std::cmp;
 
 pub struct Swapchain {
     pub handle_ash: AshSwapchain,
     pub handle_khr: vk::SwapchainKHR,
-    pub images: Vec<SwapchainImage>,
 }
 
 impl Swapchain {
@@ -23,7 +19,6 @@ impl Swapchain {
         let swapchain = Self {
             handle_ash,
             handle_khr,
-            images: Vec::new(),
         };
         Ok(swapchain)
     }
@@ -31,19 +26,6 @@ impl Swapchain {
     pub fn images(&self) -> Result<Vec<vk::Image>> {
         let images = unsafe { self.handle_ash.get_swapchain_images(self.handle_khr) }?;
         Ok(images)
-    }
-
-    pub fn create_image_views(
-        &mut self,
-        device: Arc<LogicalDevice>,
-        format: vk::Format,
-    ) -> Result<()> {
-        self.images = self
-            .images()?
-            .into_iter()
-            .map(|image| SwapchainImage::new(image, device.clone(), format))
-            .collect::<Result<Vec<_>>>()?;
-        Ok(())
     }
 
     pub fn acquire_next_image(
@@ -169,42 +151,6 @@ impl SwapchainProperties {
     }
 }
 
-pub struct SwapchainImage {
-    pub image: vk::Image,
-    pub view: ImageView,
-}
-
-impl Image for SwapchainImage {
-    fn handle(&self) -> vk::Image {
-        self.image
-    }
-}
-
-impl SwapchainImage {
-    pub fn new(image: vk::Image, device: Arc<LogicalDevice>, format: vk::Format) -> Result<Self> {
-        let create_info = vk::ImageViewCreateInfo::builder()
-            .image(image)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(format)
-            .components(vk::ComponentMapping {
-                r: vk::ComponentSwizzle::IDENTITY,
-                g: vk::ComponentSwizzle::IDENTITY,
-                b: vk::ComponentSwizzle::IDENTITY,
-                a: vk::ComponentSwizzle::IDENTITY,
-            })
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-        let view = ImageView::new(device, create_info)?;
-        let swapchain_image = Self { image, view };
-        Ok(swapchain_image)
-    }
-}
-
 pub fn create_swapchain(
     context: &Context,
     dimensions: &[u32; 2],
@@ -215,15 +161,10 @@ pub fn create_swapchain(
     let queue_indices = context.physical_device.queue_indices();
     let create_info = swapchain_create_info(context, &queue_indices, properties)?;
 
-    let mut swapchain = Swapchain::new(
+    let swapchain = Swapchain::new(
         &context.instance.handle,
         &context.logical_device.handle,
         create_info,
-    )?;
-
-    swapchain.create_image_views(
-        context.logical_device.clone(),
-        properties.surface_format.format,
     )?;
 
     Ok((swapchain, properties))
