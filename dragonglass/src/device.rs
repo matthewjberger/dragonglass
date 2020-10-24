@@ -4,19 +4,20 @@ use ash::version::DeviceV1_0;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
+use std::sync::Arc;
 
 pub struct RenderingDevice {
     swapchain: Swapchain,
     render_path: Option<RenderPath>,
-    context: Context,
+    context: Arc<Context>,
 }
 
 impl RenderingDevice {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
-        let context = Context::new(window_handle)?;
-        let swapchain = Swapchain::new(&context, dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
+        let context = Arc::new(Context::new(window_handle)?);
+        let swapchain = Swapchain::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
         let render_path = RenderPath::new(&context, &swapchain)?;
         let renderer = Self {
             swapchain,
@@ -59,6 +60,12 @@ impl RenderingDevice {
                 Ok(())
             },
         )?;
+
+        if swapchain.recreated_swapchain {
+            self.render_path = None;
+            self.render_path = Some(RenderPath::new(&self.context, swapchain)?);
+        }
+
         Ok(())
     }
 }

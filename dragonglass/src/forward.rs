@@ -7,7 +7,7 @@ use crate::{
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     scene::Scene,
-    swapchain::{VulkanSwapchain, Swapchain, SwapchainProperties},
+    swapchain::{Swapchain, SwapchainProperties, VulkanSwapchain},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -32,7 +32,7 @@ impl RenderPath {
         let mut rendergraph = Self::create_rendergraph(
             context.logical_device.clone(),
             context.allocator.clone(),
-            &swapchain.swapchain,
+            swapchain.swapchain()?,
             &swapchain.properties,
         )?;
 

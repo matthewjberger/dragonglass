@@ -231,15 +231,18 @@ pub struct Swapchain {
     command_buffers: Vec<vk::CommandBuffer>,
     _command_pool: CommandPool,
     frames_in_flight: usize,
-    pub swapchain: VulkanSwapchain,
+    swapchain: Option<VulkanSwapchain>,
     pub properties: SwapchainProperties,
-    device: Arc<LogicalDevice>,
-    presentation_queue: vk::Queue,
-    graphics_queue: vk::Queue,
+    pub recreated_swapchain: bool,
+    context: Arc<Context>,
 }
 
 impl Swapchain {
-    pub fn new(context: &Context, dimensions: &[u32; 2], frames_in_flight: usize) -> Result<Self> {
+    pub fn new(
+        context: Arc<Context>,
+        dimensions: &[u32; 2],
+        frames_in_flight: usize,
+    ) -> Result<Self> {
         let frame_locks = (0..frames_in_flight)
             .map(|_| FrameLock::new(context.logical_device.clone()))
             .collect::<Result<Vec<_>>>()?;
@@ -252,7 +255,7 @@ impl Swapchain {
                 .queue_family_index(graphics_queue_index),
         )?;
 
-        let (swapchain, properties) = create_swapchain(context, dimensions)?;
+        let (swapchain, properties) = create_swapchain(&context, dimensions)?;
         let number_of_framebuffers = swapchain.images()?.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
@@ -263,12 +266,17 @@ impl Swapchain {
             command_buffers,
             _command_pool: command_pool,
             frames_in_flight,
-            swapchain,
+            swapchain: Some(swapchain),
+            recreated_swapchain: false,
             properties,
-            device: context.logical_device.clone(),
-            presentation_queue: context.presentation_queue(),
-            graphics_queue: context.graphics_queue(),
+            context,
         })
+    }
+
+    pub fn swapchain(&self) -> Result<&VulkanSwapchain> {
+        self.swapchain
+            .as_ref()
+            .context("Failed to get inner swapchain!")
     }
 
     pub fn render_frame(
@@ -277,11 +285,12 @@ impl Swapchain {
         mut pre_recording_callback: impl FnMut(&SwapchainProperties) -> Result<()>,
         mut recording_callback: impl FnMut(vk::CommandBuffer, usize) -> Result<()>,
     ) -> Result<()> {
+        self.recreated_swapchain = false;
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
             pre_recording_callback(&self.properties)?;
-            self.device.record_command_buffer(
+            self.context.logical_device.record_command_buffer(
                 self.command_buffer_at(image_index)?,
                 vk::CommandBufferUsageFlags::empty(),
                 |command_buffer| recording_callback(command_buffer, image_index),
@@ -300,14 +309,20 @@ impl Swapchain {
 
     fn reset_in_flight_fence(&self) -> Result<()> {
         let in_flight_fence = self.frame_lock()?.in_flight.handle;
-        unsafe { self.device.handle.reset_fences(&[in_flight_fence]) }?;
+        unsafe {
+            self.context
+                .logical_device
+                .handle
+                .reset_fences(&[in_flight_fence])
+        }?;
         Ok(())
     }
 
     fn wait_for_in_flight_fence(&self) -> Result<()> {
         let fence = self.frame_lock()?.in_flight.handle;
         unsafe {
-            self.device
+            self.context
+                .logical_device
                 .handle
                 .wait_for_fences(&[fence], true, std::u64::MAX)
         }?;
@@ -316,7 +331,7 @@ impl Swapchain {
 
     fn acquire_next_frame(&mut self, dimensions: &[u32; 2]) -> Result<Option<usize>> {
         let result = self
-            .swapchain
+            .swapchain()?
             .acquire_next_image(self.frame_lock()?.image_available.handle, vk::Fence::null());
 
         match result {
@@ -331,7 +346,7 @@ impl Swapchain {
 
     fn present_next_frame(&mut self, image_index: usize) -> Result<VkResult<bool>> {
         let wait_semaphores = [self.frame_lock()?.render_finished.handle];
-        let swapchains = [self.swapchain.handle_khr];
+        let swapchains = [self.swapchain()?.handle_khr];
         let image_indices = [image_index as u32];
 
         let present_info = vk::PresentInfoKHR::builder()
@@ -340,9 +355,9 @@ impl Swapchain {
             .image_indices(&image_indices);
 
         let presentation_result = unsafe {
-            self.swapchain
+            self.swapchain()?
                 .handle_ash
-                .queue_present(self.presentation_queue, &present_info)
+                .queue_present(self.context.presentation_queue(), &present_info)
         };
 
         Ok(presentation_result)
@@ -371,11 +386,15 @@ impl Swapchain {
             return Ok(());
         }
 
-        unsafe { self.device.handle.device_wait_idle() }?;
+        unsafe { self.context.logical_device.handle.device_wait_idle() }?;
 
-        // TODO: recreate resources
-        // self.render_path = None;
-        // self.render_path = Some(RenderPath::new(&self.context, dimensions)?);
+        self.swapchain = None;
+        let (swapchain, properties) = create_swapchain(&self.context, dimensions)?;
+        self.swapchain = Some(swapchain);
+        self.properties = properties;
+
+        self.recreated_swapchain = true;
+
         Ok(())
     }
 
@@ -408,8 +427,8 @@ impl Swapchain {
             .signal_semaphores(&wait_semaphores);
 
         unsafe {
-            self.device.handle.queue_submit(
-                self.graphics_queue,
+            self.context.logical_device.handle.queue_submit(
+                self.context.graphics_queue(),
                 &[submit_info.build()],
                 lock.in_flight.handle,
             )
