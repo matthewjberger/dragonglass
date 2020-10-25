@@ -12,7 +12,6 @@ use crate::{
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use vk_mem::Allocator;
 
 pub struct Scene {
     _transient_command_pool: CommandPool,
@@ -33,8 +32,7 @@ impl Scene {
             context.physical_device.graphics_queue_index,
         )?;
 
-        // let samples = context.max_usable_samples();
-        let samples = vk::SampleCountFlags::TYPE_1;
+        let samples = context.max_usable_samples();
 
         let mut rendergraph =
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
@@ -60,7 +58,7 @@ impl Scene {
             context,
             rendergraph.final_pass()?.render_pass.clone(),
             &mut shader_cache,
-            rendergraph.image_views["color"].handle,
+            rendergraph.image_views["color_resolve"].handle,
             rendergraph.samplers["default"].handle,
         )?;
         let pipeline = Rc::new(RefCell::new(pipeline));
@@ -112,6 +110,7 @@ impl Scene {
         let offscreen = "offscreen";
         let postprocessing = "postprocessing";
         let color = "color";
+        let color_resolve = "color_resolve";
         let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
         let mut rendergraph = RenderGraph::new(
             &[offscreen, postprocessing],
@@ -125,7 +124,7 @@ impl Scene {
                             float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
                         },
                     },
-                    samples: vk::SampleCountFlags::TYPE_1,
+                    samples,
                 },
                 ImageNode {
                     name: RenderGraph::DEPTH_STENCIL.to_owned(),
@@ -135,6 +134,17 @@ impl Scene {
                         depth_stencil: vk::ClearDepthStencilValue {
                             depth: 1.0,
                             stencil: 0,
+                        },
+                    },
+                    samples,
+                },
+                ImageNode {
+                    name: color_resolve.to_string(),
+                    extent: offscreen_extent,
+                    format: vk::Format::R8G8B8A8_UNORM,
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [1.0, 1.0, 1.0, 1.0], // Cornflower blue
                         },
                     },
                     samples: vk::SampleCountFlags::TYPE_1,
@@ -153,8 +163,9 @@ impl Scene {
             ],
             &[
                 (offscreen, color),
+                (offscreen, color_resolve),
                 (offscreen, RenderGraph::DEPTH_STENCIL),
-                (color, postprocessing),
+                (color_resolve, postprocessing),
                 (postprocessing, &RenderGraph::backbuffer_name(0)),
             ],
         )?;

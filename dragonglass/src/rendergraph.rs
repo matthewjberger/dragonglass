@@ -356,7 +356,7 @@ impl ImageNode {
             vk::AttachmentLoadOp::DONT_CARE
         };
         let mut store_op = vk::AttachmentStoreOp::DONT_CARE;
-        let mut final_layout = vk::ImageLayout::UNDEFINED;
+        let mut final_layout = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
 
         if !has_children {
             store_op = vk::AttachmentStoreOp::STORE;
