@@ -22,6 +22,7 @@ pub struct RenderGraph {
 
 impl RenderGraph {
     pub const BACKBUFFER_PREFIX: &'static str = "backbuffer";
+    pub const RESOLVE_SUFFIX: &'static str = "resolve";
     pub const DEPTH_STENCIL: &'static str = "depth_stencil";
 
     pub fn backbuffer_name(index: usize) -> String {
@@ -324,6 +325,10 @@ pub struct ImageNode {
 }
 
 impl ImageNode {
+    pub fn is_resolve(&self) -> bool {
+        self.name.ends_with(RenderGraph::RESOLVE_SUFFIX)
+    }
+
     pub fn is_depth_stencil(&self) -> bool {
         self.name == RenderGraph::DEPTH_STENCIL
     }
@@ -508,8 +513,9 @@ impl<'a> Pass<'a> {
 #[derive(Default)]
 pub struct PassBuilder {
     pub attachment_descriptions: Vec<vk::AttachmentDescription>,
-    pub color_references: Vec<vk::AttachmentReference>,
-    pub depth_reference: Option<vk::AttachmentReference>,
+    pub color_attachments: Vec<vk::AttachmentReference>,
+    pub depth_stencil_attachment: Option<vk::AttachmentReference>,
+    pub resolve_attachments: Vec<vk::AttachmentReference>,
     pub clear_values: Vec<vk::ClearValue>,
     pub extents: Vec<vk::Extent2D>,
     pub bindpoint: vk::PipelineBindPoint,
@@ -528,20 +534,29 @@ impl PassBuilder {
         Ok(())
     }
 
+    fn attachment_offset(&self) -> usize {
+        let number_of_color_attachments = self.color_attachments.iter().count();
+        let number_of_resolve_attachments = self.resolve_attachments.iter().count();
+        let has_depth_attachment = self.depth_stencil_attachment.is_some();
+        number_of_color_attachments
+            + number_of_resolve_attachments
+            + if has_depth_attachment { 1 } else { 0 }
+    }
+
     pub fn add_attachment(&mut self, image: &ImageNode) -> Result<()> {
-        let mut offset = self.color_references.iter().count() as _;
-        if self.depth_reference.is_some() {
-            offset += 1;
-        }
-        let attachment_reference = image.attachment_reference(offset);
+        let offset = self.attachment_offset();
+        let attachment_reference = image.attachment_reference(offset as _);
+
         if image.is_depth_stencil() {
             ensure!(
-                self.depth_reference.is_none(),
+                self.depth_stencil_attachment.is_none(),
                 "Multiple depth attachments were specified for a single pass!"
             );
-            self.depth_reference = Some(attachment_reference);
+            self.depth_stencil_attachment = Some(attachment_reference);
+        } else if image.is_resolve() {
+            self.resolve_attachments.push(attachment_reference);
         } else {
-            self.color_references.push(attachment_reference);
+            self.color_attachments.push(attachment_reference);
         }
         Ok(())
     }
@@ -549,11 +564,18 @@ impl PassBuilder {
     pub fn build<'a>(self, device: Arc<Device>) -> Result<Pass<'a>> {
         let mut subpass_description = vk::SubpassDescription::builder()
             .pipeline_bind_point(self.bindpoint)
-            .color_attachments(&self.color_references);
-        if let Some(depth_stencil_reference) = self.depth_reference.as_ref() {
+            .color_attachments(&self.color_attachments);
+
+        if !self.resolve_attachments.is_empty() {
+            subpass_description =
+                subpass_description.resolve_attachments(&self.resolve_attachments);
+        }
+
+        if let Some(depth_stencil_reference) = self.depth_stencil_attachment.as_ref() {
             subpass_description =
                 subpass_description.depth_stencil_attachment(depth_stencil_reference);
         }
+
         let subpass_descriptions = [subpass_description.build()];
         let create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&self.attachment_descriptions)
