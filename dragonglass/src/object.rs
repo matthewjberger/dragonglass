@@ -115,8 +115,8 @@ impl ObjectRendering {
 
     fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/triangle/triangle.vert.spv")
-            .fragment("assets/shaders/triangle/triangle.frag.spv")
+            .vertex("assets/shaders/object/object.vert.spv")
+            .fragment("assets/shaders/object/object.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)
