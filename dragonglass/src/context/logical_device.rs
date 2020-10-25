@@ -79,11 +79,11 @@ impl LogicalDevice {
         &self,
         buffer: vk::CommandBuffer,
         usage: vk::CommandBufferUsageFlags,
-        mut action: impl FnMut() -> Result<()>,
+        mut action: impl FnMut(vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         let begin_info = vk::CommandBufferBeginInfo::builder().flags(usage);
         unsafe { self.handle.begin_command_buffer(buffer, &begin_info) }?;
-        action()?;
+        action(buffer)?;
         unsafe { self.handle.end_command_buffer(buffer) }?;
         Ok(())
     }

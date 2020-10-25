@@ -7,7 +7,7 @@ use crate::{
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     scene::Scene,
-    swapchain::{create_swapchain, Swapchain, SwapchainProperties},
+    swapchain::{Swapchain, SwapchainProperties, VulkanSwapchain},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -19,25 +19,21 @@ pub struct RenderPath {
     pub shader_cache: ShaderCache,
     pub scene: Rc<RefCell<Scene>>,
     pub rendergraph: RenderGraph,
-    pub swapchain: Swapchain,
-    pub swapchain_properties: SwapchainProperties,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
 }
 
 impl RenderPath {
-    pub fn new(context: &Context, dimensions: &[u32; 2]) -> Result<Self> {
+    pub fn new(context: &Context, swapchain: &Swapchain) -> Result<Self> {
         let transient_command_pool = Self::transient_command_pool(
             context.logical_device.clone(),
             context.physical_device.graphics_queue_index,
         )?;
 
-        let (swapchain, swapchain_properties) = create_swapchain(context, dimensions)?;
-
         let mut rendergraph = Self::create_rendergraph(
             context.logical_device.clone(),
             context.allocator.clone(),
-            &swapchain,
-            &swapchain_properties,
+            swapchain.swapchain()?,
+            &swapchain.properties,
         )?;
 
         let mut shader_cache = ShaderCache::default();
@@ -86,8 +82,6 @@ impl RenderPath {
             _transient_command_pool: transient_command_pool,
             shader_cache,
             rendergraph,
-            swapchain,
-            swapchain_properties,
             pipeline,
         };
 
@@ -105,7 +99,7 @@ impl RenderPath {
     pub fn create_rendergraph(
         device: Arc<LogicalDevice>,
         allocator: Arc<Allocator>,
-        swapchain: &Swapchain,
+        swapchain: &VulkanSwapchain,
         swapchain_properties: &SwapchainProperties,
     ) -> Result<RenderGraph> {
         let offscreen = "offscreen";
