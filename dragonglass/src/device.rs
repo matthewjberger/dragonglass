@@ -42,15 +42,15 @@ impl RenderingDevice {
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.logical_device.clone();
 
-        if let Some(scene) = scene.as_ref() {
-            scene.object.borrow().update_ubo(aspect_ratio, *view)?;
-            frame.render(dimensions, |command_buffer, image_index| {
+        frame.render(dimensions, |command_buffer, image_index| {
+            if let Some(scene) = scene.as_ref() {
+                scene.object.borrow().update_ubo(aspect_ratio, *view)?;
                 scene
                     .rendergraph
                     .execute_at_index(device.clone(), command_buffer, image_index)?;
-                Ok(())
-            })?;
-        }
+            }
+            Ok(())
+        })?;
 
         if frame.recreated_swapchain {
             self.scene = None;
