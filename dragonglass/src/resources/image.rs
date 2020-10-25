@@ -1,7 +1,7 @@
 use super::CpuToGpuBuffer;
 use crate::{
     adapters::{BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, PipelineBarrierBuilder},
-    context::{Context, LogicalDevice},
+    context::{Context, Device},
 };
 use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -419,14 +419,11 @@ impl Drop for AllocatedImage {
 
 pub struct ImageView {
     pub handle: vk::ImageView,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl ImageView {
-    pub fn new(
-        device: Arc<LogicalDevice>,
-        create_info: vk::ImageViewCreateInfoBuilder,
-    ) -> Result<Self> {
+    pub fn new(device: Arc<Device>, create_info: vk::ImageViewCreateInfoBuilder) -> Result<Self> {
         let handle = unsafe { device.handle.create_image_view(&create_info, None) }?;
         let image_view = Self { handle, device };
         Ok(image_view)
@@ -443,14 +440,11 @@ impl Drop for ImageView {
 
 pub struct Sampler {
     pub handle: vk::Sampler,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl Sampler {
-    pub fn new(
-        device: Arc<LogicalDevice>,
-        create_info: vk::SamplerCreateInfoBuilder,
-    ) -> Result<Self> {
+    pub fn new(device: Arc<Device>, create_info: vk::SamplerCreateInfoBuilder) -> Result<Self> {
         let handle = unsafe { device.handle.create_sampler(&create_info, None) }?;
         let sampler = Self { handle, device };
         Ok(sampler)

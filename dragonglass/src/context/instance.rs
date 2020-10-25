@@ -31,8 +31,7 @@ impl Instance {
             .enabled_layer_names(&layers);
 
         let handle = unsafe { entry.create_instance(&instance_create_info, None) }?;
-        let instance = Self { handle };
-        Ok(instance)
+        Ok(Self { handle })
     }
 
     fn application_create_info() -> Result<vk::ApplicationInfo> {

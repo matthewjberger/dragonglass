@@ -3,7 +3,7 @@ use crate::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
-    context::{Context, LogicalDevice},
+    context::{Context, Device},
     object::ObjectRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
@@ -29,12 +29,12 @@ impl Scene {
         swapchain_properties: &SwapchainProperties,
     ) -> Result<Self> {
         let transient_command_pool = Self::transient_command_pool(
-            context.logical_device.clone(),
+            context.device.clone(),
             context.physical_device.graphics_queue_index,
         )?;
 
         let mut rendergraph = Self::create_rendergraph(
-            context.logical_device.clone(),
+            context.device.clone(),
             context.allocator.clone(),
             swapchain,
             swapchain_properties,
@@ -92,7 +92,7 @@ impl Scene {
         Ok(path)
     }
 
-    fn transient_command_pool(device: Arc<LogicalDevice>, queue_index: u32) -> Result<CommandPool> {
+    fn transient_command_pool(device: Arc<Device>, queue_index: u32) -> Result<CommandPool> {
         let create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(queue_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
@@ -101,7 +101,7 @@ impl Scene {
     }
 
     pub fn create_rendergraph(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         allocator: Arc<Allocator>,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
@@ -172,7 +172,7 @@ pub struct PostProcessingPipeline {
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub descriptor_set: vk::DescriptorSet,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl PostProcessingPipeline {
@@ -183,7 +183,7 @@ impl PostProcessingPipeline {
         color_target: vk::ImageView,
         sampler: vk::Sampler,
     ) -> Result<Self> {
-        let device = context.logical_device.clone();
+        let device = context.device.clone();
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
         let descriptor_pool = Self::descriptor_pool(device.clone())?;
         let descriptor_set =
@@ -217,7 +217,7 @@ impl PostProcessingPipeline {
     }
 
     fn settings(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
         descriptor_set_layout: Arc<DescriptorSetLayout>,
@@ -234,7 +234,7 @@ impl PostProcessingPipeline {
         Ok(settings)
     }
 
-    fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
+    fn descriptor_pool(device: Arc<Device>) -> Result<DescriptorPool> {
         let sampler_pool_size = vk::DescriptorPoolSize::builder()
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
@@ -248,7 +248,7 @@ impl PostProcessingPipeline {
         DescriptorPool::new(device, pool_info)
     }
 
-    fn descriptor_set_layout(device: Arc<LogicalDevice>) -> Result<DescriptorSetLayout> {
+    fn descriptor_set_layout(device: Arc<Device>) -> Result<DescriptorSetLayout> {
         let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)

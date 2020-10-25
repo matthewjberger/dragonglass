@@ -7,19 +7,18 @@ use ash::{
 };
 use std::os::raw::c_char;
 
-pub struct LogicalDevice {
+pub struct Device {
     pub handle: ash::Device,
 }
 
-impl LogicalDevice {
+impl Device {
     pub fn new(
         instance: &ash::Instance,
         physical_device: vk::PhysicalDevice,
         create_info: vk::DeviceCreateInfoBuilder,
     ) -> Result<Self> {
         let handle = unsafe { instance.create_device(physical_device, &create_info, None) }?;
-        let logical_device = Self { handle };
-        Ok(logical_device)
+        Ok(Self { handle })
     }
 
     pub fn from_physical(
@@ -113,7 +112,7 @@ impl LogicalDevice {
     }
 }
 
-impl Drop for LogicalDevice {
+impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
             self.handle.destroy_device(None);

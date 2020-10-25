@@ -1,16 +1,16 @@
-use crate::context::LogicalDevice;
+use crate::context::Device;
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 
 pub struct DescriptorSetLayout {
     pub handle: vk::DescriptorSetLayout,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl DescriptorSetLayout {
     pub fn new(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         create_info: vk::DescriptorSetLayoutCreateInfoBuilder,
     ) -> Result<Self> {
         let handle = unsafe {
@@ -35,12 +35,12 @@ impl Drop for DescriptorSetLayout {
 
 pub struct DescriptorPool {
     pub handle: vk::DescriptorPool,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl DescriptorPool {
     pub fn new(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         create_info: vk::DescriptorPoolCreateInfoBuilder,
     ) -> Result<Self> {
         let handle = unsafe { device.handle.create_descriptor_pool(&create_info, None) }?;

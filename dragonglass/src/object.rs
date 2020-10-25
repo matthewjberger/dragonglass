@@ -3,7 +3,7 @@ use crate::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
-    context::{Context, LogicalDevice},
+    context::{Context, Device},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
@@ -31,7 +31,7 @@ pub struct ObjectRendering {
     pub descriptor_set: vk::DescriptorSet,
     pub texture: Texture,
     number_of_indices: usize,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl ObjectRendering {
@@ -41,7 +41,7 @@ impl ObjectRendering {
         render_pass: Arc<RenderPass>,
         shader_cache: &mut ShaderCache,
     ) -> Result<Self> {
-        let device = context.logical_device.clone();
+        let device = context.device.clone();
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
         let descriptor_pool = Self::descriptor_pool(device.clone())?;
         let descriptor_set =
@@ -123,7 +123,7 @@ impl ObjectRendering {
     }
 
     fn settings(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
         descriptor_set_layout: Arc<DescriptorSetLayout>,
@@ -181,7 +181,7 @@ impl ObjectRendering {
         [vertex_input_binding_description]
     }
 
-    fn descriptor_pool(device: Arc<LogicalDevice>) -> Result<DescriptorPool> {
+    fn descriptor_pool(device: Arc<Device>) -> Result<DescriptorPool> {
         let ubo_pool_size = vk::DescriptorPoolSize::builder()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
@@ -199,7 +199,7 @@ impl ObjectRendering {
         DescriptorPool::new(device, pool_info)
     }
 
-    fn descriptor_set_layout(device: Arc<LogicalDevice>) -> Result<DescriptorSetLayout> {
+    fn descriptor_set_layout(device: Arc<Device>) -> Result<DescriptorSetLayout> {
         let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -317,8 +317,8 @@ impl Texture {
     ) -> Result<Self> {
         let image = description.as_image(context.allocator.clone())?;
         image.upload_data(context, command_pool, description)?;
-        let view = Self::create_image_view(context.logical_device.clone(), &image, description)?;
-        let sampler = Self::create_sampler(context.logical_device.clone(), description.mip_levels)?;
+        let view = Self::create_image_view(context.device.clone(), &image, description)?;
+        let sampler = Self::create_sampler(context.device.clone(), description.mip_levels)?;
 
         let texture = Self {
             image,
@@ -330,7 +330,7 @@ impl Texture {
     }
 
     fn create_image_view(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         image: &AllocatedImage,
         description: &ImageDescription,
     ) -> Result<ImageView> {
@@ -349,7 +349,7 @@ impl Texture {
         ImageView::new(device, create_info)
     }
 
-    fn create_sampler(device: Arc<LogicalDevice>, mip_levels: u32) -> Result<Sampler> {
+    fn create_sampler(device: Arc<Device>, mip_levels: u32) -> Result<Sampler> {
         let sampler_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::LINEAR)
             .min_filter(vk::Filter::LINEAR)

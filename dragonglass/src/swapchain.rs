@@ -163,7 +163,7 @@ pub fn create_swapchain(
 
     let swapchain = Swapchain::new(
         &context.instance.handle,
-        &context.logical_device.handle,
+        &context.device.handle,
         create_info,
     )?;
 

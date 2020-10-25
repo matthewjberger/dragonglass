@@ -1,4 +1,4 @@
-use crate::{adapters::Fence, context::LogicalDevice};
+use crate::{adapters::Fence, context::Device};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
@@ -6,14 +6,11 @@ use std::sync::Arc;
 
 pub struct CommandPool {
     pub handle: vk::CommandPool,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl CommandPool {
-    pub fn new(
-        device: Arc<LogicalDevice>,
-        create_info: vk::CommandPoolCreateInfoBuilder,
-    ) -> Result<Self> {
+    pub fn new(device: Arc<Device>, create_info: vk::CommandPoolCreateInfoBuilder) -> Result<Self> {
         let handle = unsafe { device.handle.create_command_pool(&create_info, None)? };
         let command_pool = Self { handle, device };
         Ok(command_pool)

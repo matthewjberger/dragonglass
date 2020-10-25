@@ -1,6 +1,6 @@
 use crate::{
     adapters::{DescriptorSetLayout, RenderPass},
-    context::LogicalDevice,
+    context::Device,
     resources::ShaderSet,
 };
 use anyhow::Result;
@@ -10,12 +10,12 @@ use std::sync::Arc;
 
 pub struct GraphicsPipeline {
     pub handle: vk::Pipeline,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl GraphicsPipeline {
     pub fn new(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         create_info: vk::GraphicsPipelineCreateInfoBuilder,
     ) -> Result<Self> {
         let handle = unsafe {
@@ -50,14 +50,11 @@ impl Drop for GraphicsPipeline {
 
 pub struct PipelineLayout {
     pub handle: vk::PipelineLayout,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl PipelineLayout {
-    pub fn new(
-        device: Arc<LogicalDevice>,
-        create_info: vk::PipelineLayoutCreateInfo,
-    ) -> Result<Self> {
+    pub fn new(device: Arc<Device>, create_info: vk::PipelineLayoutCreateInfo) -> Result<Self> {
         let handle = unsafe { device.handle.create_pipeline_layout(&create_info, None) }?;
         let pipeline_layout = Self { handle, device };
         Ok(pipeline_layout)
@@ -119,7 +116,7 @@ pub struct GraphicsPipelineSettings {
 impl GraphicsPipelineSettings {
     pub fn create_pipeline(
         &self,
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
     ) -> Result<(GraphicsPipeline, PipelineLayout)> {
         let stages = self.shader_set.stages()?;
         let input_assembly_create_info = Self::input_assembly_create_info();
@@ -233,7 +230,7 @@ impl GraphicsPipelineSettings {
             .blend_constants([0.0, 0.0, 0.0, 0.0])
     }
 
-    fn create_pipeline_layout(&self, device: Arc<LogicalDevice>) -> PipelineLayout {
+    fn create_pipeline_layout(&self, device: Arc<Device>) -> PipelineLayout {
         let descriptor_set_layouts = [self.descriptor_set_layout.handle];
 
         if let Some(push_constant_range) = self.push_constant_range.as_ref() {

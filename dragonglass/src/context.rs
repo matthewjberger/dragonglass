@@ -1,7 +1,7 @@
-pub use self::{instance::*, logical_device::*, physical_device::*};
+pub use self::{device::*, instance::*, physical_device::*};
 
+mod device;
 mod instance;
-mod logical_device;
 mod physical_device;
 
 use anyhow::{ensure, Context as AnyhowContext, Result};
@@ -20,7 +20,7 @@ use vk_mem::{Allocator, AllocatorCreateInfo};
 // when this struct is dropped
 pub struct Context {
     pub allocator: Arc<vk_mem::Allocator>,
-    pub logical_device: Arc<LogicalDevice>,
+    pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
     pub surface: Surface,
     pub instance: Instance,
@@ -33,11 +33,11 @@ impl Context {
         let instance = Instance::new(&entry, window_handle)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
-        let logical_device = LogicalDevice::from_physical(&instance.handle, &physical_device)?;
-        let logical_device = Arc::new(logical_device);
+        let device = Device::from_physical(&instance.handle, &physical_device)?;
+        let device = Arc::new(device);
 
         let allocator_create_info = AllocatorCreateInfo {
-            device: logical_device.handle.clone(),
+            device: device.handle.clone(),
             instance: instance.handle.clone(),
             physical_device: physical_device.handle,
             ..Default::default()
@@ -45,16 +45,14 @@ impl Context {
 
         let allocator = Arc::new(Allocator::new(&allocator_create_info)?);
 
-        let context = Self {
+        Ok(Self {
             allocator,
-            logical_device,
+            device,
             physical_device,
             surface,
             instance,
             entry,
-        };
-
-        Ok(context)
+        })
     }
 
     pub fn physical_device_surface_capabilities(&self) -> Result<vk::SurfaceCapabilitiesKHR> {
@@ -119,12 +117,12 @@ impl Context {
 
     pub fn graphics_queue(&self) -> vk::Queue {
         let index = self.physical_device.presentation_queue_index;
-        unsafe { self.logical_device.handle.get_device_queue(index, 0) }
+        unsafe { self.device.handle.get_device_queue(index, 0) }
     }
 
     pub fn presentation_queue(&self) -> vk::Queue {
         let index = self.physical_device.presentation_queue_index;
-        unsafe { self.logical_device.handle.get_device_queue(index, 0) }
+        unsafe { self.device.handle.get_device_queue(index, 0) }
     }
 }
 

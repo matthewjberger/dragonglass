@@ -1,6 +1,6 @@
 use crate::{
     adapters::{CommandPool, Fence, Semaphore},
-    context::{Context, LogicalDevice},
+    context::{Context, Device},
     swapchain::{create_swapchain, Swapchain, SwapchainProperties},
 };
 use anyhow::{bail, Context as AnyhowContext, Result};
@@ -26,12 +26,12 @@ impl Frame {
         frames_in_flight: usize,
     ) -> Result<Self> {
         let frame_locks = (0..frames_in_flight)
-            .map(|_| FrameLock::new(context.logical_device.clone()))
+            .map(|_| FrameLock::new(context.device.clone()))
             .collect::<Result<Vec<_>>>()?;
 
         let graphics_queue_index = context.physical_device.graphics_queue_index;
         let command_pool = CommandPool::new(
-            context.logical_device.clone(),
+            context.device.clone(),
             vk::CommandPoolCreateInfo::builder()
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
                 .queue_family_index(graphics_queue_index),
@@ -68,7 +68,7 @@ impl Frame {
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
-            self.context.logical_device.record_command_buffer(
+            self.context.device.record_command_buffer(
                 self.command_buffer_at(image_index)?,
                 vk::CommandBufferUsageFlags::empty(),
                 |command_buffer| action(command_buffer, image_index),
@@ -87,12 +87,7 @@ impl Frame {
 
     fn reset_in_flight_fence(&self) -> Result<()> {
         let in_flight_fence = self.frame_lock()?.in_flight.handle;
-        unsafe {
-            self.context
-                .logical_device
-                .handle
-                .reset_fences(&[in_flight_fence])
-        }?;
+        unsafe { self.context.device.handle.reset_fences(&[in_flight_fence]) }?;
         Ok(())
     }
 
@@ -100,7 +95,7 @@ impl Frame {
         let fence = self.frame_lock()?.in_flight.handle;
         unsafe {
             self.context
-                .logical_device
+                .device
                 .handle
                 .wait_for_fences(&[fence], true, std::u64::MAX)
         }?;
@@ -164,7 +159,7 @@ impl Frame {
             return Ok(());
         }
 
-        unsafe { self.context.logical_device.handle.device_wait_idle() }?;
+        unsafe { self.context.device.handle.device_wait_idle() }?;
 
         self.swapchain = None;
         let (swapchain, properties) = create_swapchain(&self.context, dimensions)?;
@@ -205,7 +200,7 @@ impl Frame {
             .signal_semaphores(&wait_semaphores);
 
         unsafe {
-            self.context.logical_device.handle.queue_submit(
+            self.context.device.handle.queue_submit(
                 self.context.graphics_queue(),
                 &[submit_info.build()],
                 lock.in_flight.handle,
@@ -223,7 +218,7 @@ pub struct FrameLock {
 }
 
 impl FrameLock {
-    pub fn new(device: Arc<LogicalDevice>) -> Result<Self> {
+    pub fn new(device: Arc<Device>) -> Result<Self> {
         let handles = Self {
             image_available: Semaphore::new(device.clone())?,
             render_finished: Semaphore::new(device.clone())?,

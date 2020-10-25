@@ -1,4 +1,4 @@
-use crate::context::LogicalDevice;
+use crate::context::Device;
 use anyhow::{Context, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
@@ -11,12 +11,12 @@ use std::{
 
 pub struct Shader {
     pub module: vk::ShaderModule,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl Shader {
     pub fn new(
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         create_info: vk::ShaderModuleCreateInfoBuilder,
     ) -> Result<Self> {
         let module = unsafe { device.handle.create_shader_module(&create_info, None)? };
@@ -24,7 +24,7 @@ impl Shader {
         Ok(shader)
     }
 
-    pub fn from_file<P>(path: P, device: Arc<LogicalDevice>) -> Result<Self>
+    pub fn from_file<P>(path: P, device: Arc<Device>) -> Result<Self>
     where
         P: AsRef<Path> + Into<PathBuf>,
     {
@@ -111,7 +111,7 @@ impl ShaderCache {
     pub fn load_shader<P: AsRef<Path> + Into<PathBuf>>(
         &mut self,
         path: P,
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
     ) -> Result<Arc<Shader>> {
         let shader_path = path
             .as_ref()
@@ -132,7 +132,7 @@ macro_rules! impl_create_shader_set {
         impl ShaderCache {
             pub fn create_shader_set(
                 &mut self,
-                device: Arc<LogicalDevice>,
+                device: Arc<Device>,
                 shader_paths: &ShaderPathSet,
             ) -> Result<ShaderSet> {
                 let mut shader_set = ShaderSet::default();

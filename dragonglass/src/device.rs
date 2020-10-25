@@ -40,7 +40,7 @@ impl RenderingDevice {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
-        let device = self.context.logical_device.clone();
+        let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
@@ -68,7 +68,7 @@ impl RenderingDevice {
 impl Drop for RenderingDevice {
     fn drop(&mut self) {
         unsafe {
-            if let Err(error) = self.context.logical_device.handle.device_wait_idle() {
+            if let Err(error) = self.context.device.handle.device_wait_idle() {
                 error!("{}", error);
             }
         }

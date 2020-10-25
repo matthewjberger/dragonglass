@@ -1,6 +1,6 @@
 use crate::{
     adapters::{Framebuffer, RenderPass},
-    context::LogicalDevice,
+    context::Device,
     resources::AllocatedImage,
     resources::{Image, ImageView, Sampler},
 };
@@ -63,7 +63,7 @@ impl RenderGraph {
         })
     }
 
-    pub fn build(&mut self, device: Arc<LogicalDevice>, allocator: Arc<Allocator>) -> Result<()> {
+    pub fn build(&mut self, device: Arc<Device>, allocator: Arc<Allocator>) -> Result<()> {
         // hash the array of passes
         // check if we already have a cached graph with the same hash
         // if not, construct a new one
@@ -79,11 +79,7 @@ impl RenderGraph {
         Ok(())
     }
 
-    fn process_images(
-        &mut self,
-        device: Arc<LogicalDevice>,
-        allocator: Arc<Allocator>,
-    ) -> Result<()> {
+    fn process_images(&mut self, device: Arc<Device>, allocator: Arc<Allocator>) -> Result<()> {
         for index in self.graph.node_indices() {
             if let Node::Image(image_node) = &self.graph[index] {
                 let allocation_result =
@@ -99,7 +95,7 @@ impl RenderGraph {
         Ok(())
     }
 
-    fn process_passes(&mut self, device: Arc<LogicalDevice>) -> Result<()> {
+    fn process_passes(&mut self, device: Arc<Device>) -> Result<()> {
         for index in self.graph.node_indices() {
             if let Node::Pass(pass_node) = &self.graph[index] {
                 let pass = self.create_pass(index, device.clone())?;
@@ -137,7 +133,7 @@ impl RenderGraph {
 
     pub fn insert_backbuffer_images(
         &mut self,
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         images: Vec<Box<dyn Image>>,
     ) -> Result<()> {
         let backbuffer_node_index = self
@@ -183,7 +179,7 @@ impl RenderGraph {
     // TODO: Have rendergraph handle command buffer generation and submission as well
     pub fn execute_at_index(
         &self,
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         command_buffer: vk::CommandBuffer,
         backbuffer_index: usize,
     ) -> Result<()> {
@@ -240,7 +236,7 @@ impl RenderGraph {
             }))
     }
 
-    fn create_pass<'a>(&self, index: NodeIndex, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
+    fn create_pass<'a>(&self, index: NodeIndex, device: Arc<Device>) -> Result<Pass<'a>> {
         let should_clear = self.parent_node_indices(index)?.is_empty();
         let mut pass_builder = PassBuilder::default();
         for child_index in self.child_node_indices(index)?.into_iter() {
@@ -259,7 +255,7 @@ impl RenderGraph {
 
     fn allocate_image(
         image_node: &ImageNode,
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         allocator: Arc<Allocator>,
     ) -> Result<Option<(AllocatedImage, ImageView)>> {
         if image_node.is_backbuffer() {
@@ -440,11 +436,7 @@ impl ImageNode {
         1 + (shortest_side as f32).log2().floor() as u32
     }
 
-    pub fn create_image_view(
-        &self,
-        device: Arc<LogicalDevice>,
-        image: vk::Image,
-    ) -> Result<ImageView> {
+    pub fn create_image_view(&self, device: Arc<Device>, image: vk::Image) -> Result<ImageView> {
         let subresource_range = vk::ImageSubresourceRange::builder()
             .aspect_mask(self.aspect_mask())
             .level_count(1)
@@ -500,7 +492,7 @@ impl<'a> Pass<'a> {
 
     fn create_framebuffer(
         &self,
-        device: Arc<LogicalDevice>,
+        device: Arc<Device>,
         attachments: &[vk::ImageView],
     ) -> Result<Framebuffer> {
         let create_info = vk::FramebufferCreateInfo::builder()
@@ -554,7 +546,7 @@ impl PassBuilder {
         Ok(())
     }
 
-    pub fn build<'a>(self, device: Arc<LogicalDevice>) -> Result<Pass<'a>> {
+    pub fn build<'a>(self, device: Arc<Device>) -> Result<Pass<'a>> {
         let mut subpass_description = vk::SubpassDescription::builder()
             .pipeline_bind_point(self.bindpoint)
             .color_attachments(&self.color_references);
@@ -600,7 +592,7 @@ impl PassBuilder {
     }
 }
 
-fn create_default_sampler(device: Arc<LogicalDevice>) -> Result<Sampler> {
+fn create_default_sampler(device: Arc<Device>) -> Result<Sampler> {
     let sampler_info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)

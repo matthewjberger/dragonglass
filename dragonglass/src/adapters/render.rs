@@ -1,15 +1,15 @@
-use crate::context::LogicalDevice;
+use crate::context::Device;
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 
 pub struct RenderPass {
     pub handle: vk::RenderPass,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl RenderPass {
-    pub fn new(device: Arc<LogicalDevice>, create_info: &vk::RenderPassCreateInfo) -> Result<Self> {
+    pub fn new(device: Arc<Device>, create_info: &vk::RenderPassCreateInfo) -> Result<Self> {
         let handle = unsafe { device.handle.create_render_pass(create_info, None) }?;
         let render_pass = Self { handle, device };
         Ok(render_pass)
@@ -49,14 +49,11 @@ impl Drop for RenderPass {
 
 pub struct Framebuffer {
     pub handle: vk::Framebuffer,
-    device: Arc<LogicalDevice>,
+    device: Arc<Device>,
 }
 
 impl Framebuffer {
-    pub fn new(
-        device: Arc<LogicalDevice>,
-        create_info: vk::FramebufferCreateInfoBuilder,
-    ) -> Result<Self> {
+    pub fn new(device: Arc<Device>, create_info: vk::FramebufferCreateInfoBuilder) -> Result<Self> {
         let handle = unsafe { device.handle.create_framebuffer(&create_info, None) }?;
         let framebuffer = Self { handle, device };
         Ok(framebuffer)
