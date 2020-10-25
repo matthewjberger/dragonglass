@@ -282,18 +282,16 @@ impl Swapchain {
     pub fn render_frame(
         &mut self,
         dimensions: &[u32; 2],
-        mut pre_recording_callback: impl FnMut(&SwapchainProperties) -> Result<()>,
-        mut recording_callback: impl FnMut(vk::CommandBuffer, usize) -> Result<()>,
+        mut action: impl FnMut(vk::CommandBuffer, usize) -> Result<()>,
     ) -> Result<()> {
         self.recreated_swapchain = false;
         self.wait_for_in_flight_fence()?;
         if let Some(image_index) = self.acquire_next_frame(dimensions)? {
             self.reset_in_flight_fence()?;
-            pre_recording_callback(&self.properties)?;
             self.context.logical_device.record_command_buffer(
                 self.command_buffer_at(image_index)?,
                 vk::CommandBufferUsageFlags::empty(),
-                |command_buffer| recording_callback(command_buffer, image_index),
+                |command_buffer| action(command_buffer, image_index),
             )?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;

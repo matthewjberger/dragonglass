@@ -6,11 +6,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ash::vk;
-use petgraph::{
-    algo::toposort,
-    dot::{Config, Dot},
-    prelude::*,
-};
+use petgraph::{algo::toposort, prelude::*};
 use std::{collections::HashMap, fmt, sync::Arc};
 use vk_mem::Allocator;
 
@@ -73,11 +69,6 @@ impl RenderGraph {
         // if not, construct a new one
         // Graph construction only happens on app init, window resize, shader hot-reload,
         // or if rendering logic changes
-
-        log::info!(
-            "Full graph: {:#?}",
-            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
-        );
 
         self.process_images(device.clone(), allocator)?;
         self.process_passes(device.clone())?;
