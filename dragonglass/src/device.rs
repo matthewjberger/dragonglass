@@ -34,7 +34,7 @@ impl RenderingDevice {
     pub fn render(
         &mut self,
         dimensions: &[u32; 2],
-        view: &glm::Mat4, // TODO: Turn these into a camera trait
+        view: &glm::Mat4,
         _camera_position: &glm::Vec3,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;

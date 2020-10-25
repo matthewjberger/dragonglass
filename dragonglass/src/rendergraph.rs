@@ -176,7 +176,6 @@ impl RenderGraph {
         None
     }
 
-    // TODO: Have rendergraph handle command buffer generation and submission as well
     pub fn execute_at_index(
         &self,
         device: Arc<Device>,
@@ -405,7 +404,7 @@ impl ImageNode {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(self.usage())
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(vk::SampleCountFlags::TYPE_1) // TODO: Update this when using multisampling
+            .samples(vk::SampleCountFlags::TYPE_1)
             .flags(vk::ImageCreateFlags::empty());
 
         let allocation_create_info = vk_mem::AllocationCreateInfo {
