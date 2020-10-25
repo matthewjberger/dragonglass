@@ -566,8 +566,6 @@ impl PassBuilder {
         let create_info = vk::RenderPassCreateInfo::builder()
             .attachments(&self.attachment_descriptions)
             .subpasses(&subpass_descriptions);
-        // TODO: Add subpass dependencies where necessary
-        // .dependencies(&subpass_dependencies);
 
         let render_pass = Arc::new(RenderPass::new(device, &create_info)?);
 
