@@ -56,9 +56,7 @@ impl Frame {
     }
 
     pub fn swapchain(&self) -> Result<&Swapchain> {
-        self.swapchain
-            .as_ref()
-            .context("Failed to get inner swapchain!")
+        self.swapchain.as_ref().context("Failed to get swapchain!")
     }
 
     pub fn render(
