@@ -1,4 +1,4 @@
-use crate::{context::Context, forward::RenderPath, swapchain::Swapchain};
+use crate::{context::Context, frame::Frame, scene::Scene};
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use log::error;
@@ -7,8 +7,8 @@ use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
-    swapchain: Swapchain,
-    render_path: Option<RenderPath>,
+    frame: Frame,
+    scene: Option<Scene>,
     context: Arc<Context>,
 }
 
@@ -17,11 +17,15 @@ impl RenderingDevice {
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
-        let swapchain = Swapchain::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
-        let render_path = RenderPath::new(&context, &swapchain)?;
+        let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
+        let scene = Some(Scene::new(
+            &context,
+            frame.swapchain()?,
+            &frame.swapchain_properties,
+        )?);
         let renderer = Self {
-            swapchain,
-            render_path: Some(render_path),
+            frame,
+            scene,
             context,
         };
         Ok(renderer)
@@ -33,30 +37,28 @@ impl RenderingDevice {
         view: &glm::Mat4, // TODO: Turn these into a camera trait
         _camera_position: &glm::Vec3,
     ) -> Result<()> {
-        let Self {
-            swapchain,
-            render_path,
-            ..
-        } = self;
+        let Self { frame, scene, .. } = self;
 
-        let aspect_ratio = swapchain.properties.aspect_ratio();
+        let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.logical_device.clone();
 
-        if let Some(render_path) = render_path.as_ref() {
-            render_path.scene.borrow().update_ubo(aspect_ratio, *view)?;
-            swapchain.render_frame(dimensions, |command_buffer, image_index| {
-                render_path.rendergraph.execute_at_index(
-                    device.clone(),
-                    command_buffer,
-                    image_index,
-                )?;
+        if let Some(scene) = scene.as_ref() {
+            scene.object.borrow().update_ubo(aspect_ratio, *view)?;
+            frame.render(dimensions, |command_buffer, image_index| {
+                scene
+                    .rendergraph
+                    .execute_at_index(device.clone(), command_buffer, image_index)?;
                 Ok(())
             })?;
         }
 
-        if swapchain.recreated_swapchain {
-            self.render_path = None;
-            self.render_path = Some(RenderPath::new(&self.context, swapchain)?);
+        if frame.recreated_swapchain {
+            self.scene = None;
+            self.scene = Some(Scene::new(
+                &self.context,
+                frame.swapchain()?,
+                &frame.swapchain_properties,
+            )?);
         }
 
         Ok(())
