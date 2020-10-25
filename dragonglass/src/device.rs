@@ -1,6 +1,6 @@
 use crate::{context::Context, forward::RenderPath, swapchain::Swapchain};
 use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
+use ash::version::DeviceV1_0;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -41,19 +41,18 @@ impl RenderingDevice {
 
         let aspect_ratio = swapchain.properties.aspect_ratio();
         let device = self.context.logical_device.clone();
+
         if let Some(render_path) = render_path.as_ref() {
             render_path.scene.borrow().update_ubo(aspect_ratio, *view)?;
-        }
-        swapchain.render_frame(dimensions, |command_buffer, image_index| {
-            if let Some(render_path) = render_path.as_ref() {
+            swapchain.render_frame(dimensions, |command_buffer, image_index| {
                 render_path.rendergraph.execute_at_index(
                     device.clone(),
                     command_buffer,
                     image_index,
                 )?;
-            }
-            Ok(())
-        })?;
+                Ok(())
+            })?;
+        }
 
         if swapchain.recreated_swapchain {
             self.render_path = None;
