@@ -33,12 +33,7 @@ impl Scene {
             context.physical_device.graphics_queue_index,
         )?;
 
-        let mut rendergraph = Self::create_rendergraph(
-            context.device.clone(),
-            context.allocator.clone(),
-            swapchain,
-            swapchain_properties,
-        )?;
+        let mut rendergraph = Self::create_rendergraph(context, swapchain, swapchain_properties)?;
 
         let mut shader_cache = ShaderCache::default();
         let offscreen_renderpass = rendergraph
@@ -101,11 +96,14 @@ impl Scene {
     }
 
     pub fn create_rendergraph(
-        device: Arc<Device>,
-        allocator: Arc<Allocator>,
+        context: &Context,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
     ) -> Result<RenderGraph> {
+        let device = context.device.clone();
+        let allocator = context.allocator.clone();
+        let _samples = context.max_usable_samples();
+
         let offscreen = "offscreen";
         let postprocessing = "postprocessing";
         let color = "color";
@@ -122,6 +120,7 @@ impl Scene {
                             float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
                         },
                     },
+                    samples: vk::SampleCountFlags::TYPE_1,
                 },
                 ImageNode {
                     name: RenderGraph::DEPTH_STENCIL.to_owned(),
@@ -133,6 +132,7 @@ impl Scene {
                             stencil: 0,
                         },
                     },
+                    samples: vk::SampleCountFlags::TYPE_1,
                 },
                 ImageNode {
                     name: RenderGraph::backbuffer_name(0),
@@ -143,6 +143,7 @@ impl Scene {
                             float32: [1.0, 1.0, 1.0, 1.0],
                         },
                     },
+                    samples: vk::SampleCountFlags::TYPE_1,
                 },
             ],
             &[

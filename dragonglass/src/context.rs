@@ -124,6 +124,37 @@ impl Context {
         let index = self.physical_device.presentation_queue_index;
         unsafe { self.device.handle.get_device_queue(index, 0) }
     }
+
+    pub fn physical_device_properties(&self) -> vk::PhysicalDeviceProperties {
+        unsafe {
+            self.instance
+                .handle
+                .get_physical_device_properties(self.physical_device.handle)
+        }
+    }
+
+    pub fn max_usable_samples(&self) -> vk::SampleCountFlags {
+        let properties = self.physical_device_properties();
+        let color_sample_counts = properties.limits.framebuffer_color_sample_counts;
+        let depth_sample_counts = properties.limits.framebuffer_depth_sample_counts;
+        let sample_counts = color_sample_counts.min(depth_sample_counts);
+
+        if sample_counts.contains(vk::SampleCountFlags::TYPE_64) {
+            vk::SampleCountFlags::TYPE_64
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_32) {
+            vk::SampleCountFlags::TYPE_32
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_16) {
+            vk::SampleCountFlags::TYPE_16
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_8) {
+            vk::SampleCountFlags::TYPE_8
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_4) {
+            vk::SampleCountFlags::TYPE_4
+        } else if sample_counts.contains(vk::SampleCountFlags::TYPE_2) {
+            vk::SampleCountFlags::TYPE_2
+        } else {
+            vk::SampleCountFlags::TYPE_1
+        }
+    }
 }
 
 pub struct Surface {

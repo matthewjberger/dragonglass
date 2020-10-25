@@ -320,6 +320,7 @@ pub struct ImageNode {
     pub extent: vk::Extent2D,
     pub format: vk::Format,
     pub clear_value: vk::ClearValue,
+    pub samples: vk::SampleCountFlags,
 }
 
 impl ImageNode {
@@ -368,7 +369,7 @@ impl ImageNode {
 
         let attachment_description = vk::AttachmentDescription::builder()
             .format(self.format)
-            .samples(vk::SampleCountFlags::TYPE_1)
+            .samples(self.samples)
             .load_op(load_op)
             .store_op(store_op)
             .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
@@ -404,7 +405,7 @@ impl ImageNode {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(self.usage())
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(vk::SampleCountFlags::TYPE_1)
+            .samples(self.samples)
             .flags(vk::ImageCreateFlags::empty());
 
         let allocation_create_info = vk_mem::AllocationCreateInfo {
