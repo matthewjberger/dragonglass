@@ -39,6 +39,7 @@ impl ObjectRendering {
         context: &Context,
         pool: &CommandPool,
         render_pass: Arc<RenderPass>,
+        samples: vk::SampleCountFlags,
         shader_cache: &mut ShaderCache,
     ) -> Result<Self> {
         let device = context.device.clone();
@@ -61,7 +62,7 @@ impl ObjectRendering {
             device,
         };
 
-        rendering.create_pipeline(render_pass, shader_cache)?;
+        rendering.create_pipeline(render_pass, samples, shader_cache)?;
         rendering.update_descriptor_set();
 
         Ok(rendering)
@@ -70,6 +71,7 @@ impl ObjectRendering {
     pub fn create_pipeline(
         &mut self,
         render_pass: Arc<RenderPass>,
+        samples: vk::SampleCountFlags,
         mut shader_cache: &mut ShaderCache,
     ) -> Result<()> {
         let settings = Self::settings(
@@ -77,6 +79,7 @@ impl ObjectRendering {
             &mut shader_cache,
             render_pass,
             self.descriptor_set_layout.clone(),
+            samples,
         )?;
         self.pipeline = None;
         self.pipeline_layout = None;
@@ -127,6 +130,7 @@ impl ObjectRendering {
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
         descriptor_set_layout: Arc<DescriptorSetLayout>,
+        samples: vk::SampleCountFlags,
     ) -> Result<GraphicsPipelineSettings> {
         let shader_paths = Self::shader_paths()?;
         let shader_set = shader_cache.create_shader_set(device, &shader_paths)?;
@@ -140,6 +144,7 @@ impl ObjectRendering {
             .render_pass(render_pass)
             .vertex_state_info(vertex_state_info.build())
             .descriptor_set_layout(descriptor_set_layout)
+            .rasterization_samples(samples)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(settings)

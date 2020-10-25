@@ -33,7 +33,11 @@ impl Scene {
             context.physical_device.graphics_queue_index,
         )?;
 
-        let mut rendergraph = Self::create_rendergraph(context, swapchain, swapchain_properties)?;
+        // let samples = context.max_usable_samples();
+        let samples = vk::SampleCountFlags::TYPE_1;
+
+        let mut rendergraph =
+            Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
 
         let mut shader_cache = ShaderCache::default();
         let offscreen_renderpass = rendergraph
@@ -47,6 +51,7 @@ impl Scene {
             context,
             &transient_command_pool,
             offscreen_renderpass,
+            samples,
             &mut shader_cache,
         )?;
         let scene = Rc::new(RefCell::new(scene));
@@ -99,10 +104,10 @@ impl Scene {
         context: &Context,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
+        samples: vk::SampleCountFlags,
     ) -> Result<RenderGraph> {
         let device = context.device.clone();
         let allocator = context.allocator.clone();
-        let _samples = context.max_usable_samples();
 
         let offscreen = "offscreen";
         let postprocessing = "postprocessing";
