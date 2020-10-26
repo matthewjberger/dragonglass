@@ -34,7 +34,7 @@ pub struct Vertex {
     uv_0: glm::Vec2,
 }
 
-const DEFAULT_NAME: &'static str = "<Unnamed>";
+const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub fn load_gltf(path: &str) -> Result<Asset> {
     let (gltf, buffers, textures) = gltf::import(&path)?;
