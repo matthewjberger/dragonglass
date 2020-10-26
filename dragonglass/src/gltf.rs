@@ -4,7 +4,7 @@ use petgraph::prelude::*;
 
 pub struct Scene {
     name: String,
-    nodes: Vec<NodeGraph>,
+    node_graphs: Vec<NodeGraph>,
 }
 
 pub type NodeGraph = Graph<Node, ()>;
@@ -38,21 +38,34 @@ const DEFAULT_NAME: &'static str = "<Unnamed>";
 
 pub fn load_gltf(path: &str) -> Result<Asset> {
     let (gltf, buffers, textures) = gltf::import(&path)?;
+
     let mut asset = Asset {
         buffers,
         textures,
         ..Default::default()
     };
 
-    let mut node_graphs = Vec::new();
     for gltf_scene in gltf.scenes() {
+        load_scene(&gltf_scene, &mut asset)?;
+    }
+
+    Ok(asset)
+}
+
+fn load_scene(gltf_scene: &gltf::Scene, asset: &mut Asset) -> Result<()> {
+    let mut node_graphs = Vec::new();
+    for gltf_node in gltf_scene.nodes() {
         let mut node_graph = NodeGraph::new();
-        for gltf_node in gltf_scene.nodes() {
-            load_node(&gltf_node, &mut asset, &mut node_graph, NodeIndex::new(0))?;
-        }
+        load_node(&gltf_node, asset, &mut node_graph, NodeIndex::new(0))?;
         node_graphs.push(node_graph);
     }
-    Ok(Asset::default())
+
+    let scene = Scene {
+        name: gltf_scene.name().unwrap_or(DEFAULT_NAME).to_string(),
+        node_graphs,
+    };
+    asset.scenes.push(scene);
+    Ok(())
 }
 
 fn load_node(
