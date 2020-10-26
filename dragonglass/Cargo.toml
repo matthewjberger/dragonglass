@@ -15,6 +15,7 @@ nalgebra-glm = "0.8.0"
 petgraph = "0.5.1"
 raw-window-handle = "0.3.3"
 vk-mem = "0.2.2"
+gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual"] }
 
 [build-dependencies]
 log = "0.4.11"
