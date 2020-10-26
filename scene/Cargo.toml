@@ -1,0 +1,11 @@
+[package]
+name = "scene"
+version = "0.1.0"
+authors = ["matthewjberger <matthewjberger@nevada.unr.edu>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.32"
+gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual"] }
+nalgebra-glm = "0.8.0"
+petgraph = "0.5.1"

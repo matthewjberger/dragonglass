@@ -1,9 +1,10 @@
-use crate::{context::Context, frame::Frame, gltf::Asset, scene::Scene};
+use crate::{context::Context, frame::Frame, scene::Scene};
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
+use scene::Asset;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
@@ -16,7 +17,7 @@ impl RenderingDevice {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
-        let asset = Asset::new("assets/models/DamagedHelmet.glb")?;
+        let _asset = Asset::new("assets/models/DamagedHelmet.glb")?;
 
         let context = Arc::new(Context::new(window_handle)?);
         let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
