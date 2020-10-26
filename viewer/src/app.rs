@@ -6,7 +6,7 @@ use log::{error, info};
 use scene::Asset;
 use winit::{
     dpi::PhysicalSize,
-    event::{Event, VirtualKeyCode},
+    event::{Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
@@ -79,9 +79,6 @@ impl App {
 
         input.allowed = true;
 
-        // TODO: Use winit drag and drop to load these
-        let _asset = Asset::new("assets/models/DamagedHelmet.glb")?;
-
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -95,14 +92,36 @@ impl App {
 
             Self::update_camera(&mut camera, &input, &system);
 
-            if let Event::MainEventsCleared = event {
-                if let Err(error) = rendering_device.render(
-                    &system.window_dimensions,
-                    &camera.view_matrix(),
-                    &camera.position(),
-                ) {
-                    error!("{}", error);
+            match event {
+                Event::MainEventsCleared => {
+                    if let Err(error) = rendering_device.render(
+                        &system.window_dimensions,
+                        &camera.view_matrix(),
+                        &camera.position(),
+                    ) {
+                        error!("{}", error);
+                    }
                 }
+                Event::WindowEvent {
+                    event: WindowEvent::DroppedFile(path),
+                    ..
+                } => {
+                    if let Some(raw_path) = path.to_str() {
+                        if let Some(extension) = path.extension() {
+                            match extension.to_str() {
+                                Some("glb") | Some("gltf") => {
+                                    let error_message = format!("Failed to load gltf asset '{}'.", raw_path);
+                                    let _asset = Asset::new(raw_path).expect(&error_message);
+                                    log::info!("Loaded gltf asset: '{}'", raw_path);
+                                }
+                                _ => log::warn!(
+                                    "File extension {:#?} is not a valid '.glb' or '.gltf' extension",
+                                    extension),
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         });
     }
