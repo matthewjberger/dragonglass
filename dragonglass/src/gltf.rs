@@ -190,6 +190,15 @@ fn load_primitive_indices(gltf_primitive: &gltf::Primitive, asset: &mut Asset) -
     Ok(number_of_indices)
 }
 
+fn global_transform(graph: &NodeGraph, index: NodeIndex) -> glm::Mat4 {
+    let transform = graph[index].transform;
+    let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
+    match incoming_walker.next_node(graph) {
+        Some(parent_index) => transform * global_transform(graph, parent_index),
+        None => transform,
+    }
+}
+
 #[derive(Default)]
 pub struct Asset {
     buffers: Vec<gltf::buffer::Data>,
