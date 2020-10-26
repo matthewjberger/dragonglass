@@ -63,8 +63,8 @@ fn load_node(
 ) -> Result<()> {
     let node = Node {
         name: gltf_node.name().unwrap_or(DEFAULT_NAME).to_string(),
+        transform: node_transform(gltf_node),
         mesh: load_mesh(gltf_node, asset)?,
-        ..Default::default()
     };
 
     let index = graph.add_node(node);
@@ -77,6 +77,17 @@ fn load_node(
     }
 
     Ok(())
+}
+
+fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
+    let transform = gltf_node
+        .transform()
+        .matrix()
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>();
+    glm::make_mat4x4(&transform)
 }
 
 fn load_mesh(gltf_node: &gltf::Node, asset: &mut Asset) -> Result<Option<Mesh>> {
