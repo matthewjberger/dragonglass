@@ -11,6 +11,7 @@ dragonglass = { path = "../dragonglass" }
 image = "0.23.11"
 log = "0.4.11"
 nalgebra-glm = "0.8.0"
+scene = { path = "../scene" }
 serde = { version = "1.0.117", features = ["derive"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
 toml = "0.5.7"

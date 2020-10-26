@@ -3,6 +3,7 @@ use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
 use log::{error, info};
+use scene::Asset;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode},
@@ -77,6 +78,9 @@ impl App {
         } = self;
 
         input.allowed = true;
+
+        // TODO: Use winit drag and drop to load these
+        let _asset = Asset::new("assets/models/DamagedHelmet.glb")?;
 
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {

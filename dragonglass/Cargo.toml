@@ -16,8 +16,6 @@ petgraph = "0.5.1"
 raw-window-handle = "0.3.3"
 vk-mem = "0.2.2"
 
-scene = { path = "../scene" }
-
 [build-dependencies]
 log = "0.4.11"
 shader-compilation = { path = "../shader-compilation" }
