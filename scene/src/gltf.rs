@@ -3,35 +3,35 @@ use nalgebra_glm as glm;
 use petgraph::prelude::*;
 
 pub struct Scene {
-    name: String,
-    node_graphs: Vec<NodeGraph>,
+    pub name: String,
+    pub node_graphs: Vec<NodeGraph>,
 }
 
 pub type NodeGraph = Graph<Node, ()>;
 
 #[derive(Default)]
 pub struct Node {
-    name: String,
-    transform: glm::Mat4,
-    mesh: Option<Mesh>,
+    pub name: String,
+    pub transform: glm::Mat4,
+    pub mesh: Option<Mesh>,
 }
 
 #[derive(Default)]
 pub struct Mesh {
-    name: String,
-    primitives: Vec<Primitive>,
+    pub name: String,
+    pub primitives: Vec<Primitive>,
 }
 
 #[derive(Default)]
 pub struct Primitive {
-    first_index: u32,
-    number_of_indices: u32,
+    pub first_index: u32,
+    pub number_of_indices: u32,
 }
 
 pub struct Vertex {
-    position: glm::Vec3,
-    normal: glm::Vec3,
-    uv_0: glm::Vec2,
+    pub position: glm::Vec3,
+    pub normal: glm::Vec3,
+    pub uv_0: glm::Vec2,
 }
 
 const DEFAULT_NAME: &str = "<Unnamed>";
@@ -47,7 +47,7 @@ fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
     glm::make_mat4x4(&transform)
 }
 
-fn global_transform(graph: &NodeGraph, index: NodeIndex) -> glm::Mat4 {
+pub fn global_transform(graph: &NodeGraph, index: NodeIndex) -> glm::Mat4 {
     let transform = graph[index].transform;
     let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
     match incoming_walker.next_node(graph) {
@@ -59,7 +59,7 @@ fn global_transform(graph: &NodeGraph, index: NodeIndex) -> glm::Mat4 {
 #[derive(Default)]
 pub struct Asset {
     buffers: Vec<gltf::buffer::Data>,
-    textures: Vec<gltf::image::Data>,
+    pub textures: Vec<gltf::image::Data>,
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub scenes: Vec<Scene>,
