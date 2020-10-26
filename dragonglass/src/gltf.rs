@@ -30,6 +30,8 @@ pub struct Primitive {
 
 pub struct Vertex {
     position: glm::Vec3,
+    normal: glm::Vec3,
+    uv_0: glm::Vec2,
 }
 
 const DEFAULT_NAME: &'static str = "<Unnamed>";
@@ -78,9 +80,6 @@ fn load_node(
 }
 
 fn load_mesh(gltf_node: &gltf::Node, asset: &mut Asset) -> Result<Option<Mesh>> {
-    let stride = std::mem::size_of::<Vertex>();
-    let vertex_count = asset.vertices.len();
-
     match gltf_node.mesh() {
         Some(gltf_mesh) => {
             let mut primitives = Vec::new();
@@ -120,10 +119,27 @@ fn load_primitive_vertices(gltf_primitive: &gltf::Primitive, asset: &mut Asset) 
         .read_positions()
         .context("Failed to read vertex positions from the model. Vertex positions are required.")?
         .map(glm::Vec3::from);
+    let number_of_vertices = positions.len();
 
-    positions.into_iter().for_each(|position| {
-        vertices.push(Vertex { position });
-    });
+    let normals = reader.read_normals().map_or(
+        vec![glm::vec3(0.0, 0.0, 0.0); number_of_vertices],
+        |normals| normals.map(glm::Vec3::from).collect::<Vec<_>>(),
+    );
+
+    let map_to_vec2 = |coords: gltf::mesh::util::ReadTexCoords<'_>| -> Vec<glm::Vec2> {
+        coords.into_f32().map(glm::Vec2::from).collect::<Vec<_>>()
+    };
+    let uv_0 = reader
+        .read_tex_coords(0)
+        .map_or(vec![glm::vec2(0.0, 0.0); number_of_vertices], map_to_vec2);
+
+    for (index, position) in positions.into_iter().enumerate() {
+        vertices.push(Vertex {
+            position,
+            normal: normals[index],
+            uv_0: uv_0[index],
+        });
+    }
 
     Ok(())
 }
