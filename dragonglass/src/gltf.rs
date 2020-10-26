@@ -100,23 +100,40 @@ fn load_mesh(gltf_node: &gltf::Node, asset: &mut Asset) -> Result<Option<Mesh>> 
 }
 
 fn load_primitive(gltf_primitive: &gltf::Primitive, asset: &mut Asset) -> Result<Primitive> {
+    load_primitive_vertices(gltf_primitive, asset)?;
+    let first_index = asset.indices.len() as u32;
+    let number_of_indices = load_primitive_indices(gltf_primitive, asset)?;
+    Ok(Primitive {
+        first_index,
+        number_of_indices,
+    })
+}
+
+fn load_primitive_vertices(gltf_primitive: &gltf::Primitive, asset: &mut Asset) -> Result<()> {
     let Asset {
         buffers, vertices, ..
     } = asset;
 
     let reader = gltf_primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
-    reader
+    let positions = reader
         .read_positions()
         .context("Failed to read vertex positions from the model. Vertex positions are required.")?
-        .map(glm::Vec3::from)
-        .into_iter()
-        .for_each(|position| {
-            vertices.push(Vertex { position });
-        });
+        .map(glm::Vec3::from);
+
+    positions.into_iter().for_each(|position| {
+        vertices.push(Vertex { position });
+    });
+
+    Ok(())
+}
+
+fn load_primitive_indices(gltf_primitive: &gltf::Primitive, asset: &mut Asset) -> Result<u32> {
+    let Asset { buffers, .. } = asset;
+
+    let reader = gltf_primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
     let vertex_count = asset.vertices.len();
-    let first_index = asset.indices.len() as u32;
     let primitive_indices = reader
         .read_indices()
         .map(|indices| {
@@ -126,14 +143,11 @@ fn load_primitive(gltf_primitive: &gltf::Primitive, asset: &mut Asset) -> Result
                 .collect::<Vec<_>>()
         })
         .context("Failed to read indices!")?;
-    let number_of_indices = primitive_indices.len() as u32;
 
+    let number_of_indices = primitive_indices.len() as u32;
     asset.indices.extend_from_slice(&primitive_indices);
 
-    Ok(Primitive {
-        first_index,
-        number_of_indices,
-    })
+    Ok(number_of_indices)
 }
 
 #[derive(Default)]
