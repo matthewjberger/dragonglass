@@ -5,13 +5,13 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.32"
+anyhow = "1.0.33"
 config = "0.10.1"
 dragonglass = { path = "../dragonglass" }
-image = "0.23.9"
+image = "0.23.11"
 log = "0.4.11"
 nalgebra-glm = "0.8.0"
-serde = { version = "1.0.116", features = ["derive"] }
+serde = { version = "1.0.117", features = ["derive"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
-toml = "0.5.6"
+toml = "0.5.7"
 winit = "0.23.0"
