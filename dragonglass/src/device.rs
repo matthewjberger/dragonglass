@@ -1,4 +1,4 @@
-use crate::{context::Context, frame::Frame, scene::Scene};
+use crate::{context::Context, frame::Frame, gltf::Asset, scene::Scene};
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use log::error;
@@ -29,6 +29,11 @@ impl RenderingDevice {
             context,
         };
         Ok(renderer)
+    }
+
+    pub fn load_asset(&mut self, path: &str) -> Result<()> {
+        let _asset = Asset::new(path)?;
+        Ok(())
     }
 
     pub fn render(

@@ -3,7 +3,6 @@ use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
 use log::{error, info};
-use scene::Asset;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode, WindowEvent},
@@ -111,7 +110,7 @@ impl App {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
                                     let error_message = format!("Failed to load gltf asset '{}'.", raw_path);
-                                    let _asset = Asset::new(raw_path).expect(&error_message);
+                                    rendering_device.load_asset(raw_path).expect(&error_message);
                                     log::info!("Loaded gltf asset: '{}'", raw_path);
                                 }
                                 _ => log::warn!(

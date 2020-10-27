@@ -489,6 +489,7 @@ dependencies = [
  "ash",
  "ash-window",
  "derive_builder",
+ "gltf",
  "image",
  "log",
  "nalgebra-glm",
@@ -1403,16 +1404,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scene"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gltf",
- "nalgebra-glm",
- "petgraph",
-]
-
-[[package]]
 name = "scoped-tls"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1678,7 +1669,6 @@ dependencies = [
  "image",
  "log",
  "nalgebra-glm",
- "scene",
  "serde 1.0.117",
  "simplelog",
  "toml",
