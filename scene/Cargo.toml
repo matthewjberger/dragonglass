@@ -7,5 +7,5 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.33"
 gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual"] }
-nalgebra-glm = "0.8.0"
+nalgebra-glm = "0.9.0"
 petgraph = "0.5.1"
