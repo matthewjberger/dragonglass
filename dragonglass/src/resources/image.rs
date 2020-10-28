@@ -51,7 +51,10 @@ impl ImageDescription {
         Self::from_image(&image)
     }
 
-    pub fn from_hdr(path: &str) -> Result<Self> {
+    pub fn from_hdr<P>(path: P) -> Result<Self>
+    where
+        P: AsRef<Path> + Into<PathBuf>,
+    {
         let decoder =
             image::hdr::HdrDecoder::new(std::io::BufReader::new(std::fs::File::open(&path)?))
                 .expect("Failed to create hdr decoder!");
