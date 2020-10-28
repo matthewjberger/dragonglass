@@ -51,6 +51,32 @@ impl ImageDescription {
         Self::from_image(&image)
     }
 
+    pub fn from_hdr(path: &str) -> Result<Self> {
+        let decoder =
+            image::hdr::HdrDecoder::new(std::io::BufReader::new(std::fs::File::open(&path)?))
+                .expect("Failed to create hdr decoder!");
+        let metadata = decoder.metadata();
+        let decoded = decoder.read_image_hdr()?;
+        let format = vk::Format::R32G32B32A32_SFLOAT;
+        let width = metadata.width as u32;
+        let height = metadata.height as u32;
+        let mip_levels = Self::calculate_mip_levels(width, height);
+        let data = decoded
+            .iter()
+            .flat_map(|pixel| vec![pixel[0], pixel[1], pixel[2], 1.0])
+            .collect::<Vec<_>>();
+        let pixels =
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
+                .to_vec();
+        Ok(Self {
+            format,
+            width,
+            height,
+            pixels,
+            mip_levels,
+        })
+    }
+
     pub fn from_image(image: &DynamicImage) -> Result<Self> {
         let (format, (width, height)) = match image {
             DynamicImage::ImageRgb8(buffer) => (vk::Format::R8G8B8_UNORM, buffer.dimensions()),
