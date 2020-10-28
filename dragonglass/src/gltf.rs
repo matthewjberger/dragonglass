@@ -1,6 +1,13 @@
-use anyhow::{Context, Result};
+use crate::{
+    adapters::CommandPool,
+    context::{Context, Device},
+    resources::{AllocatedImage, ImageDescription, ImageView, Sampler},
+};
+use anyhow::{Context as AshContext, Result};
+use ash::vk;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
+use std::sync::Arc;
 
 pub struct Scene {
     pub name: String,
@@ -59,15 +66,23 @@ pub fn global_transform(graph: &NodeGraph, index: NodeIndex) -> glm::Mat4 {
 #[derive(Default)]
 pub struct Asset {
     buffers: Vec<gltf::buffer::Data>,
-    pub textures: Vec<gltf::image::Data>,
+    pub textures: Vec<Texture>,
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub scenes: Vec<Scene>,
 }
 
 impl Asset {
-    pub fn new(path: &str) -> Result<Self> {
+    pub fn new(context: &Context, command_pool: &CommandPool, path: &str) -> Result<Self> {
         let (gltf, buffers, textures) = gltf::import(&path)?;
+
+        let textures = textures
+            .into_iter()
+            .map(|texture| {
+                let description = ImageDescription::from_gltf(&texture);
+                Texture::new(context, command_pool, &description)
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut asset = Self {
             buffers,
@@ -209,5 +224,70 @@ impl Asset {
         self.indices.extend_from_slice(&primitive_indices);
 
         Ok(number_of_indices)
+    }
+}
+
+pub struct Texture {
+    pub image: AllocatedImage,
+    pub view: ImageView,
+    pub sampler: Sampler,
+}
+
+impl Texture {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        description: &ImageDescription,
+    ) -> Result<Self> {
+        let image = description.as_image(context.allocator.clone())?;
+        image.upload_data(context, command_pool, description)?;
+        let view = Self::image_view(context.device.clone(), &image, description)?;
+        let sampler = Self::sampler(context.device.clone(), description.mip_levels)?;
+        let texture = Self {
+            image,
+            view,
+            sampler,
+        };
+        Ok(texture)
+    }
+
+    fn image_view(
+        device: Arc<Device>,
+        image: &AllocatedImage,
+        description: &ImageDescription,
+    ) -> Result<ImageView> {
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1)
+            .level_count(description.mip_levels);
+
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image.handle)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(description.format)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(subresource_range.build());
+
+        ImageView::new(device, create_info)
+    }
+
+    fn sampler(device: Arc<Device>, mip_levels: u32) -> Result<Sampler> {
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::REPEAT)
+            .address_mode_v(vk::SamplerAddressMode::REPEAT)
+            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(mip_levels as _);
+        Sampler::new(device, sampler_info)
     }
 }

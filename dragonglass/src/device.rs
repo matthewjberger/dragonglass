@@ -1,12 +1,13 @@
-use crate::{context::Context, frame::Frame, gltf::Asset, scene::Scene};
+use crate::{adapters::CommandPool, context::Context, frame::Frame, gltf::Asset, scene::Scene};
 use anyhow::Result;
-use ash::version::DeviceV1_0;
+use ash::{version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct RenderingDevice {
+    command_pool: CommandPool,
     frame: Frame,
     scene: Option<Scene>,
     context: Arc<Context>,
@@ -23,7 +24,12 @@ impl RenderingDevice {
             frame.swapchain()?,
             &frame.swapchain_properties,
         )?);
+        let create_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(context.physical_device.graphics_queue_index)
+            .flags(vk::CommandPoolCreateFlags::TRANSIENT);
+        let command_pool = CommandPool::new(context.device.clone(), create_info)?;
         let renderer = Self {
+            command_pool,
             frame,
             scene,
             context,
@@ -32,7 +38,7 @@ impl RenderingDevice {
     }
 
     pub fn load_asset(&mut self, path: &str) -> Result<()> {
-        let _asset = Asset::new(path)?;
+        let _asset = Asset::new(&self.context, &self.command_pool, path)?;
         Ok(())
     }
 
