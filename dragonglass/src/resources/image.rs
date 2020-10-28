@@ -6,6 +6,7 @@ use crate::{
 use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
+use gltf::image::Format;
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
 use log::error;
 use std::{
@@ -72,6 +73,34 @@ impl ImageDescription {
         };
         description.convert_24bit_formats()?;
         Ok(description)
+    }
+
+    pub fn from_gltf(data: &gltf::image::Data) -> Self {
+        let format = Self::gltf_to_vulkan_format(data.format);
+        let mut description = Self {
+            format,
+            width: data.width,
+            height: data.height,
+            pixels: data.pixels.to_vec(),
+            mip_levels: Self::calculate_mip_levels(data.width, data.height),
+        };
+        description.convert_24bit_formats();
+        description
+    }
+
+    fn gltf_to_vulkan_format(format: Format) -> vk::Format {
+        match format {
+            Format::R8 => vk::Format::R8_UNORM,
+            Format::R8G8 => vk::Format::R8G8_UNORM,
+            Format::R8G8B8A8 => vk::Format::R8G8B8A8_UNORM,
+            Format::B8G8R8A8 => vk::Format::B8G8R8A8_UNORM,
+            Format::R8G8B8 => vk::Format::R8G8B8_UNORM,
+            Format::B8G8R8 => vk::Format::B8G8R8_UNORM,
+            Format::R16 => vk::Format::R16_UNORM,
+            Format::R16G16 => vk::Format::R16G16_UNORM,
+            Format::R16G16B16 => vk::Format::R16G16B16_UNORM,
+            Format::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
+        }
     }
 
     pub fn calculate_mip_levels(width: u32, height: u32) -> u32 {
