@@ -136,9 +136,6 @@ impl ObjectRendering {
         let shader_set = shader_cache.create_shader_set(device, &shader_paths)?;
         let descriptions = Self::vertex_inputs();
         let attributes = Self::vertex_attributes();
-        let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&descriptions)
-            .vertex_attribute_descriptions(&attributes);
         let settings = GraphicsPipelineSettingsBuilder::default()
             .shader_set(shader_set)
             .render_pass(render_pass)
