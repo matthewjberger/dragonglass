@@ -13,7 +13,7 @@ use crate::{
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
-use petgraph::graph::NodeIndex;
+use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};
 use vk_mem::Allocator;
 
@@ -238,6 +238,69 @@ impl AssetRendering {
         let (pipeline, pipeline_layout) = settings.create_pipeline(self.device.clone())?;
         self.pipeline = Some(pipeline);
         self.pipeline_layout = Some(pipeline_layout);
+        Ok(())
+    }
+
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        self.pipeline
+            .as_ref()
+            .context("Failed to get scene pipeline!")?
+            .bind(&self.device.handle, command_buffer);
+
+        let pipeline_layout = self
+            .pipeline_layout
+            .as_ref()
+            .context("Failed to get scene pipeline layout!")?
+            .handle;
+
+        self.geometry_buffer
+            .bind(&self.device.handle, command_buffer)?;
+
+        for scene in self.asset.scenes.iter() {
+            for graph in scene.graphs.iter() {
+                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+                while let Some(node_index) = dfs.next(&graph) {
+                    let node = &self.asset.nodes[graph[node_index]];
+
+                    // Get the descriptor set and bind it
+                    // let descriptor_set =
+                    //     self.nodes.iter().filter(|node| node.mesh.is_some()).nth();
+                    // unsafe {
+                    //     self.device.handle.cmd_bind_descriptor_sets(
+                    //         command_buffer,
+                    //         vk::PipelineBindPoint::GRAPHICS,
+                    //         pipeline_layout,
+                    //         0,
+                    //         &[self.descriptor_set],
+                    //         &[],
+                    //     );
+                    // }
+
+                    let mesh = match node.mesh.as_ref() {
+                        Some(mesh) => mesh,
+                        _ => continue,
+                    };
+
+                    for primitive in mesh.primitives.iter() {
+                        let material = self.asset.material_at_index(primitive.material_index)?;
+
+                        // TODO: Update push constant block here
+
+                        // unsafe {
+                        //     self.device.handle.cmd_draw_indexed(
+                        //         command_buffer,
+                        //         self.number_of_indices as _,
+                        //         1,
+                        //         0,
+                        //         0,
+                        //         0,
+                        //     )
+                        // };
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }
