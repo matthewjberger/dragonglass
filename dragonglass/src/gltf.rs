@@ -28,8 +28,9 @@ pub struct Mesh {
 
 #[derive(Debug)]
 pub struct Primitive {
-    pub first_index: u32,
-    pub number_of_indices: u32,
+    pub first_index: usize,
+    pub number_of_indices: usize,
+    pub material_index: usize,
 }
 
 #[derive(Default)]
@@ -103,7 +104,12 @@ impl Asset {
         })
     }
 
-    pub fn traverse(&self) {
+    pub fn material_at_index(&self, index: usize) -> Result<gltf::Material> {
+        let error_message = format!("Failed to lookup gltf asset material at index: {}", index);
+        self.gltf.materials().nth(index).context(error_message)
+    }
+
+    pub fn traverse(&self) -> Result<()> {
         for scene in self.scenes.iter() {
             log::info!("Dfs Scene Traversal: {}", scene.name);
             for graph in scene.graphs.iter() {
@@ -111,15 +117,26 @@ impl Asset {
                 while let Some(node_index) = dfs.next(&graph) {
                     log::info!("Node gltf index: {}", &graph[node_index]);
                     let node = &self.nodes[graph[node_index]];
-                    if let Some(mesh) = node.mesh.as_ref() {
-                        log::info!("Found mesh: {}", mesh.name);
-                        for primitive in mesh.primitives.iter() {
-                            log::info!("Found primitive: {:#?}", primitive);
-                        }
+
+                    let mesh = match node.mesh.as_ref() {
+                        Some(mesh) => mesh,
+                        _ => continue,
+                    };
+                    log::info!("Found mesh: {}", mesh.name);
+
+                    for primitive in mesh.primitives.iter() {
+                        log::info!("Found primitive: {:#?}", primitive);
+                        log::info!(
+                            "    Material: {:#?}",
+                            self.material_at_index(primitive.material_index)?
+                                .name()
+                                .unwrap_or(DEFAULT_NAME),
+                        );
                     }
                 }
             }
         }
+        Ok(())
     }
 
     fn load_textures(
@@ -192,11 +209,12 @@ impl Asset {
         geometry: &mut Geometry,
     ) -> Result<Primitive> {
         Self::load_primitive_vertices(primitive, buffers, geometry)?;
-        let first_index = geometry.indices.len() as u32;
+        let first_index = geometry.indices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
         Ok(Primitive {
             first_index,
             number_of_indices,
+            material_index: primitive.material().index().unwrap_or(0), // FIXME: This should load a default material
         })
     }
 
@@ -242,7 +260,7 @@ impl Asset {
         primitive: &gltf::Primitive,
         buffers: &[gltf::buffer::Data],
         geometry: &mut Geometry,
-    ) -> Result<u32> {
+    ) -> Result<usize> {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
         let vertex_count = geometry.vertices.len();
@@ -256,8 +274,7 @@ impl Asset {
             })
             .context("Failed to read indices!")?;
 
-        let number_of_indices = primitive_indices.len() as u32;
-
+        let number_of_indices = primitive_indices.len();
         geometry.indices.extend_from_slice(&primitive_indices);
 
         Ok(number_of_indices)
