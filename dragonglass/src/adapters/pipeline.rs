@@ -75,7 +75,8 @@ impl Drop for PipelineLayout {
 #[builder(setter(into))]
 pub struct GraphicsPipelineSettings {
     pub render_pass: Arc<RenderPass>,
-    pub vertex_state_info: vk::PipelineVertexInputStateCreateInfo,
+    pub vertex_inputs: Vec<vk::VertexInputBindingDescription>,
+    pub vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub shader_set: ShaderSet,
 
@@ -119,6 +120,7 @@ impl GraphicsPipelineSettings {
         device: Arc<Device>,
     ) -> Result<(GraphicsPipeline, PipelineLayout)> {
         let stages = self.shader_set.stages()?;
+        let vertex_state_info = self.vertex_input_state();
         let input_assembly_create_info = Self::input_assembly_create_info();
         let rasterizer_create_info = self.rasterizer_create_info();
         let multisampling_create_info = self.multisampling_create_info();
@@ -131,7 +133,7 @@ impl GraphicsPipelineSettings {
         let dynamic_state = Self::dynamic_state(&dynamic_states);
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&stages)
-            .vertex_input_state(&self.vertex_state_info)
+            .vertex_input_state(&vertex_state_info)
             .input_assembly_state(&input_assembly_create_info)
             .rasterization_state(&rasterizer_create_info)
             .multisample_state(&multisampling_create_info)
@@ -146,8 +148,15 @@ impl GraphicsPipelineSettings {
         Ok((pipeline, pipeline_layout))
     }
 
+    fn vertex_input_state(&self) -> vk::PipelineVertexInputStateCreateInfoBuilder {
+        vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&self.vertex_inputs)
+            .vertex_attribute_descriptions(&self.vertex_attributes)
+    }
+
     fn input_assembly_create_info<'a>() -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
         vk::PipelineInputAssemblyStateCreateInfo::builder()
+            // TODO: This topology should be configurable. gltf assets will need to use it
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false)
     }

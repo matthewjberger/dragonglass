@@ -134,7 +134,7 @@ impl ObjectRendering {
     ) -> Result<GraphicsPipelineSettings> {
         let shader_paths = Self::shader_paths()?;
         let shader_set = shader_cache.create_shader_set(device, &shader_paths)?;
-        let descriptions = Self::vertex_input_descriptions();
+        let descriptions = Self::vertex_inputs();
         let attributes = Self::vertex_attributes();
         let vertex_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&descriptions)
@@ -142,7 +142,8 @@ impl ObjectRendering {
         let settings = GraphicsPipelineSettingsBuilder::default()
             .shader_set(shader_set)
             .render_pass(render_pass)
-            .vertex_state_info(vertex_state_info.build())
+            .vertex_inputs(Self::vertex_inputs().to_vec())
+            .vertex_attributes(Self::vertex_attributes().to_vec())
             .descriptor_set_layout(descriptor_set_layout)
             .rasterization_samples(samples)
             .build()
@@ -177,7 +178,7 @@ impl ObjectRendering {
         [position_description, tex_coord_description]
     }
 
-    fn vertex_input_descriptions() -> [vk::VertexInputBindingDescription; 1] {
+    fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
         let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride((4 * std::mem::size_of::<f32>()) as _)

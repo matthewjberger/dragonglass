@@ -4,6 +4,8 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
+    gltf::Asset,
+    gltf_rendering::AssetRendering,
     object::ObjectRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
@@ -11,14 +13,15 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 
 pub struct Scene {
-    _transient_command_pool: CommandPool,
+    pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub object: Rc<RefCell<ObjectRendering>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
+    pub samples: vk::SampleCountFlags,
 }
 
 impl Scene {
@@ -45,14 +48,14 @@ impl Scene {
             .render_pass
             .clone();
 
-        let scene = ObjectRendering::new(
+        let object = ObjectRendering::new(
             context,
             &transient_command_pool,
             offscreen_renderpass,
             samples,
             &mut shader_cache,
         )?;
-        let scene = Rc::new(RefCell::new(scene));
+        let object = Rc::new(RefCell::new(object));
 
         let pipeline = PostProcessingPipeline::new(
             context,
@@ -63,12 +66,12 @@ impl Scene {
         )?;
         let pipeline = Rc::new(RefCell::new(pipeline));
 
-        let scene_ptr = scene.clone();
+        let object_ptr = object.clone();
         rendergraph
             .passes
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| scene_ptr.borrow().issue_commands(command_buffer));
+            .set_callback(move |command_buffer| object_ptr.borrow().issue_commands(command_buffer));
 
         let pipeline_ptr = pipeline.clone();
         rendergraph
@@ -80,11 +83,12 @@ impl Scene {
             });
 
         let path = Self {
-            object: scene,
-            _transient_command_pool: transient_command_pool,
+            object,
+            transient_command_pool,
             shader_cache,
             rendergraph,
             pipeline,
+            samples,
         };
 
         Ok(path)
@@ -181,6 +185,33 @@ impl Scene {
 
         Ok(rendergraph)
     }
+
+    pub fn load_asset<P>(&mut self, context: &Context, path: P) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        let offscreen_renderpass = self
+            .rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene")?
+            .render_pass
+            .clone();
+
+        let asset = Asset::new(context, &self.transient_command_pool, path)?;
+        asset.traverse()?;
+        let rendering = AssetRendering::new(
+            context,
+            &self.transient_command_pool,
+            offscreen_renderpass,
+            self.samples,
+            &mut self.shader_cache,
+            asset,
+        )?;
+        let _rendering = Rc::new(RefCell::new(rendering));
+
+        Ok(())
+    }
 }
 
 pub struct PostProcessingPipeline {
@@ -244,7 +275,8 @@ impl PostProcessingPipeline {
         let settings = GraphicsPipelineSettingsBuilder::default()
             .shader_set(shader_set)
             .render_pass(render_pass)
-            .vertex_state_info(vk::PipelineVertexInputStateCreateInfo::builder().build())
+            .vertex_inputs(Vec::new())
+            .vertex_attributes(Vec::new())
             .descriptor_set_layout(descriptor_set_layout)
             .build()
             .map_err(|error| anyhow!("{}", error))?;

@@ -1,4 +1,4 @@
-use crate::{adapters::CommandPool, context::Context, frame::Frame, gltf::Asset, scene::Scene};
+use crate::{adapters::CommandPool, context::Context, frame::Frame, scene::Scene};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use log::error;
@@ -7,7 +7,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::{path::Path, sync::Arc};
 
 pub struct RenderingDevice {
-    command_pool: CommandPool,
+    _command_pool: CommandPool,
     frame: Frame,
     scene: Option<Scene>,
     context: Arc<Context>,
@@ -29,7 +29,7 @@ impl RenderingDevice {
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
         let command_pool = CommandPool::new(context.device.clone(), create_info)?;
         let renderer = Self {
-            command_pool,
+            _command_pool: command_pool,
             frame,
             scene,
             context,
@@ -41,9 +41,13 @@ impl RenderingDevice {
     where
         P: AsRef<Path>,
     {
-        let asset = Asset::new(&self.context, &self.command_pool, path)?;
-        asset.traverse();
-        Ok(())
+        match self.scene.as_mut() {
+            Some(scene) => scene.load_asset(&self.context, path),
+            None => {
+                log::warn!("No scene was available to load the asset into!");
+                Ok(())
+            }
+        }
     }
 
     pub fn render(

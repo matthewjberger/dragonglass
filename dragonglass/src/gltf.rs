@@ -35,14 +35,80 @@ pub struct Primitive {
 
 #[derive(Default)]
 pub struct Geometry {
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
 }
 
+#[derive(Copy, Clone)]
 pub struct Vertex {
     pub position: glm::Vec3,
     pub normal: glm::Vec3,
     pub uv_0: glm::Vec2,
+}
+
+impl Vertex {
+    pub fn attributes() -> [vk::VertexInputAttributeDescription; 3] {
+        let float_size = std::mem::size_of::<f32>();
+        let position_description = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(0)
+            .build();
+
+        let normal_description = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset((3 * float_size) as _)
+            .build();
+
+        let tex_coord_0_description = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset((6 * float_size) as _)
+            .build();
+
+        // let tex_coord_1_description = vk::VertexInputAttributeDescription::builder()
+        //     .binding(0)
+        //     .location(3)
+        //     .format(vk::Format::R32G32_SFLOAT)
+        //     .offset((8 * float_size) as _)
+        //     .build();
+
+        // let joint_0_description = vk::VertexInputAttributeDescription::builder()
+        //     .binding(0)
+        //     .location(4)
+        //     .format(vk::Format::R32G32B32A32_SFLOAT)
+        //     .offset((10 * float_size) as _)
+        //     .build();
+
+        // let weight_0_description = vk::VertexInputAttributeDescription::builder()
+        //     .binding(0)
+        //     .location(5)
+        //     .format(vk::Format::R32G32B32A32_SFLOAT)
+        //     .offset((14 * float_size) as _)
+        //     .build();
+
+        [
+            position_description,
+            normal_description,
+            tex_coord_0_description,
+            // tex_coord_1_description,
+            // joint_0_description,
+            // weight_0_description,
+        ]
+    }
+
+    pub fn inputs() -> [vk::VertexInputBindingDescription; 1] {
+        let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Self>() as _)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build();
+        [vertex_input_binding_description]
+    }
 }
 
 pub type SceneGraph = Graph<usize, ()>;
@@ -78,10 +144,10 @@ const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub struct Asset {
     gltf: gltf::Document,
-    textures: Vec<Texture>,
-    nodes: Vec<Node>,
-    scenes: Vec<Scene>,
-    geometry: Geometry,
+    pub textures: Vec<Texture>,
+    pub nodes: Vec<Node>,
+    pub scenes: Vec<Scene>,
+    pub geometry: Geometry,
 }
 
 impl Asset {
@@ -102,6 +168,13 @@ impl Asset {
             scenes,
             geometry,
         })
+    }
+
+    pub fn number_of_meshes(&self) -> usize {
+        self.gltf
+            .nodes()
+            .filter(|node| node.mesh().is_some())
+            .count()
     }
 
     pub fn material_at_index(&self, index: usize) -> Result<gltf::Material> {
