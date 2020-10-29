@@ -109,8 +109,10 @@ impl App {
                         if let Some(extension) = path.extension() {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
-                                    let error_message = format!("Failed to load gltf asset '{}'.", raw_path);
-                                    rendering_device.load_asset(raw_path).expect(&error_message);
+                                    if let Err(error) = rendering_device.load_asset(raw_path) {
+                                        log::error!("Viewer error: {}", error);
+                                        system.exit_requested = true;
+                                    }
                                     log::info!("Loaded gltf asset: '{}'", raw_path);
                                 }
                                 _ => log::warn!(

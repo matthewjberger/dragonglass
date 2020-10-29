@@ -54,6 +54,7 @@ impl AssetRendering {
 
         let number_of_meshes = asset.number_of_meshes();
         let number_of_textures = asset.textures.len();
+
         let descriptor_pool =
             Self::descriptor_pool(device.clone(), number_of_meshes, number_of_textures)?;
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
@@ -78,7 +79,7 @@ impl AssetRendering {
             device,
         };
 
-        // rendering.create_pipeline(render_pass, samples, shader_cache)?;
+        rendering.create_pipeline(render_pass, samples, shader_cache)?;
         // update descriptor sets
 
         Ok(rendering)
@@ -101,7 +102,7 @@ impl AssetRendering {
 
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .pool_sizes(&pool_sizes)
-            .max_sets(1);
+            .max_sets(number_of_meshes as _);
 
         DescriptorPool::new(device, pool_info)
     }
