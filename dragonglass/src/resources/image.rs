@@ -7,9 +7,10 @@ use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use gltf::image::Format;
-use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
+use image::{hdr::HdrDecoder, DynamicImage, ImageBuffer, Pixel, RgbImage};
 use log::error;
 use std::{
+    io::BufReader,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -51,13 +52,13 @@ impl ImageDescription {
         Self::from_image(&image)
     }
 
+    #[allow(dead_code)]
     pub fn from_hdr<P>(path: P) -> Result<Self>
     where
         P: AsRef<Path> + Into<PathBuf>,
     {
-        let decoder =
-            image::hdr::HdrDecoder::new(std::io::BufReader::new(std::fs::File::open(&path)?))
-                .expect("Failed to create hdr decoder!");
+        let file = std::fs::File::open(&path)?;
+        let decoder = HdrDecoder::new(BufReader::new(file))?;
         let metadata = decoder.metadata();
         let decoded = decoder.read_image_hdr()?;
         let format = vk::Format::R32G32B32A32_SFLOAT;
@@ -104,7 +105,8 @@ impl ImageDescription {
         Ok(description)
     }
 
-    pub fn from_gltf(data: &gltf::image::Data) -> Self {
+    #[allow(dead_code)]
+    pub fn from_gltf(data: &gltf::image::Data) -> Result<Self> {
         let format = Self::gltf_to_vulkan_format(data.format);
         let mut description = Self {
             format,
@@ -113,8 +115,8 @@ impl ImageDescription {
             pixels: data.pixels.to_vec(),
             mip_levels: Self::calculate_mip_levels(data.width, data.height),
         };
-        description.convert_24bit_formats();
-        description
+        description.convert_24bit_formats()?;
+        Ok(description)
     }
 
     fn gltf_to_vulkan_format(format: Format) -> vk::Format {

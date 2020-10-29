@@ -4,7 +4,7 @@ use ash::{version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 pub struct RenderingDevice {
     command_pool: CommandPool,
@@ -37,8 +37,12 @@ impl RenderingDevice {
         Ok(renderer)
     }
 
-    pub fn load_asset(&mut self, path: &str) -> Result<()> {
-        let _asset = Asset::new(&self.context, &self.command_pool, path)?;
+    pub fn load_asset<P>(&mut self, path: P) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        let asset = Asset::new(&self.context, &self.command_pool, path)?;
+        asset.traverse();
         Ok(())
     }
 

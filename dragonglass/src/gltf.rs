@@ -6,33 +6,36 @@ use crate::{
 use anyhow::{Context as AshContext, Result};
 use ash::vk;
 use nalgebra_glm as glm;
-use petgraph::prelude::*;
-use std::sync::Arc;
+use petgraph::{prelude::*, visit::Dfs};
+use std::{path::Path, sync::Arc};
 
 pub struct Scene {
     pub name: String,
-    pub node_graphs: Vec<NodeGraph>,
+    pub graphs: Vec<SceneGraph>,
 }
 
-pub type NodeGraph = Graph<Node, ()>;
-
-#[derive(Default)]
 pub struct Node {
     pub name: String,
     pub transform: glm::Mat4,
     pub mesh: Option<Mesh>,
 }
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct Mesh {
     pub name: String,
     pub primitives: Vec<Primitive>,
 }
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct Primitive {
     pub first_index: u32,
     pub number_of_indices: u32,
+}
+
+#[derive(Default)]
+pub struct Geometry {
+    vertices: Vec<Vertex>,
+    indices: Vec<u32>,
 }
 
 pub struct Vertex {
@@ -41,7 +44,23 @@ pub struct Vertex {
     pub uv_0: glm::Vec2,
 }
 
-const DEFAULT_NAME: &str = "<Unnamed>";
+pub type SceneGraph = Graph<usize, ()>;
+
+pub fn create_scene_graph(node: &gltf::Node) -> SceneGraph {
+    let mut node_graph = SceneGraph::new();
+    graph_node(node, &mut node_graph, NodeIndex::new(0));
+    node_graph
+}
+
+pub fn graph_node(gltf_node: &gltf::Node, graph: &mut SceneGraph, parent_index: NodeIndex) {
+    let index = graph.add_node(gltf_node.index());
+    if parent_index != index {
+        graph.add_edge(parent_index, index, ());
+    }
+    for child in gltf_node.children() {
+        graph_node(&child, graph, parent_index);
+    }
+}
 
 fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
     let transform = gltf_node
@@ -54,124 +73,139 @@ fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
     glm::make_mat4x4(&transform)
 }
 
-pub fn global_transform(graph: &NodeGraph, index: NodeIndex) -> glm::Mat4 {
-    let transform = graph[index].transform;
-    let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
-    match incoming_walker.next_node(graph) {
-        Some(parent_index) => transform * global_transform(graph, parent_index),
-        None => transform,
-    }
-}
+const DEFAULT_NAME: &str = "<Unnamed>";
 
-#[derive(Default)]
 pub struct Asset {
-    buffers: Vec<gltf::buffer::Data>,
-    pub textures: Vec<Texture>,
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
-    pub scenes: Vec<Scene>,
+    gltf: gltf::Document,
+    textures: Vec<Texture>,
+    nodes: Vec<Node>,
+    scenes: Vec<Scene>,
+    geometry: Geometry,
 }
 
 impl Asset {
-    pub fn new(context: &Context, command_pool: &CommandPool, path: &str) -> Result<Self> {
-        let (gltf, buffers, textures) = gltf::import(&path)?;
+    pub fn new<P>(context: &Context, command_pool: &CommandPool, path: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let (gltf, buffers, textures) = gltf::import(path)?;
 
-        let textures = textures
-            .into_iter()
+        let textures = Self::load_textures(context, command_pool, &textures)?;
+        let (nodes, geometry) = Self::load_nodes(&gltf, &buffers)?;
+        let scenes = Self::load_scenes(&gltf);
+
+        Ok(Self {
+            gltf,
+            textures,
+            nodes,
+            scenes,
+            geometry,
+        })
+    }
+
+    pub fn traverse(&self) {
+        for scene in self.scenes.iter() {
+            log::info!("Dfs Scene Traversal: {}", scene.name);
+            for graph in scene.graphs.iter() {
+                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+                while let Some(node_index) = dfs.next(&graph) {
+                    log::info!("Node gltf index: {}", &graph[node_index]);
+                    let node = &self.nodes[graph[node_index]];
+                    if let Some(mesh) = node.mesh.as_ref() {
+                        log::info!("Found mesh: {}", mesh.name);
+                        for primitive in mesh.primitives.iter() {
+                            log::info!("Found primitive: {:#?}", primitive);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn load_textures(
+        context: &Context,
+        command_pool: &CommandPool,
+        textures: &[gltf::image::Data],
+    ) -> Result<Vec<Texture>> {
+        textures
+            .iter()
             .map(|texture| {
-                let description = ImageDescription::from_gltf(&texture);
+                let description = ImageDescription::from_gltf(&texture)?;
                 Texture::new(context, command_pool, &description)
             })
-            .collect::<Result<Vec<_>>>()?;
-
-        let mut asset = Self {
-            buffers,
-            textures,
-            ..Default::default()
-        };
-
-        for gltf_scene in gltf.scenes() {
-            asset.load_scene(&gltf_scene)?;
-        }
-
-        Ok(asset)
+            .collect::<Result<Vec<_>>>()
     }
 
-    fn load_scene(&mut self, gltf_scene: &gltf::Scene) -> Result<()> {
-        let mut node_graphs = Vec::new();
-        for gltf_node in gltf_scene.nodes() {
-            let mut node_graph = NodeGraph::new();
-            self.load_node(&gltf_node, &mut node_graph, NodeIndex::new(0))?;
-            node_graphs.push(node_graph);
-        }
-
-        let scene = Scene {
-            name: gltf_scene.name().unwrap_or(DEFAULT_NAME).to_string(),
-            node_graphs,
-        };
-        self.scenes.push(scene);
-        Ok(())
+    fn load_scenes(gltf: &gltf::Document) -> Vec<Scene> {
+        gltf.scenes()
+            .map(|scene| Scene {
+                name: scene.name().unwrap_or(DEFAULT_NAME).to_string(),
+                graphs: scene
+                    .nodes()
+                    .map(|node| create_scene_graph(&node))
+                    .collect(),
+            })
+            .collect::<Vec<_>>()
     }
 
-    fn load_node(
-        &mut self,
-        gltf_node: &gltf::Node,
-        graph: &mut NodeGraph,
-        parent_index: NodeIndex,
-    ) -> Result<()> {
-        let node = Node {
-            name: gltf_node.name().unwrap_or(DEFAULT_NAME).to_string(),
-            transform: node_transform(gltf_node),
-            mesh: self.load_mesh(gltf_node)?,
-        };
-
-        let index = graph.add_node(node);
-        if parent_index != index {
-            graph.add_edge(parent_index, index, ());
-        }
-
-        for child in gltf_node.children() {
-            self.load_node(&child, graph, index)?;
-        }
-
-        Ok(())
+    fn load_nodes(
+        gltf: &gltf::Document,
+        buffers: &[gltf::buffer::Data],
+    ) -> Result<(Vec<Node>, Geometry)> {
+        let mut geometry = Geometry::default();
+        let nodes = gltf
+            .nodes()
+            .map(|node| {
+                Ok(Node {
+                    name: node.name().unwrap_or(DEFAULT_NAME).to_string(),
+                    transform: node_transform(&node),
+                    mesh: Self::load_mesh(&node, buffers, &mut geometry)?,
+                })
+            })
+            .collect::<Result<_>>()?;
+        Ok((nodes, geometry))
     }
 
-    fn load_mesh(&mut self, gltf_node: &gltf::Node) -> Result<Option<Mesh>> {
-        match gltf_node.mesh() {
-            Some(gltf_mesh) => {
-                let mut primitives = Vec::new();
-                for gltf_primitive in gltf_mesh.primitives() {
-                    primitives.push(self.load_primitive(&gltf_primitive)?);
-                }
-
-                let mesh = Mesh {
-                    name: gltf_mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
+    fn load_mesh(
+        node: &gltf::Node,
+        buffers: &[gltf::buffer::Data],
+        geometry: &mut Geometry,
+    ) -> Result<Option<Mesh>> {
+        match node.mesh() {
+            Some(mesh) => {
+                let primitives = mesh
+                    .primitives()
+                    .map(|primitive| Self::load_primitive(&primitive, buffers, geometry))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Some(Mesh {
+                    name: mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
                     primitives,
-                };
-
-                Ok(Some(mesh))
+                }))
             }
             None => Ok(None),
         }
     }
 
-    fn load_primitive(&mut self, gltf_primitive: &gltf::Primitive) -> Result<Primitive> {
-        self.load_primitive_vertices(gltf_primitive)?;
-        let first_index = self.indices.len() as u32;
-        let number_of_indices = self.load_primitive_indices(gltf_primitive)?;
+    fn load_primitive(
+        primitive: &gltf::Primitive,
+        buffers: &[gltf::buffer::Data],
+        geometry: &mut Geometry,
+    ) -> Result<Primitive> {
+        Self::load_primitive_vertices(primitive, buffers, geometry)?;
+        let first_index = geometry.indices.len() as u32;
+        let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
         Ok(Primitive {
             first_index,
             number_of_indices,
         })
     }
 
-    fn load_primitive_vertices(&mut self, gltf_primitive: &gltf::Primitive) -> Result<()> {
-        let Self {
-            buffers, vertices, ..
-        } = self;
-
-        let reader = gltf_primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+    fn load_primitive_vertices(
+        primitive: &gltf::Primitive,
+        buffers: &[gltf::buffer::Data],
+        geometry: &mut Geometry,
+    ) -> Result<()> {
+        let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
         let positions = reader
             .read_positions()
@@ -194,7 +228,7 @@ impl Asset {
             .map_or(vec![glm::vec2(0.0, 0.0); number_of_vertices], map_to_vec2);
 
         for (index, position) in positions.into_iter().enumerate() {
-            vertices.push(Vertex {
+            geometry.vertices.push(Vertex {
                 position,
                 normal: normals[index],
                 uv_0: uv_0[index],
@@ -204,12 +238,14 @@ impl Asset {
         Ok(())
     }
 
-    fn load_primitive_indices(&mut self, gltf_primitive: &gltf::Primitive) -> Result<u32> {
-        let Self { buffers, .. } = self;
+    fn load_primitive_indices(
+        primitive: &gltf::Primitive,
+        buffers: &[gltf::buffer::Data],
+        geometry: &mut Geometry,
+    ) -> Result<u32> {
+        let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
-        let reader = gltf_primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-
-        let vertex_count = self.vertices.len();
+        let vertex_count = geometry.vertices.len();
         let primitive_indices = reader
             .read_indices()
             .map(|indices| {
@@ -221,7 +257,8 @@ impl Asset {
             .context("Failed to read indices!")?;
 
         let number_of_indices = primitive_indices.len() as u32;
-        self.indices.extend_from_slice(&primitive_indices);
+
+        geometry.indices.extend_from_slice(&primitive_indices);
 
         Ok(number_of_indices)
     }
@@ -230,7 +267,7 @@ impl Asset {
 pub struct Texture {
     pub image: AllocatedImage,
     pub view: ImageView,
-    pub sampler: Sampler,
+    pub sampler: Sampler, // TODO: Use samplers specified in file
 }
 
 impl Texture {
