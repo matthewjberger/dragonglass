@@ -42,6 +42,16 @@ pub struct ImageDescription {
 }
 
 impl ImageDescription {
+    pub fn empty(width: u32, height: u32, format: vk::Format) -> Self {
+        Self {
+            format,
+            width,
+            height,
+            pixels: Vec::new(),
+            mip_levels: Self::calculate_mip_levels(width, height),
+        }
+    }
+
     pub fn from_file<P>(path: P) -> Result<Self>
     where
         P: AsRef<Path> + Into<PathBuf>,

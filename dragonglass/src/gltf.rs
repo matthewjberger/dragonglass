@@ -69,6 +69,15 @@ fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
     glm::make_mat4x4(&transform)
 }
 
+pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) -> glm::Mat4 {
+    let transform = nodes[graph[index]].transform;
+    let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
+    match incoming_walker.next_node(graph) {
+        Some(parent_index) => global_transform(graph, parent_index, nodes) * transform,
+        None => transform,
+    }
+}
+
 const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub struct Asset {
@@ -96,13 +105,6 @@ impl Asset {
             scenes,
             geometry,
         })
-    }
-
-    pub fn number_of_meshes(&self) -> usize {
-        self.gltf
-            .nodes()
-            .filter(|node| node.mesh().is_some())
-            .count()
     }
 
     pub fn material_at_index(&self, index: usize) -> Result<gltf::Material> {
@@ -165,9 +167,11 @@ impl Asset {
         buffers: &[gltf::buffer::Data],
         geometry: &mut Geometry,
     ) -> Result<Primitive> {
-        Self::load_primitive_vertices(primitive, buffers, geometry)?;
+        // Indices must be loaded before vertices in this case
+        // because the number of vertices is used to offset indices
         let first_index = geometry.indices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
+        Self::load_primitive_vertices(primitive, buffers, geometry)?;
         Ok(Primitive {
             first_index,
             number_of_indices,

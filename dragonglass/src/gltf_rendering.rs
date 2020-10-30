@@ -6,7 +6,7 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::{Asset, Geometry, Primitive, Vertex},
+    gltf::{global_transform, Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
@@ -70,44 +70,44 @@ impl Default for PushConstantMaterial {
 }
 
 impl PushConstantMaterial {
-    fn from_primitive(asset: &Asset, primitive: &Primitive) -> Result<Self> {
+    fn from_gltf(primitive_material: &gltf::Material) -> Result<Self> {
         let mut material = Self::default();
-        if let Some(material_index) = primitive.material_index {
-            let primitive_material = asset.material_at_index(material_index)?;
-            let pbr = primitive_material.pbr_metallic_roughness();
-            material.base_color_factor = glm::Vec4::from(pbr.base_color_factor());
-            material.metallic_factor = pbr.metallic_factor();
-            material.roughness_factor = pbr.roughness_factor();
-            material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
-            material.alpha_mode = primitive_material.alpha_mode() as i32;
-            material.alpha_cutoff = primitive_material.alpha_cutoff();
-            if let Some(base_color_texture) = pbr.base_color_texture() {
-                material.color_texture_set = base_color_texture.texture().index() as i32;
-            }
-            if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
-                material.metallic_roughness_texture_set =
-                    metallic_roughness_texture.texture().index() as i32;
-            }
-            if let Some(normal_texture) = primitive_material.normal_texture() {
-                material.normal_texture_set = normal_texture.texture().index() as i32;
-            }
-            if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
-                material.occlusion_texture_set = occlusion_texture.texture().index() as i32;
-            }
-            if let Some(emissive_texture) = primitive_material.emissive_texture() {
-                material.emissive_texture_set = emissive_texture.texture().index() as i32;
-            }
+        let pbr = primitive_material.pbr_metallic_roughness();
+        material.base_color_factor = glm::Vec4::from(pbr.base_color_factor());
+        material.metallic_factor = pbr.metallic_factor();
+        material.roughness_factor = pbr.roughness_factor();
+        material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
+        material.alpha_mode = primitive_material.alpha_mode() as i32;
+        material.alpha_cutoff = primitive_material.alpha_cutoff();
+        if let Some(base_color_texture) = pbr.base_color_texture() {
+            material.color_texture_set = base_color_texture.texture().index() as i32;
         }
+        if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
+            material.metallic_roughness_texture_set =
+                metallic_roughness_texture.texture().index() as i32;
+        }
+        if let Some(normal_texture) = primitive_material.normal_texture() {
+            material.normal_texture_set = normal_texture.texture().index() as i32;
+        }
+        if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
+            material.occlusion_texture_set = occlusion_texture.texture().index() as i32;
+        }
+        if let Some(emissive_texture) = primitive_material.emissive_texture() {
+            material.emissive_texture_set = emissive_texture.texture().index() as i32;
+        }
+
         Ok(material)
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
 }
 
-pub struct MeshDynamicUniformBuffer {
+#[derive(Debug, Clone, Copy)]
+pub struct NodeDynamicUniformBuffer {
     pub model: glm::Mat4,
 }
 
@@ -120,7 +120,7 @@ pub struct GltfPipelineData {
     pub descriptor_set: vk::DescriptorSet,
     pub textures: Vec<Texture>,
     pub geometry_buffer: GeometryBuffer,
-    // pub dummy: DummyImage,
+    pub dummy: Texture,
 }
 
 impl GltfPipelineData {
@@ -139,30 +139,34 @@ impl GltfPipelineData {
 
         let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             allocator.clone(),
-            mem::size_of::<MeshDynamicUniformBuffer>() as _,
+            mem::size_of::<AssetUniformBuffer>() as _,
         )?;
 
-        let dynamic_alignment = context.dynamic_alignment_of::<MeshDynamicUniformBuffer>();
-        let number_of_meshes = asset.number_of_meshes();
+        let dynamic_alignment = context.dynamic_alignment_of::<NodeDynamicUniformBuffer>();
+        let number_of_nodes = asset.nodes.len(); // TODO: Maybe only data is needed per-mesh rather than per-node
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             allocator,
-            (number_of_meshes as u64 * dynamic_alignment) as vk::DeviceSize,
+            (number_of_nodes as u64 * dynamic_alignment) as vk::DeviceSize,
         )?;
 
         let geometry_buffer = Self::geometry_buffer(context, command_pool, &asset.geometry)?;
 
-        let data = Self {
+        let empty_description = ImageDescription::empty(1, 1, vk::Format::R8G8B8A8_UNORM);
+        let dummy = Texture::new(context, command_pool, &empty_description)?;
+
+        let mut data = Self {
             descriptor_pool,
             uniform_buffer,
             dynamic_uniform_buffer,
             descriptor_set,
             dynamic_alignment,
-            // dummy: DummyImage::new(context.clone(), &command_pool),
+            dummy,
             descriptor_set_layout,
             textures,
             geometry_buffer,
         };
-        data.update_descriptor_set(device, number_of_meshes);
+        data.update_descriptor_set(device, number_of_nodes);
+        data.update_dynamic_ubo(asset)?;
         Ok(data)
     }
 
@@ -242,7 +246,7 @@ impl GltfPipelineData {
         Ok(geometry_buffer)
     }
 
-    fn update_descriptor_set(&self, device: Arc<Device>, number_of_meshes: usize) {
+    fn update_descriptor_set(&self, device: Arc<Device>, number_of_nodes: usize) {
         let uniform_buffer_size = mem::size_of::<AssetUniformBuffer>() as vk::DeviceSize;
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
@@ -252,7 +256,7 @@ impl GltfPipelineData {
         let buffer_infos = [buffer_info];
 
         let dynamic_uniform_buffer_size =
-            (number_of_meshes as u64 * self.dynamic_alignment) as vk::DeviceSize;
+            (number_of_nodes as u64 * self.dynamic_alignment) as vk::DeviceSize;
         let dynamic_buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.dynamic_uniform_buffer.handle())
             .offset(0)
@@ -260,7 +264,7 @@ impl GltfPipelineData {
             .build();
         let dynamic_buffer_infos = [dynamic_buffer_info];
 
-        let image_infos = self
+        let mut image_infos = self
             .textures
             .iter()
             .map(|texture| {
@@ -272,20 +276,20 @@ impl GltfPipelineData {
             })
             .collect::<Vec<_>>();
 
-        // let number_of_images = image_infos.len();
-        // let required_images = Self::MAX_TEXTURES;
-        // if number_of_images < required_images {
-        //     let remaining = required_images - number_of_images;
-        //     for _ in 0..remaining {
-        //         image_infos.push(
-        //             vk::DescriptorImageInfo::builder()
-        //                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        //                 .image_view(self.dummy.view().view())
-        //                 .sampler(self.dummy.sampler().sampler())
-        //                 .build(),
-        //         );
-        //     }
-        // }
+        let number_of_images = image_infos.len();
+        let required_images = Self::MAX_TEXTURES;
+        if number_of_images < required_images {
+            let remaining = required_images - number_of_images;
+            for _ in 0..remaining {
+                image_infos.push(
+                    vk::DescriptorImageInfo::builder()
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                        .image_view(self.dummy.view.handle)
+                        .sampler(self.dummy.sampler.handle)
+                        .build(),
+                );
+            }
+        }
 
         let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
@@ -345,6 +349,26 @@ impl GltfPipelineData {
             }
         }
     }
+
+    fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<()> {
+        let mut buffers = Vec::with_capacity(asset.nodes.len());
+
+        for scene in asset.scenes.iter() {
+            for graph in scene.graphs.iter() {
+                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+                while let Some(node_index) = dfs.next(&graph) {
+                    buffers.push(NodeDynamicUniformBuffer {
+                        model: global_transform(graph, node_index, &asset.nodes),
+                    });
+                }
+            }
+        }
+
+        let alignment = self.dynamic_alignment;
+        self.dynamic_uniform_buffer
+            .upload_data_aligned(&buffers, 0, alignment)?;
+        Ok(())
+    }
 }
 
 pub struct GltfRenderer {
@@ -378,16 +402,13 @@ impl GltfRenderer {
             for graph in scene.graphs.iter() {
                 let mut dfs = Dfs::new(graph, NodeIndex::new(0));
                 while let Some(node_index) = dfs.next(&graph) {
-                    let node = &asset.nodes[graph[node_index]];
+                    let node_offset = graph[node_index];
+                    let node = &asset.nodes[node_offset];
                     let mesh = match node.mesh.as_ref() {
                         Some(mesh) => mesh,
                         _ => continue,
                     };
 
-                    // TODO: Update dynamic_ubo with mesh model matrices (aligned)
-                    // TODO: Update shaders
-                    // FIXME: This needs to offset to the correct mesh
-                    let mesh_offset: u64 = 0;
                     unsafe {
                         device.cmd_bind_descriptor_sets(
                             self.command_buffer,
@@ -395,16 +416,18 @@ impl GltfRenderer {
                             self.pipeline_layout,
                             0,
                             &[self.descriptor_set],
-                            &[(mesh_offset * self.dynamic_alignment) as _],
+                            &[(node_offset as u64 * self.dynamic_alignment) as _],
                         );
                     }
 
                     for primitive in mesh.primitives.iter() {
                         if let Some(material_index) = primitive.material_index {
-                            let material = asset.material_at_index(material_index)?;
-                            if material.alpha_mode() != alpha_mode {
+                            let primitive_material = asset.material_at_index(material_index)?;
+                            if primitive_material.alpha_mode() != alpha_mode {
                                 continue;
                             }
+
+                            let material = PushConstantMaterial::from_gltf(&primitive_material)?;
 
                             unsafe {
                                 device.cmd_push_constants(

@@ -78,6 +78,8 @@ impl App {
 
         input.allowed = true;
 
+        rendering_device.load_asset("assets/models/DamagedHelmet.glb")?;
+
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
