@@ -1,7 +1,9 @@
+use std::{mem, sync::Arc};
+
 use crate::{
     adapters::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
-        GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
+        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
     gltf::{Asset, Geometry, Primitive, Vertex},
@@ -14,9 +16,6 @@ use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
-use petgraph::{graph::NodeIndex, visit::Dfs};
-use std::{mem, sync::Arc};
-use vk_mem::Allocator;
 
 fn load_textures(
     context: &Context,
@@ -140,7 +139,7 @@ impl GltfPipelineData {
         let dynamic_alignment = context.dynamic_alignment_of::<MeshDynamicUniformBuffer>();
         let number_of_meshes = asset.number_of_meshes();
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
-            allocator.clone(),
+            allocator,
             (number_of_meshes as u64 * dynamic_alignment) as vk::DeviceSize,
         )?;
 
@@ -255,7 +254,7 @@ impl GltfPipelineData {
             .build();
         let dynamic_buffer_infos = [dynamic_buffer_info];
 
-        let mut image_infos = self
+        let image_infos = self
             .textures
             .iter()
             .map(|texture| {
@@ -267,8 +266,8 @@ impl GltfPipelineData {
             })
             .collect::<Vec<_>>();
 
-        let number_of_images = image_infos.len();
-        let required_images = Self::MAX_TEXTURES;
+        // let number_of_images = image_infos.len();
+        // let required_images = Self::MAX_TEXTURES;
         // if number_of_images < required_images {
         //     let remaining = required_images - number_of_images;
         //     for _ in 0..remaining {
@@ -330,7 +329,6 @@ pub struct GltfRenderer {
 impl GltfRenderer {
     pub fn new(
         command_buffer: vk::CommandBuffer,
-        pipeline: &GraphicsPipeline,
         pipeline_layout: &PipelineLayout,
         pipeline_data: &GltfPipelineData,
     ) -> Self {
@@ -355,17 +353,13 @@ pub struct AssetRendering {
 
 impl AssetRendering {
     pub fn new(context: &Context, command_pool: &CommandPool, asset: Asset) -> Result<Self> {
-        let device = context.device.clone();
-        let allocator = context.allocator.clone();
-
         let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
-
         Ok(Self {
             asset,
             pipeline: None,
             pipeline_layout: None,
             pipeline_data,
-            device,
+            device: context.device.clone(),
         })
     }
 
