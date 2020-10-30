@@ -4,18 +4,46 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::{Asset, Geometry, Node, SceneGraph, Vertex},
+    gltf::{Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};
 use vk_mem::Allocator;
+
+fn load_textures(
+    context: &Context,
+    command_pool: &CommandPool,
+    textures: &[gltf::image::Data],
+) -> Result<Vec<Texture>> {
+    textures
+        .iter()
+        .map(|texture| {
+            let description = ImageDescription::from_gltf(&texture)?;
+            Texture::new(context, command_pool, &description)
+        })
+        .collect::<Result<Vec<_>>>()
+}
+
+pub struct PushConstantBlockMaterial {
+    pub base_color_factor: glm::Vec4,
+    // pub emissive_factor: glm::Vec3,
+    pub color_texture_set: i32,
+    // pub metallic_roughness_texture_set: i32, // B channel - metalness values. G channel - roughness values
+    // pub normal_texture_set: i32,
+    // pub occlusion_texture_set: i32, // R channel - occlusion values
+    // pub emissive_texture_set: i32,
+    // pub metallic_factor: f32,
+    // pub roughness_factor: f32,
+    // pub alpha_mode: i32,
+    // pub alpha_cutoff: f32,
+}
 
 pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
@@ -43,7 +71,7 @@ impl AssetRendering {
     // FIXME: Shorten this parameter list
     pub fn new(
         context: &Context,
-        pool: &CommandPool,
+        command_pool: &CommandPool,
         render_pass: Arc<RenderPass>,
         samples: vk::SampleCountFlags,
         shader_cache: &mut ShaderCache,
@@ -54,6 +82,7 @@ impl AssetRendering {
 
         let number_of_meshes = asset.number_of_meshes();
         let number_of_textures = asset.textures.len();
+        let textures = load_textures(context, command_pool, &asset.textures)?;
 
         let descriptor_pool =
             Self::descriptor_pool(device.clone(), number_of_meshes, number_of_textures)?;
@@ -61,7 +90,7 @@ impl AssetRendering {
         let descriptor_sets = descriptor_pool
             .allocate_descriptor_sets(descriptor_set_layout.handle, number_of_meshes as _)?;
 
-        let geometry_buffer = Self::geometry_buffer(context, pool, &asset.geometry)?;
+        let geometry_buffer = Self::geometry_buffer(context, command_pool, &asset.geometry)?;
 
         let asset_uniform_buffer = Self::asset_uniform_buffer(allocator.clone())?;
         let mesh_uniform_buffers = Self::mesh_uniform_buffers(allocator, number_of_meshes)?;
@@ -213,8 +242,8 @@ impl AssetRendering {
         GraphicsPipelineSettingsBuilder::default()
             .shader_set(shader_set)
             .render_pass(render_pass)
-            .vertex_inputs(Vertex::inputs().to_vec())
-            .vertex_attributes(Vertex::attributes().to_vec())
+            .vertex_inputs(vertex_inputs().to_vec())
+            .vertex_attributes(vertex_attributes().to_vec())
             .descriptor_set_layout(descriptor_set_layout)
             .rasterization_samples(samples)
             .build()
@@ -263,8 +292,7 @@ impl AssetRendering {
                     let node = &self.asset.nodes[graph[node_index]];
 
                     // Get the descriptor set and bind it
-                    // let descriptor_set =
-                    //     self.nodes.iter().filter(|node| node.mesh.is_some()).nth();
+                    // let descriptor_set = self.nodes.iter().filter(|node| node.mesh.is_some()).nth();
                     // unsafe {
                     //     self.device.handle.cmd_bind_descriptor_sets(
                     //         command_buffer,
@@ -302,5 +330,133 @@ impl AssetRendering {
         }
 
         Ok(())
+    }
+}
+
+pub fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 3] {
+    let float_size = std::mem::size_of::<f32>();
+    let position_description = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(0)
+        .format(vk::Format::R32G32B32_SFLOAT)
+        .offset(0)
+        .build();
+
+    let normal_description = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(1)
+        .format(vk::Format::R32G32B32_SFLOAT)
+        .offset((3 * float_size) as _)
+        .build();
+
+    let tex_coord_0_description = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(2)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset((6 * float_size) as _)
+        .build();
+
+    // let tex_coord_1_description = vk::VertexInputAttributeDescription::builder()
+    //     .binding(0)
+    //     .location(3)
+    //     .format(vk::Format::R32G32_SFLOAT)
+    //     .offset((8 * float_size) as _)
+    //     .build();
+
+    // let joint_0_description = vk::VertexInputAttributeDescription::builder()
+    //     .binding(0)
+    //     .location(4)
+    //     .format(vk::Format::R32G32B32A32_SFLOAT)
+    //     .offset((10 * float_size) as _)
+    //     .build();
+
+    // let weight_0_description = vk::VertexInputAttributeDescription::builder()
+    //     .binding(0)
+    //     .location(5)
+    //     .format(vk::Format::R32G32B32A32_SFLOAT)
+    //     .offset((14 * float_size) as _)
+    //     .build();
+
+    [
+        position_description,
+        normal_description,
+        tex_coord_0_description,
+        // tex_coord_1_description,
+        // joint_0_description,
+        // weight_0_description,
+    ]
+}
+
+pub fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
+    let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
+        .binding(0)
+        .stride(std::mem::size_of::<Vertex>() as _)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build();
+    [vertex_input_binding_description]
+}
+
+pub struct Texture {
+    pub image: AllocatedImage,
+    pub view: ImageView,
+    pub sampler: Sampler, // TODO: Use samplers specified in file
+}
+
+impl Texture {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        description: &ImageDescription,
+    ) -> Result<Self> {
+        let image = description.as_image(context.allocator.clone())?;
+        image.upload_data(context, command_pool, description)?;
+        let view = Self::image_view(context.device.clone(), &image, description)?;
+        let sampler = Self::sampler(context.device.clone(), description.mip_levels)?;
+        let texture = Self {
+            image,
+            view,
+            sampler,
+        };
+        Ok(texture)
+    }
+
+    fn image_view(
+        device: Arc<Device>,
+        image: &AllocatedImage,
+        description: &ImageDescription,
+    ) -> Result<ImageView> {
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1)
+            .level_count(description.mip_levels);
+
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image.handle)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(description.format)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(subresource_range.build());
+
+        ImageView::new(device, create_info)
+    }
+
+    fn sampler(device: Arc<Device>, mip_levels: u32) -> Result<Sampler> {
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::REPEAT)
+            .address_mode_v(vk::SamplerAddressMode::REPEAT)
+            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(mip_levels as _);
+        Sampler::new(device, sampler_info)
     }
 }

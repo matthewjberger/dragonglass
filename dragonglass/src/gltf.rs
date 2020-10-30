@@ -1,13 +1,8 @@
-use crate::{
-    adapters::CommandPool,
-    context::{Context, Device},
-    resources::{AllocatedImage, ImageDescription, ImageView, Sampler},
-};
-use anyhow::{Context as AshContext, Result};
-use ash::vk;
+use crate::{adapters::CommandPool, context::Context};
+use anyhow::{Context as AnyhowContext, Result};
 use nalgebra_glm as glm;
 use petgraph::{prelude::*, visit::Dfs};
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 pub struct Scene {
     pub name: String,
@@ -46,71 +41,6 @@ pub struct Vertex {
     pub uv_0: glm::Vec2,
 }
 
-impl Vertex {
-    pub fn attributes() -> [vk::VertexInputAttributeDescription; 3] {
-        let float_size = std::mem::size_of::<f32>();
-        let position_description = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(0)
-            .build();
-
-        let normal_description = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(1)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset((3 * float_size) as _)
-            .build();
-
-        let tex_coord_0_description = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(2)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset((6 * float_size) as _)
-            .build();
-
-        // let tex_coord_1_description = vk::VertexInputAttributeDescription::builder()
-        //     .binding(0)
-        //     .location(3)
-        //     .format(vk::Format::R32G32_SFLOAT)
-        //     .offset((8 * float_size) as _)
-        //     .build();
-
-        // let joint_0_description = vk::VertexInputAttributeDescription::builder()
-        //     .binding(0)
-        //     .location(4)
-        //     .format(vk::Format::R32G32B32A32_SFLOAT)
-        //     .offset((10 * float_size) as _)
-        //     .build();
-
-        // let weight_0_description = vk::VertexInputAttributeDescription::builder()
-        //     .binding(0)
-        //     .location(5)
-        //     .format(vk::Format::R32G32B32A32_SFLOAT)
-        //     .offset((14 * float_size) as _)
-        //     .build();
-
-        [
-            position_description,
-            normal_description,
-            tex_coord_0_description,
-            // tex_coord_1_description,
-            // joint_0_description,
-            // weight_0_description,
-        ]
-    }
-
-    pub fn inputs() -> [vk::VertexInputBindingDescription; 1] {
-        let vertex_input_binding_description = vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride(std::mem::size_of::<Self>() as _)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
-        [vertex_input_binding_description]
-    }
-}
-
 pub type SceneGraph = Graph<usize, ()>;
 
 pub fn create_scene_graph(node: &gltf::Node) -> SceneGraph {
@@ -144,7 +74,7 @@ const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub struct Asset {
     gltf: gltf::Document,
-    pub textures: Vec<Texture>,
+    pub textures: Vec<gltf::image::Data>,
     pub nodes: Vec<Node>,
     pub scenes: Vec<Scene>,
     pub geometry: Geometry,
@@ -157,7 +87,6 @@ impl Asset {
     {
         let (gltf, buffers, textures) = gltf::import(path)?;
 
-        let textures = Self::load_textures(context, command_pool, &textures)?;
         let (nodes, geometry) = Self::load_nodes(&gltf, &buffers)?;
         let scenes = Self::load_scenes(&gltf);
 
@@ -210,20 +139,6 @@ impl Asset {
             }
         }
         Ok(())
-    }
-
-    fn load_textures(
-        context: &Context,
-        command_pool: &CommandPool,
-        textures: &[gltf::image::Data],
-    ) -> Result<Vec<Texture>> {
-        textures
-            .iter()
-            .map(|texture| {
-                let description = ImageDescription::from_gltf(&texture)?;
-                Texture::new(context, command_pool, &description)
-            })
-            .collect::<Result<Vec<_>>>()
     }
 
     fn load_scenes(gltf: &gltf::Document) -> Vec<Scene> {
@@ -351,70 +266,5 @@ impl Asset {
         geometry.indices.extend_from_slice(&primitive_indices);
 
         Ok(number_of_indices)
-    }
-}
-
-pub struct Texture {
-    pub image: AllocatedImage,
-    pub view: ImageView,
-    pub sampler: Sampler, // TODO: Use samplers specified in file
-}
-
-impl Texture {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        description: &ImageDescription,
-    ) -> Result<Self> {
-        let image = description.as_image(context.allocator.clone())?;
-        image.upload_data(context, command_pool, description)?;
-        let view = Self::image_view(context.device.clone(), &image, description)?;
-        let sampler = Self::sampler(context.device.clone(), description.mip_levels)?;
-        let texture = Self {
-            image,
-            view,
-            sampler,
-        };
-        Ok(texture)
-    }
-
-    fn image_view(
-        device: Arc<Device>,
-        image: &AllocatedImage,
-        description: &ImageDescription,
-    ) -> Result<ImageView> {
-        let subresource_range = vk::ImageSubresourceRange::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .layer_count(1)
-            .level_count(description.mip_levels);
-
-        let create_info = vk::ImageViewCreateInfo::builder()
-            .image(image.handle)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(description.format)
-            .components(vk::ComponentMapping::default())
-            .subresource_range(subresource_range.build());
-
-        ImageView::new(device, create_info)
-    }
-
-    fn sampler(device: Arc<Device>, mip_levels: u32) -> Result<Sampler> {
-        let sampler_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::REPEAT)
-            .address_mode_v(vk::SamplerAddressMode::REPEAT)
-            .address_mode_w(vk::SamplerAddressMode::REPEAT)
-            .anisotropy_enable(true)
-            .max_anisotropy(16.0)
-            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-            .unnormalized_coordinates(false)
-            .compare_enable(false)
-            .compare_op(vk::CompareOp::ALWAYS)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .mip_lod_bias(0.0)
-            .min_lod(0.0)
-            .max_lod(mip_levels as _);
-        Sampler::new(device, sampler_info)
     }
 }
