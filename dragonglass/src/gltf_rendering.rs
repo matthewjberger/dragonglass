@@ -16,6 +16,12 @@ use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
+use petgraph::{graph::NodeIndex, visit::Dfs};
+
+pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
+    let data_ptr = (data as *const T) as *const u8;
+    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
+}
 
 fn load_textures(
     context: &Context,
@@ -362,33 +368,68 @@ impl GltfRenderer {
         }
     }
 
-    pub fn draw_asset(&self, device: &ash::Device, asset: &Asset, alpha_mode: AlphaMode) {
+    pub fn draw_asset(
+        &self,
+        device: &ash::Device,
+        asset: &Asset,
+        alpha_mode: AlphaMode,
+    ) -> Result<()> {
         for scene in asset.scenes.iter() {
-            log::info!("Dfs Scene Traversal: {}", scene.name);
-            // for graph in scene.graphs.iter() {
-            //     let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            //     while let Some(node_index) = dfs.next(&graph) {
-            //         log::info!("Node gltf index: {}", &graph[node_index]);
-            //         let node = &self.nodes[graph[node_index]];
+            for graph in scene.graphs.iter() {
+                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+                while let Some(node_index) = dfs.next(&graph) {
+                    let node = &asset.nodes[graph[node_index]];
+                    let mesh = match node.mesh.as_ref() {
+                        Some(mesh) => mesh,
+                        _ => continue,
+                    };
 
-            //         let mesh = match node.mesh.as_ref() {
-            //             Some(mesh) => mesh,
-            //             _ => continue,
-            //         };
-            //         log::info!("Found mesh: {}", mesh.name);
+                    // TODO: Update dynamic_ubo with mesh model matrices (aligned)
+                    // TODO: Update shaders
+                    // FIXME: This needs to offset to the correct mesh
+                    let mesh_offset: u64 = 0;
+                    unsafe {
+                        device.cmd_bind_descriptor_sets(
+                            self.command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.pipeline_layout,
+                            0,
+                            &[self.descriptor_set],
+                            &[(mesh_offset * self.dynamic_alignment) as _],
+                        );
+                    }
 
-            //         for primitive in mesh.primitives.iter() {
-            //             log::info!("Found primitive: {:#?}", primitive);
-            //             log::info!(
-            //                 "    Material: {:#?}",
-            //                 self.material_at_index(primitive.material_index)?
-            //                     .name()
-            //                     .unwrap_or(DEFAULT_NAME),
-            //             );
-            //         }
-            //     }
-            // }
+                    for primitive in mesh.primitives.iter() {
+                        if let Some(material_index) = primitive.material_index {
+                            let material = asset.material_at_index(material_index)?;
+                            if material.alpha_mode() != alpha_mode {
+                                continue;
+                            }
+
+                            unsafe {
+                                device.cmd_push_constants(
+                                    self.command_buffer,
+                                    self.pipeline_layout,
+                                    vk::ShaderStageFlags::ALL_GRAPHICS,
+                                    0,
+                                    byte_slice_from(&material),
+                                );
+
+                                device.cmd_draw_indexed(
+                                    self.command_buffer,
+                                    primitive.number_of_indices as _,
+                                    1,
+                                    primitive.first_index as _,
+                                    0,
+                                    0,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
+        Ok(())
     }
 }
 
@@ -473,16 +514,16 @@ impl AssetRendering {
         self.pipeline_data
             .bind_geometry_buffer(self.device.clone(), command_buffer);
 
-        [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend]
-            .iter()
-            .for_each(|alpha_mode| match alpha_mode {
+        for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
+            match alpha_mode {
                 AlphaMode::Opaque => {
                     pipeline.bind(&self.device.handle, command_buffer);
-                    renderer.draw_asset(&self.device.handle, &self.asset, *alpha_mode);
+                    renderer.draw_asset(&self.device.handle, &self.asset, *alpha_mode)?;
                 }
                 AlphaMode::Blend => { /* TODO: Implement a blend pipeline */ }
                 _ => {}
-            });
+            }
+        }
 
         Ok(())
     }
