@@ -18,6 +18,10 @@ impl RenderingDevice {
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
+        log::debug!(
+            "Physical Device Properties: {:#?}",
+            context.physical_device_properties()
+        );
         let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
         let scene = Some(Scene::new(
             &context,

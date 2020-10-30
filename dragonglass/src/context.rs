@@ -155,6 +155,17 @@ impl Context {
             vk::SampleCountFlags::TYPE_1
         }
     }
+
+    pub fn dynamic_alignment_of<T>(&self) -> u64 {
+        let properties = self.physical_device_properties();
+        let minimum_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
+        let dynamic_alignment = std::mem::size_of::<T>() as u64;
+        if minimum_ubo_alignment > 0 {
+            (dynamic_alignment + minimum_ubo_alignment - 1) & !(minimum_ubo_alignment - 1)
+        } else {
+            dynamic_alignment
+        }
+    }
 }
 
 pub struct Surface {

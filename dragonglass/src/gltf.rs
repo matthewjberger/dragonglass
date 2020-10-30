@@ -1,5 +1,4 @@
-use crate::{adapters::CommandPool, context::Context};
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::{Context, Result};
 use nalgebra_glm as glm;
 use petgraph::{prelude::*, visit::Dfs};
 use std::path::Path;
@@ -25,7 +24,7 @@ pub struct Mesh {
 pub struct Primitive {
     pub first_index: usize,
     pub number_of_indices: usize,
-    pub material_index: usize,
+    pub material_index: Option<usize>,
 }
 
 #[derive(Default)]
@@ -81,7 +80,7 @@ pub struct Asset {
 }
 
 impl Asset {
-    pub fn new<P>(context: &Context, command_pool: &CommandPool, path: P) -> Result<Self>
+    pub fn new<P>(path: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
@@ -128,12 +127,14 @@ impl Asset {
 
                     for primitive in mesh.primitives.iter() {
                         log::info!("Found primitive: {:#?}", primitive);
-                        log::info!(
-                            "    Material: {:#?}",
-                            self.material_at_index(primitive.material_index)?
-                                .name()
-                                .unwrap_or(DEFAULT_NAME),
-                        );
+                        if let Some(material_index) = primitive.material_index {
+                            log::info!(
+                                "    Material: {:#?}",
+                                self.material_at_index(material_index)?
+                                    .name()
+                                    .unwrap_or(DEFAULT_NAME),
+                            );
+                        }
                     }
                 }
             }
@@ -202,7 +203,7 @@ impl Asset {
         Ok(Primitive {
             first_index,
             number_of_indices,
-            material_index: primitive.material().index().unwrap_or(0), // FIXME: This should load a default material
+            material_index: primitive.material().index(),
         })
     }
 

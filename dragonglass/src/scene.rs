@@ -198,16 +198,10 @@ impl Scene {
             .render_pass
             .clone();
 
-        let asset = Asset::new(context, &self.transient_command_pool, path)?;
+        let asset = Asset::new(path)?;
         asset.traverse()?;
-        let rendering = AssetRendering::new(
-            context,
-            &self.transient_command_pool,
-            offscreen_renderpass,
-            self.samples,
-            &mut self.shader_cache,
-            asset,
-        )?;
+        let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
+        rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
         let _rendering = Rc::new(RefCell::new(rendering));
 
         Ok(())

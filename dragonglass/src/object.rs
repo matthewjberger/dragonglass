@@ -116,15 +116,6 @@ impl ObjectRendering {
         Ok((geometry_buffer, number_of_indices))
     }
 
-    fn shader_paths() -> Result<ShaderPathSet> {
-        let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/object/object.vert.spv")
-            .fragment("assets/shaders/object/object.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        Ok(shader_path_set)
-    }
-
     fn settings(
         device: Arc<Device>,
         shader_cache: &mut ShaderCache,
@@ -134,18 +125,25 @@ impl ObjectRendering {
     ) -> Result<GraphicsPipelineSettings> {
         let shader_paths = Self::shader_paths()?;
         let shader_set = shader_cache.create_shader_set(device, &shader_paths)?;
-        let descriptions = Self::vertex_inputs();
-        let attributes = Self::vertex_attributes();
         let settings = GraphicsPipelineSettingsBuilder::default()
             .shader_set(shader_set)
             .render_pass(render_pass)
-            .vertex_inputs(Self::vertex_inputs().to_vec())
-            .vertex_attributes(Self::vertex_attributes().to_vec())
+            .vertex_inputs(Self::vertex_inputs())
+            .vertex_attributes(Self::vertex_attributes())
             .descriptor_set_layout(descriptor_set_layout)
             .rasterization_samples(samples)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(settings)
+    }
+
+    fn shader_paths() -> Result<ShaderPathSet> {
+        let shader_path_set = ShaderPathSetBuilder::default()
+            .vertex("assets/shaders/object/object.vert.spv")
+            .fragment("assets/shaders/object/object.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        Ok(shader_path_set)
     }
 
     fn uniform_buffer(allocator: Arc<Allocator>) -> Result<CpuToGpuBuffer> {
