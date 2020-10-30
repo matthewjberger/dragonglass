@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
-use petgraph::{prelude::*, visit::Dfs};
+use petgraph::prelude::*;
 use std::path::Path;
 
 pub struct Scene {
@@ -108,38 +108,6 @@ impl Asset {
     pub fn material_at_index(&self, index: usize) -> Result<gltf::Material> {
         let error_message = format!("Failed to lookup gltf asset material at index: {}", index);
         self.gltf.materials().nth(index).context(error_message)
-    }
-
-    pub fn traverse(&self) -> Result<()> {
-        for scene in self.scenes.iter() {
-            log::info!("Dfs Scene Traversal: {}", scene.name);
-            for graph in scene.graphs.iter() {
-                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-                while let Some(node_index) = dfs.next(&graph) {
-                    log::info!("Node gltf index: {}", &graph[node_index]);
-                    let node = &self.nodes[graph[node_index]];
-
-                    let mesh = match node.mesh.as_ref() {
-                        Some(mesh) => mesh,
-                        _ => continue,
-                    };
-                    log::info!("Found mesh: {}", mesh.name);
-
-                    for primitive in mesh.primitives.iter() {
-                        log::info!("Found primitive: {:#?}", primitive);
-                        if let Some(material_index) = primitive.material_index {
-                            log::info!(
-                                "    Material: {:#?}",
-                                self.material_at_index(material_index)?
-                                    .name()
-                                    .unwrap_or(DEFAULT_NAME),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
     }
 
     fn load_scenes(gltf: &gltf::Document) -> Vec<Scene> {

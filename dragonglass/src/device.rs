@@ -67,7 +67,9 @@ impl RenderingDevice {
 
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
-                scene.object.borrow().update_ubo(aspect_ratio, *view)?;
+                if let Some(asset) = scene.asset.as_ref() {
+                    asset.borrow().update_ubo(aspect_ratio, *view)?
+                };
                 scene
                     .rendergraph
                     .execute_at_index(device.clone(), command_buffer, image_index)?;

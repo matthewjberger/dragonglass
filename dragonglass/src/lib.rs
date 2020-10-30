@@ -23,7 +23,6 @@ mod device;
 mod frame;
 mod gltf;
 mod gltf_rendering;
-mod object;
 mod rendergraph;
 mod resources;
 mod scene;

@@ -407,6 +407,17 @@ impl AssetRendering {
 
         Ok(())
     }
+
+    pub fn issue_commands(&self, _command_buffer: vk::CommandBuffer) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn update_ubo(&self, aspect_ratio: f32, view: glm::Mat4) -> Result<()> {
+        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+        let ubo = AssetUniformBuffer { view, projection };
+        self.pipeline_data.uniform_buffer.upload_data(&[ubo], 0)?;
+        Ok(())
+    }
 }
 
 fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 3] {

@@ -6,7 +6,6 @@ use crate::{
     context::{Context, Device},
     gltf::Asset,
     gltf_rendering::AssetRendering,
-    object::ObjectRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     swapchain::{Swapchain, SwapchainProperties},
@@ -18,7 +17,7 @@ use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
-    pub object: Rc<RefCell<ObjectRendering>>,
+    pub asset: Option<Rc<RefCell<AssetRendering>>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
     pub samples: vk::SampleCountFlags,
@@ -41,21 +40,6 @@ impl Scene {
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
 
         let mut shader_cache = ShaderCache::default();
-        let offscreen_renderpass = rendergraph
-            .passes
-            .get("offscreen")
-            .context("Failed to get offscreen pass to create scene")?
-            .render_pass
-            .clone();
-
-        let object = ObjectRendering::new(
-            context,
-            &transient_command_pool,
-            offscreen_renderpass,
-            samples,
-            &mut shader_cache,
-        )?;
-        let object = Rc::new(RefCell::new(object));
 
         let pipeline = PostProcessingPipeline::new(
             context,
@@ -65,13 +49,6 @@ impl Scene {
             rendergraph.samplers["default"].handle,
         )?;
         let pipeline = Rc::new(RefCell::new(pipeline));
-
-        let object_ptr = object.clone();
-        rendergraph
-            .passes
-            .get_mut("offscreen")
-            .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| object_ptr.borrow().issue_commands(command_buffer));
 
         let pipeline_ptr = pipeline.clone();
         rendergraph
@@ -83,7 +60,7 @@ impl Scene {
             });
 
         let path = Self {
-            object,
+            asset: None,
             transient_command_pool,
             shader_cache,
             rendergraph,
@@ -198,11 +175,20 @@ impl Scene {
             .render_pass
             .clone();
 
-        let asset = Asset::new(path)?;
-        asset.traverse()?;
-        let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
+        let mut rendering =
+            AssetRendering::new(context, &self.transient_command_pool, Asset::new(path)?)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
-        let _rendering = Rc::new(RefCell::new(rendering));
+
+        self.asset = None;
+        let asset = Rc::new(RefCell::new(rendering));
+        let asset_ptr = asset.clone();
+        self.asset = Some(asset);
+
+        self.rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set scene callback")?
+            .set_callback(move |command_buffer| asset_ptr.borrow().issue_commands(command_buffer));
 
         Ok(())
     }
