@@ -317,6 +317,28 @@ impl GltfPipelineData {
                 .update_descriptor_sets(&descriptor_writes, &[])
         }
     }
+
+    pub fn bind_geometry_buffer(&self, device: Arc<Device>, command_buffer: vk::CommandBuffer) {
+        let offsets = [0];
+        let vertex_buffers = [self.geometry_buffer.vertex_buffer.handle()];
+
+        unsafe {
+            device
+                .handle
+                .cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+        }
+
+        if let Some(index_buffer) = self.geometry_buffer.index_buffer.as_ref() {
+            unsafe {
+                device.handle.cmd_bind_index_buffer(
+                    command_buffer,
+                    index_buffer.handle(),
+                    0,
+                    vk::IndexType::UINT32,
+                );
+            }
+        }
+    }
 }
 
 pub struct GltfRenderer {
@@ -340,7 +362,34 @@ impl GltfRenderer {
         }
     }
 
-    pub fn draw_asset(&self, device: &ash::Device, asset: &Asset, alpha_mode: AlphaMode) {}
+    pub fn draw_asset(&self, device: &ash::Device, asset: &Asset, alpha_mode: AlphaMode) {
+        for scene in asset.scenes.iter() {
+            log::info!("Dfs Scene Traversal: {}", scene.name);
+            // for graph in scene.graphs.iter() {
+            //     let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            //     while let Some(node_index) = dfs.next(&graph) {
+            //         log::info!("Node gltf index: {}", &graph[node_index]);
+            //         let node = &self.nodes[graph[node_index]];
+
+            //         let mesh = match node.mesh.as_ref() {
+            //             Some(mesh) => mesh,
+            //             _ => continue,
+            //         };
+            //         log::info!("Found mesh: {}", mesh.name);
+
+            //         for primitive in mesh.primitives.iter() {
+            //             log::info!("Found primitive: {:#?}", primitive);
+            //             log::info!(
+            //                 "    Material: {:#?}",
+            //                 self.material_at_index(primitive.material_index)?
+            //                     .name()
+            //                     .unwrap_or(DEFAULT_NAME),
+            //             );
+            //         }
+            //     }
+            // }
+        }
+    }
 }
 
 pub struct AssetRendering {
@@ -408,7 +457,33 @@ impl AssetRendering {
         Ok(())
     }
 
-    pub fn issue_commands(&self, _command_buffer: vk::CommandBuffer) -> Result<()> {
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+        let pipeline = self
+            .pipeline
+            .as_ref()
+            .context("Failed to get pipeline for rendering asset!")?;
+
+        let pipeline_layout = self
+            .pipeline_layout
+            .as_ref()
+            .context("Failed to get pipeline layout for rendering asset!")?;
+
+        let renderer = GltfRenderer::new(command_buffer, pipeline_layout, &self.pipeline_data);
+
+        self.pipeline_data
+            .bind_geometry_buffer(self.device.clone(), command_buffer);
+
+        [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend]
+            .iter()
+            .for_each(|alpha_mode| match alpha_mode {
+                AlphaMode::Opaque => {
+                    pipeline.bind(&self.device.handle, command_buffer);
+                    renderer.draw_asset(&self.device.handle, &self.asset, *alpha_mode);
+                }
+                AlphaMode::Blend => { /* TODO: Implement a blend pipeline */ }
+                _ => {}
+            });
+
         Ok(())
     }
 
