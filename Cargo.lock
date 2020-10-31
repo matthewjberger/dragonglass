@@ -492,7 +492,6 @@ dependencies = [
  "gltf",
  "image",
  "log",
- "nalgebra",
  "nalgebra-glm",
  "petgraph",
  "raw-window-handle",

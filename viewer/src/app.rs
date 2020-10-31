@@ -3,6 +3,7 @@ use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
 use log::{error, info};
+use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode, WindowEvent},
@@ -115,6 +116,7 @@ impl App {
                                         log::error!("Viewer error: {}", error);
                                         system.exit_requested = true;
                                     }
+                                    camera = OrbitalCamera::default();
                                     log::info!("Loaded gltf asset: '{}'", raw_path);
                                 }
                                 _ => log::warn!(
@@ -134,10 +136,24 @@ impl App {
             return;
         }
         let scroll_multiplier = 0.01;
+        let rotation_multiplier = 0.05;
+        let drag_multiplier = 0.001;
+
         camera.forward(input.mouse.wheel_delta.y * scroll_multiplier);
+
+        if input.is_key_pressed(VirtualKeyCode::R) {
+            *camera = OrbitalCamera::default();
+        }
+
         if input.mouse.is_left_clicked {
-            let rotation = input.mouse.position_delta * system.delta_time as f32;
+            let mut delta = input.mouse.position_delta;
+            delta.y *= -1.0;
+            let rotation = delta * rotation_multiplier * system.delta_time as f32;
             camera.rotate(&rotation);
+        } else if input.mouse.is_right_clicked {
+            let delta = input.mouse.position_delta;
+            let pan = delta * drag_multiplier;
+            camera.pan(&pan);
         }
     }
 }

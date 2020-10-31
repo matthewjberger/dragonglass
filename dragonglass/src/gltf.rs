@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use nalgebra::{Matrix4, Quaternion, UnitQuaternion};
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use std::path::Path;
