@@ -6,7 +6,7 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::{calculate_global_transform, Asset, Geometry, Vertex},
+    gltf::{global_transform, Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
@@ -357,7 +357,7 @@ impl GltfPipelineData {
                 let mut dfs = Dfs::new(graph, NodeIndex::new(0));
                 while let Some(node_index) = dfs.next(&graph) {
                     let offset = graph[node_index];
-                    let model = calculate_global_transform(node_index, graph, &asset.nodes);
+                    let model = global_transform(graph, node_index, &asset.nodes);
                     buffers[offset] = NodeDynamicUniformBuffer { model };
                 }
             }

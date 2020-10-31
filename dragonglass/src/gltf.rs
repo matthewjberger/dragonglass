@@ -60,74 +60,23 @@ pub fn graph_node(gltf_node: &gltf::Node, graph: &mut SceneGraph, parent_index: 
 }
 
 fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
-    let (translation, rotation, scale) = gltf_node.transform().decomposed();
-    let translation: glm::Vec3 = translation.into();
-    let scale: glm::Vec3 = scale.into();
-    let rotation = glm::quat_normalize(&glm::make_quat(&rotation));
-
-    Matrix4::new_translation(&translation)
-        * Matrix4::from(UnitQuaternion::from_quaternion(rotation))
-        * Matrix4::new_nonuniform_scaling(&scale)
-
-    // let transform = gltf_node
-    //     .transform()
-    //     .matrix()
-    //     .iter()
-    //     .flatten()
-    //     .copied()
-    //     .collect::<Vec<_>>();
-    // glm::make_mat4x4(&transform)
+    let transform = gltf_node
+        .transform()
+        .matrix()
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>();
+    glm::make_mat4x4(&transform)
 }
 
-pub fn path_between_nodes(
-    starting_node_index: NodeIndex,
-    node_index: NodeIndex,
-    graph: &SceneGraph,
-) -> Vec<NodeIndex> {
-    let mut indices = Vec::new();
-    let mut dfs = Dfs::new(&graph, starting_node_index);
-    while let Some(current_node_index) = dfs.next(&graph) {
-        let mut incoming_walker = graph
-            .neighbors_directed(current_node_index, Incoming)
-            .detach();
-        let mut outgoing_walker = graph
-            .neighbors_directed(current_node_index, Outgoing)
-            .detach();
-
-        if let Some(parent) = incoming_walker.next_node(graph) {
-            while let Some(last_index) = indices.last() {
-                if *last_index == parent {
-                    break;
-                }
-                // Discard indices for transforms that are no longer needed
-                indices.pop();
-            }
-        }
-
-        indices.push(current_node_index);
-
-        if node_index == current_node_index {
-            break;
-        }
-
-        // If the node has no children, don't store the index
-        if outgoing_walker.next(graph).is_none() {
-            indices.pop();
-        }
+pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) -> glm::Mat4 {
+    let transform = nodes[graph[index]].transform;
+    let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
+    match incoming_walker.next_node(graph) {
+        Some(parent_index) => global_transform(graph, parent_index, nodes) * transform,
+        None => transform,
     }
-    indices
-}
-
-pub fn calculate_global_transform(
-    node_index: NodeIndex,
-    graph: &SceneGraph,
-    nodes: &[Node],
-) -> glm::Mat4 {
-    path_between_nodes(NodeIndex::new(0), node_index, graph)
-        .into_iter()
-        .fold(glm::Mat4::identity(), |transform, index| {
-            transform * nodes[graph[index]].transform
-        })
 }
 
 const DEFAULT_NAME: &str = "<Unnamed>";
