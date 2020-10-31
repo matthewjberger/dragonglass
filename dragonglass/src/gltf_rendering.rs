@@ -6,7 +6,7 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::{global_transform, Asset, Geometry, Vertex},
+    gltf::{calculate_global_transform, Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
@@ -106,7 +106,7 @@ pub struct AssetUniformBuffer {
     pub projection: glm::Mat4,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct NodeDynamicUniformBuffer {
     pub model: glm::Mat4,
 }
@@ -351,19 +351,17 @@ impl GltfPipelineData {
     }
 
     fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<()> {
-        let mut buffers = Vec::with_capacity(asset.nodes.len());
-
+        let mut buffers = vec![NodeDynamicUniformBuffer::default(); asset.nodes.len()];
         for scene in asset.scenes.iter() {
             for graph in scene.graphs.iter() {
                 let mut dfs = Dfs::new(graph, NodeIndex::new(0));
                 while let Some(node_index) = dfs.next(&graph) {
-                    buffers.push(NodeDynamicUniformBuffer {
-                        model: global_transform(graph, node_index, &asset.nodes),
-                    });
+                    let offset = graph[node_index];
+                    let model = calculate_global_transform(node_index, graph, &asset.nodes);
+                    buffers[offset] = NodeDynamicUniformBuffer { model };
                 }
             }
         }
-
         let alignment = self.dynamic_alignment;
         self.dynamic_uniform_buffer
             .upload_data_aligned(&buffers, 0, alignment)?;
