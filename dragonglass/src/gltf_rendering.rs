@@ -1,5 +1,3 @@
-use std::{mem, sync::Arc};
-
 use crate::{
     adapters::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
@@ -17,6 +15,7 @@ use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
+use std::{mem, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
     let data_ptr = (data as *const T) as *const u8;
@@ -455,7 +454,7 @@ impl GltfRenderer {
 }
 
 pub struct AssetRendering {
-    pub asset: Asset,
+    pub asset: Arc<Asset>,
     pub pipeline_data: GltfPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
@@ -463,14 +462,14 @@ pub struct AssetRendering {
 }
 
 impl AssetRendering {
-    pub fn new(context: &Context, command_pool: &CommandPool, asset: Asset) -> Result<Self> {
+    pub fn new(context: &Context, command_pool: &CommandPool, asset: Arc<Asset>) -> Result<Self> {
         let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
         Ok(Self {
-            asset,
             pipeline: None,
             pipeline_layout: None,
             pipeline_data,
             device: context.device.clone(),
+            asset,
         })
     }
 

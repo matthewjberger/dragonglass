@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 pub struct Scene {
     pub transient_command_pool: CommandPool,
@@ -163,10 +163,7 @@ impl Scene {
         Ok(rendergraph)
     }
 
-    pub fn load_asset<P>(&mut self, context: &Context, path: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
+    pub fn load_asset(&mut self, context: &Context, asset: Arc<Asset>) -> Result<()> {
         let offscreen_renderpass = self
             .rendergraph
             .passes
@@ -175,20 +172,21 @@ impl Scene {
             .render_pass
             .clone();
 
-        let mut rendering =
-            AssetRendering::new(context, &self.transient_command_pool, Asset::new(path)?)?;
+        let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
 
         self.asset = None;
-        let asset = Rc::new(RefCell::new(rendering));
-        let asset_ptr = asset.clone();
-        self.asset = Some(asset);
+        let asset_rendering = Rc::new(RefCell::new(rendering));
+        let asset_rendering_ptr = asset_rendering.clone();
+        self.asset = Some(asset_rendering);
 
         self.rendergraph
             .passes
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| asset_ptr.borrow().issue_commands(command_buffer));
+            .set_callback(move |command_buffer| {
+                asset_rendering_ptr.borrow().issue_commands(command_buffer)
+            });
 
         Ok(())
     }

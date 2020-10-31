@@ -1,4 +1,4 @@
-use crate::{adapters::CommandPool, context::Context, frame::Frame, scene::Scene};
+use crate::{adapters::CommandPool, context::Context, frame::Frame, gltf::Asset, scene::Scene};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use log::error;
@@ -9,6 +9,7 @@ use std::{path::Path, sync::Arc};
 pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
+    asset: Option<Arc<Asset>>,
     scene: Option<Scene>,
     context: Arc<Context>,
 }
@@ -35,6 +36,7 @@ impl RenderingDevice {
         let renderer = Self {
             _command_pool: command_pool,
             frame,
+            asset: None,
             scene,
             context,
         };
@@ -46,12 +48,17 @@ impl RenderingDevice {
         P: AsRef<Path>,
     {
         match self.scene.as_mut() {
-            Some(scene) => scene.load_asset(&self.context, path),
+            Some(scene) => {
+                self.asset = None;
+                let asset = Arc::new(Asset::new(path)?);
+                scene.load_asset(&self.context, asset.clone())?;
+                self.asset = Some(asset);
+            }
             None => {
                 log::warn!("No scene was available to load the asset into!");
-                Ok(())
             }
         }
+        Ok(())
     }
 
     pub fn render(
@@ -79,11 +86,15 @@ impl RenderingDevice {
 
         if frame.recreated_swapchain {
             self.scene = None;
-            self.scene = Some(Scene::new(
+            let mut scene = Scene::new(
                 &self.context,
                 frame.swapchain()?,
                 &frame.swapchain_properties,
-            )?);
+            )?;
+            if let Some(asset) = self.asset.as_ref() {
+                scene.load_asset(&self.context, asset.clone())?;
+            }
+            self.scene = Some(scene);
         }
 
         Ok(())

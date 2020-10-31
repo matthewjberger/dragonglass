@@ -3,7 +3,6 @@ use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
 use log::{error, info};
-use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode, WindowEvent},
