@@ -102,7 +102,7 @@ impl Scene {
                     format: vk::Format::R8G8B8A8_UNORM,
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
-                            float32: [0.39, 0.58, 0.93, 1.0], // Cornflower blue
+                            float32: [0.39, 0.39, 0.39, 1.0],
                         },
                     },
                     samples,
@@ -125,7 +125,7 @@ impl Scene {
                     format: vk::Format::R8G8B8A8_UNORM,
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
-                            float32: [1.0, 1.0, 1.0, 1.0], // Cornflower blue
+                            float32: [1.0, 1.0, 1.0, 1.0],
                         },
                     },
                     samples: vk::SampleCountFlags::TYPE_1,
