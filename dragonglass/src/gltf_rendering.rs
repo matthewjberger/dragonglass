@@ -327,28 +327,6 @@ impl GltfPipelineData {
         }
     }
 
-    pub fn bind_geometry_buffer(&self, device: Arc<Device>, command_buffer: vk::CommandBuffer) {
-        let offsets = [0];
-        let vertex_buffers = [self.geometry_buffer.vertex_buffer.handle()];
-
-        unsafe {
-            device
-                .handle
-                .cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
-        }
-
-        if let Some(index_buffer) = self.geometry_buffer.index_buffer.as_ref() {
-            unsafe {
-                device.handle.cmd_bind_index_buffer(
-                    command_buffer,
-                    index_buffer.handle(),
-                    0,
-                    vk::IndexType::UINT32,
-                );
-            }
-        }
-    }
-
     fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<()> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); asset.nodes.len()];
         for scene in asset.scenes.iter() {
@@ -532,7 +510,8 @@ impl AssetRendering {
         let renderer = GltfRenderer::new(command_buffer, pipeline_layout, &self.pipeline_data);
 
         self.pipeline_data
-            .bind_geometry_buffer(self.device.clone(), command_buffer);
+            .geometry_buffer
+            .bind(&self.device.handle, command_buffer)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             match alpha_mode {
