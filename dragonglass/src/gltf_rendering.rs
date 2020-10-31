@@ -591,34 +591,52 @@ impl AssetRendering {
     }
 }
 
-fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 3] {
+fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 6] {
     let float_size = std::mem::size_of::<f32>();
-    let position_description = vk::VertexInputAttributeDescription::builder()
+
+    let position = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(0)
         .format(vk::Format::R32G32B32_SFLOAT)
         .offset(0)
         .build();
 
-    let normal_description = vk::VertexInputAttributeDescription::builder()
+    let normal = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(1)
         .format(vk::Format::R32G32B32_SFLOAT)
         .offset((3 * float_size) as _)
         .build();
 
-    let tex_coord_0_description = vk::VertexInputAttributeDescription::builder()
+    let uv_0 = vk::VertexInputAttributeDescription::builder()
         .binding(0)
         .location(2)
         .format(vk::Format::R32G32_SFLOAT)
         .offset((6 * float_size) as _)
         .build();
 
-    [
-        position_description,
-        normal_description,
-        tex_coord_0_description,
-    ]
+    let uv_1 = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(3)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset((8 * float_size) as _)
+        .build();
+
+    let joint_0 = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(4)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset((10 * float_size) as _)
+        .build();
+
+    let weight_0 = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(5)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
+        .offset((14 * float_size) as _)
+        .build();
+
+    [position, normal, uv_0, uv_1, joint_0, weight_0]
 }
 
 fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
