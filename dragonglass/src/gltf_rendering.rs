@@ -53,7 +53,7 @@ pub struct PushConstantMaterial {
 impl Default for PushConstantMaterial {
     fn default() -> Self {
         Self {
-            base_color_factor: glm::vec4(0.0, 0.0, 0.0, 1.0),
+            base_color_factor: glm::vec4(1.0, 1.0, 1.0, 1.0),
             emissive_factor: glm::Vec3::identity(),
             color_texture_set: -1,
             metallic_roughness_texture_set: -1,
@@ -413,41 +413,44 @@ impl GltfRenderer {
                 }
 
                 for primitive in mesh.primitives.iter() {
-                    if let Some(material_index) = primitive.material_index {
-                        let primitive_material = asset.material_at_index(material_index)?;
-                        if primitive_material.alpha_mode() != alpha_mode {
-                            continue;
-                        }
-
-                        let material = PushConstantMaterial::from_gltf(&primitive_material)?;
-
-                        unsafe {
-                            device.cmd_push_constants(
-                                self.command_buffer,
-                                self.pipeline_layout,
-                                vk::ShaderStageFlags::ALL_GRAPHICS,
-                                0,
-                                byte_slice_from(&material),
-                            );
-
-                            if self.has_indices {
-                                device.cmd_draw_indexed(
-                                    self.command_buffer,
-                                    primitive.number_of_indices as _,
-                                    1,
-                                    primitive.first_index as _,
-                                    0,
-                                    0,
-                                );
-                            } else {
-                                device.cmd_draw(
-                                    self.command_buffer,
-                                    primitive.number_of_vertices as _,
-                                    1,
-                                    primitive.first_vertex as _,
-                                    0,
-                                );
+                    let material = match primitive.material_index {
+                        Some(material_index) => {
+                            let primitive_material = asset.material_at_index(material_index)?;
+                            if primitive_material.alpha_mode() != alpha_mode {
+                                continue;
                             }
+
+                            PushConstantMaterial::from_gltf(&primitive_material)?
+                        }
+                        None => PushConstantMaterial::default(),
+                    };
+
+                    unsafe {
+                        device.cmd_push_constants(
+                            self.command_buffer,
+                            self.pipeline_layout,
+                            vk::ShaderStageFlags::ALL_GRAPHICS,
+                            0,
+                            byte_slice_from(&material),
+                        );
+
+                        if self.has_indices {
+                            device.cmd_draw_indexed(
+                                self.command_buffer,
+                                primitive.number_of_indices as _,
+                                1,
+                                primitive.first_index as _,
+                                0,
+                                0,
+                            );
+                        } else {
+                            device.cmd_draw(
+                                self.command_buffer,
+                                primitive.number_of_vertices as _,
+                                1,
+                                primitive.first_vertex as _,
+                                0,
+                            );
                         }
                     }
                 }
