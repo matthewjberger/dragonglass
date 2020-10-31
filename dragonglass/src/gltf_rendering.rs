@@ -464,6 +464,7 @@ pub struct AssetRendering {
     pub asset: Arc<Asset>,
     pub pipeline_data: GltfPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
+    pub pipeline_blended: Option<GraphicsPipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     device: Arc<Device>,
 }
@@ -473,6 +474,7 @@ impl AssetRendering {
         let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
         Ok(Self {
             pipeline: None,
+            pipeline_blended: None,
             pipeline_layout: None,
             pipeline_data,
             device: context.device.clone(),
@@ -503,7 +505,8 @@ impl AssetRendering {
         let shader_paths = Self::shader_paths()?;
         let shader_set = shader_cache.create_shader_set(self.device.clone(), &shader_paths)?;
 
-        let settings = GraphicsPipelineSettingsBuilder::default()
+        let mut settings = GraphicsPipelineSettingsBuilder::default();
+        settings
             .render_pass(render_pass)
             .vertex_inputs(vertex_inputs())
             .vertex_attributes(vertex_attributes())
@@ -512,14 +515,27 @@ impl AssetRendering {
             .rasterization_samples(samples)
             .sample_shading_enabled(true)
             .cull_mode(vk::CullModeFlags::NONE)
-            .push_constant_range(push_constant_range)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .push_constant_range(push_constant_range);
+
+        let mut blend_settings = settings.clone();
+        blend_settings.blended(true);
 
         self.pipeline = None;
+        self.pipeline_blended = None;
         self.pipeline_layout = None;
-        let (pipeline, pipeline_layout) = settings.create_pipeline(self.device.clone())?;
+
+        let (pipeline, pipeline_layout) = settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
+        let (pipeline_blended, _) = blend_settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
         self.pipeline = Some(pipeline);
+        self.pipeline_blended = Some(pipeline_blended);
         self.pipeline_layout = Some(pipeline_layout);
 
         Ok(())
@@ -530,6 +546,11 @@ impl AssetRendering {
             .pipeline
             .as_ref()
             .context("Failed to get pipeline for rendering asset!")?;
+
+        let pipeline_blended = self
+            .pipeline_blended
+            .as_ref()
+            .context("Failed to get blend pipeline for rendering asset!")?;
 
         let pipeline_layout = self
             .pipeline_layout
@@ -549,13 +570,14 @@ impl AssetRendering {
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             match alpha_mode {
-                AlphaMode::Opaque => {
+                AlphaMode::Opaque | AlphaMode::Mask => {
                     pipeline.bind(&self.device.handle, command_buffer);
-                    renderer.draw_asset(&self.device.handle, &self.asset, *alpha_mode)?;
                 }
-                AlphaMode::Blend => { /* TODO: Implement a blend pipeline */ }
-                _ => {}
+                AlphaMode::Blend => {
+                    pipeline_blended.bind(&self.device.handle, command_buffer);
+                }
             }
+            renderer.draw_asset(&self.device.handle, &self.asset, *alpha_mode)?;
         }
 
         Ok(())
