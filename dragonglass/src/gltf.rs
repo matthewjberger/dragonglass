@@ -22,7 +22,9 @@ pub struct Mesh {
 
 #[derive(Debug)]
 pub struct Primitive {
+    pub first_vertex: usize,
     pub first_index: usize,
+    pub number_of_vertices: usize,
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
 }
@@ -170,11 +172,14 @@ impl Asset {
         // Indices must be loaded before vertices in this case
         // because the number of vertices is used to offset indices
         let first_index = geometry.indices.len();
+        let first_vertex = geometry.vertices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
-        Self::load_primitive_vertices(primitive, buffers, geometry)?;
+        let number_of_vertices = Self::load_primitive_vertices(primitive, buffers, geometry)?;
         Ok(Primitive {
             first_index,
+            first_vertex,
             number_of_indices,
+            number_of_vertices,
             material_index: primitive.material().index(),
         })
     }
@@ -183,7 +188,7 @@ impl Asset {
         primitive: &gltf::Primitive,
         buffers: &[gltf::buffer::Data],
         geometry: &mut Geometry,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
         let positions = reader
@@ -214,7 +219,7 @@ impl Asset {
             });
         }
 
-        Ok(())
+        Ok(number_of_vertices)
     }
 
     fn load_primitive_indices(
@@ -223,21 +228,17 @@ impl Asset {
         geometry: &mut Geometry,
     ) -> Result<usize> {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-
         let vertex_count = geometry.vertices.len();
-        let primitive_indices = reader
-            .read_indices()
-            .map(|indices| {
-                indices
-                    .into_u32()
-                    .map(|x| x + vertex_count as u32)
-                    .collect::<Vec<_>>()
-            })
-            .context("Failed to read indices!")?;
-
-        let number_of_indices = primitive_indices.len();
-        geometry.indices.extend_from_slice(&primitive_indices);
-
-        Ok(number_of_indices)
+        if let Some(read_indices) = reader.read_indices().take() {
+            let indices = read_indices
+                .into_u32()
+                .map(|x| x + vertex_count as u32)
+                .collect::<Vec<_>>();
+            let number_of_indices = indices.len();
+            geometry.indices.extend_from_slice(&indices);
+            Ok(number_of_indices)
+        } else {
+            Ok(0)
+        }
     }
 }

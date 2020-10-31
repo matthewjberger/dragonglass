@@ -223,10 +223,17 @@ impl GltfPipelineData {
         pool: &CommandPool,
         geometry: &Geometry,
     ) -> Result<GeometryBuffer> {
+        let has_indices = !geometry.indices.is_empty();
+        let index_buffer_size = if has_indices {
+            Some((geometry.indices.len() * std::mem::size_of::<u32>()) as _)
+        } else {
+            None
+        };
+
         let geometry_buffer = GeometryBuffer::new(
             context.allocator.clone(),
             (geometry.vertices.len() * std::mem::size_of::<Vertex>()) as _,
-            Some((geometry.indices.len() * std::mem::size_of::<u32>()) as _),
+            index_buffer_size,
         )?;
 
         geometry_buffer.vertex_buffer.upload_data(
@@ -236,11 +243,13 @@ impl GltfPipelineData {
             context.graphics_queue(),
         )?;
 
-        geometry_buffer
-            .index_buffer
-            .as_ref()
-            .context("Failed to access index buffer!")?
-            .upload_data(&geometry.indices, 0, pool, context.graphics_queue())?;
+        if has_indices {
+            geometry_buffer
+                .index_buffer
+                .as_ref()
+                .context("Failed to access index buffer!")?
+                .upload_data(&geometry.indices, 0, pool, context.graphics_queue())?;
+        }
 
         Ok(geometry_buffer)
     }
@@ -351,6 +360,7 @@ pub struct GltfRenderer {
     pipeline_layout: vk::PipelineLayout,
     dynamic_alignment: u64,
     descriptor_set: vk::DescriptorSet,
+    has_indices: bool,
 }
 
 impl GltfRenderer {
@@ -358,12 +368,14 @@ impl GltfRenderer {
         command_buffer: vk::CommandBuffer,
         pipeline_layout: &PipelineLayout,
         pipeline_data: &GltfPipelineData,
+        has_indices: bool,
     ) -> Self {
         Self {
             command_buffer,
             pipeline_layout: pipeline_layout.handle,
             dynamic_alignment: pipeline_data.dynamic_alignment,
             descriptor_set: pipeline_data.descriptor_set,
+            has_indices,
         }
     }
 
@@ -413,14 +425,24 @@ impl GltfRenderer {
                                     byte_slice_from(&material),
                                 );
 
-                                device.cmd_draw_indexed(
-                                    self.command_buffer,
-                                    primitive.number_of_indices as _,
-                                    1,
-                                    primitive.first_index as _,
-                                    0,
-                                    0,
-                                );
+                                if self.has_indices {
+                                    device.cmd_draw_indexed(
+                                        self.command_buffer,
+                                        primitive.number_of_indices as _,
+                                        1,
+                                        primitive.first_index as _,
+                                        0,
+                                        0,
+                                    );
+                                } else {
+                                    device.cmd_draw(
+                                        self.command_buffer,
+                                        primitive.number_of_vertices as _,
+                                        1,
+                                        primitive.first_vertex as _,
+                                        0,
+                                    );
+                                }
                             }
                         }
                     }
@@ -507,7 +529,12 @@ impl AssetRendering {
             .as_ref()
             .context("Failed to get pipeline layout for rendering asset!")?;
 
-        let renderer = GltfRenderer::new(command_buffer, pipeline_layout, &self.pipeline_data);
+        let renderer = GltfRenderer::new(
+            command_buffer,
+            pipeline_layout,
+            &self.pipeline_data,
+            self.pipeline_data.geometry_buffer.index_buffer.is_some(),
+        );
 
         self.pipeline_data
             .geometry_buffer
