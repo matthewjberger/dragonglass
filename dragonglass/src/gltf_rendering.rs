@@ -338,14 +338,16 @@ impl GltfPipelineData {
 
     fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<()> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); asset.nodes.len()];
-        for scene in asset.scenes.iter() {
-            for graph in scene.graphs.iter() {
-                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-                while let Some(node_index) = dfs.next(&graph) {
-                    let offset = graph[node_index];
-                    let model = global_transform(graph, node_index, &asset.nodes);
-                    buffers[offset] = NodeDynamicUniformBuffer { model };
-                }
+        let scene = asset
+            .scenes
+            .first()
+            .context("Failed to get first scene to render!")?;
+        for graph in scene.graphs.iter() {
+            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            while let Some(node_index) = dfs.next(&graph) {
+                let offset = graph[node_index];
+                let model = global_transform(graph, node_index, &asset.nodes);
+                buffers[offset] = NodeDynamicUniformBuffer { model };
             }
         }
         let alignment = self.dynamic_alignment;
@@ -385,64 +387,66 @@ impl GltfRenderer {
         asset: &Asset,
         alpha_mode: AlphaMode,
     ) -> Result<()> {
-        for scene in asset.scenes.iter() {
-            for graph in scene.graphs.iter() {
-                let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-                while let Some(node_index) = dfs.next(&graph) {
-                    let node_offset = graph[node_index];
-                    let node = &asset.nodes[node_offset];
-                    let mesh = match node.mesh.as_ref() {
-                        Some(mesh) => mesh,
-                        _ => continue,
-                    };
+        let scene = asset
+            .scenes
+            .first()
+            .context("Failed to get first scene to render!")?;
+        for graph in scene.graphs.iter() {
+            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            while let Some(node_index) = dfs.next(&graph) {
+                let node_offset = graph[node_index];
+                let node = &asset.nodes[node_offset];
+                let mesh = match node.mesh.as_ref() {
+                    Some(mesh) => mesh,
+                    _ => continue,
+                };
 
-                    unsafe {
-                        device.cmd_bind_descriptor_sets(
-                            self.command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pipeline_layout,
-                            0,
-                            &[self.descriptor_set],
-                            &[(node_offset as u64 * self.dynamic_alignment) as _],
-                        );
-                    }
+                unsafe {
+                    device.cmd_bind_descriptor_sets(
+                        self.command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.pipeline_layout,
+                        0,
+                        &[self.descriptor_set],
+                        &[(node_offset as u64 * self.dynamic_alignment) as _],
+                    );
+                }
 
-                    for primitive in mesh.primitives.iter() {
-                        if let Some(material_index) = primitive.material_index {
-                            let primitive_material = asset.material_at_index(material_index)?;
-                            if primitive_material.alpha_mode() != alpha_mode {
-                                continue;
-                            }
+                for primitive in mesh.primitives.iter() {
+                    if let Some(material_index) = primitive.material_index {
+                        let primitive_material = asset.material_at_index(material_index)?;
+                        if primitive_material.alpha_mode() != alpha_mode {
+                            continue;
+                        }
 
-                            let material = PushConstantMaterial::from_gltf(&primitive_material)?;
+                        let material = PushConstantMaterial::from_gltf(&primitive_material)?;
 
-                            unsafe {
-                                device.cmd_push_constants(
+                        unsafe {
+                            device.cmd_push_constants(
+                                self.command_buffer,
+                                self.pipeline_layout,
+                                vk::ShaderStageFlags::ALL_GRAPHICS,
+                                0,
+                                byte_slice_from(&material),
+                            );
+
+                            if self.has_indices {
+                                device.cmd_draw_indexed(
                                     self.command_buffer,
-                                    self.pipeline_layout,
-                                    vk::ShaderStageFlags::ALL_GRAPHICS,
+                                    primitive.number_of_indices as _,
+                                    1,
+                                    primitive.first_index as _,
                                     0,
-                                    byte_slice_from(&material),
+                                    0,
                                 );
-
-                                if self.has_indices {
-                                    device.cmd_draw_indexed(
-                                        self.command_buffer,
-                                        primitive.number_of_indices as _,
-                                        1,
-                                        primitive.first_index as _,
-                                        0,
-                                        0,
-                                    );
-                                } else {
-                                    device.cmd_draw(
-                                        self.command_buffer,
-                                        primitive.number_of_vertices as _,
-                                        1,
-                                        primitive.first_vertex as _,
-                                        0,
-                                    );
-                                }
+                            } else {
+                                device.cmd_draw(
+                                    self.command_buffer,
+                                    primitive.number_of_vertices as _,
+                                    1,
+                                    primitive.first_vertex as _,
+                                    0,
+                                );
                             }
                         }
                     }
