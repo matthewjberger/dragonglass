@@ -3,16 +3,22 @@
 #define MAX_NUMBER_OF_TEXTURES 100
 
 layout(location=0) in vec2 inUV0;
+layout(location=1) in vec2 inUV1;
 
 layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
 
 layout(push_constant) uniform Material{
     vec4 baseColorFactor;
     vec3 emissiveFactor;
+    int colorTextureIndex;
     int colorTextureSet;
+    int metallicRoughnessTextureIndex;
     int metallicRoughnessTextureSet;
+    int normalTextureIndex;
     int normalTextureSet;
+    int occlusionTextureIndex;
     int occlusionTextureSet;
+    int emissiveTextureIndex;
     int emissiveTextureSet;
     float metallicFactor;
     float roughnessFactor;
@@ -36,8 +42,12 @@ vec4 srgb_to_linear(vec4 srgbIn)
 void main()
 {
     vec4 baseColor;
-    if(material.colorTextureSet > -1) {
-        vec4 albedoMap = texture(textures[material.colorTextureSet],inUV0);
+    if(material.colorTextureIndex > -1) {
+        vec2 tex_coord = inUV0;
+        if(material.colorTextureSet != 0) {
+            tex_coord = inUV1;
+        }
+        vec4 albedoMap = texture(textures[material.colorTextureIndex], tex_coord);
         baseColor = srgb_to_linear(albedoMap) * material.baseColorFactor;
     } else {
         baseColor = material.baseColorFactor;
@@ -48,8 +58,12 @@ void main()
     }
 
     vec3 color = baseColor.rgb;
-    if(material.emissiveTextureSet > -1) {
-        vec4 emissiveMap = texture(textures[material.emissiveTextureSet], inUV0);
+    if(material.emissiveTextureIndex > -1) {
+        vec2 tex_coord = inUV0;
+        if(material.emissiveTextureSet != 0) {
+            tex_coord = inUV1;
+        }
+        vec4 emissiveMap = texture(textures[material.emissiveTextureIndex], tex_coord);
         color += srgb_to_linear(emissiveMap).rgb * material.emissiveFactor;
     }
   

@@ -30,19 +30,25 @@ fn load_textures(
     textures
         .iter()
         .map(|texture| {
-            let description = ImageDescription::from_gltf(&texture)?;
+            let description = ImageDescription::from_gltf(texture)?;
             Texture::new(context, command_pool, &description)
         })
         .collect::<Result<Vec<_>>>()
 }
 
+#[derive(Debug)]
 pub struct PushConstantMaterial {
     pub base_color_factor: glm::Vec4,
     pub emissive_factor: glm::Vec3,
+    pub color_texture_index: i32,
     pub color_texture_set: i32,
-    pub metallic_roughness_texture_set: i32, // B channel - metalness values. G channel - roughness values
+    pub metallic_roughness_texture_index: i32, // B channel - metalness values. G channel - roughness values
+    pub metallic_roughness_texture_set: i32,
+    pub normal_texture_index: i32,
     pub normal_texture_set: i32,
-    pub occlusion_texture_set: i32, // R channel - occlusion values
+    pub occlusion_texture_index: i32, // R channel - occlusion values
+    pub occlusion_texture_set: i32,   // R channel - occlusion values
+    pub emissive_texture_index: i32,
     pub emissive_texture_set: i32,
     pub metallic_factor: f32,
     pub roughness_factor: f32,
@@ -55,10 +61,15 @@ impl Default for PushConstantMaterial {
         Self {
             base_color_factor: glm::vec4(1.0, 1.0, 1.0, 1.0),
             emissive_factor: glm::Vec3::identity(),
+            color_texture_index: -1,
             color_texture_set: -1,
+            metallic_roughness_texture_index: -1,
             metallic_roughness_texture_set: -1,
+            normal_texture_index: -1,
             normal_texture_set: -1,
+            occlusion_texture_index: -1,
             occlusion_texture_set: -1,
+            emissive_texture_index: -1,
             emissive_texture_set: -1,
             metallic_factor: 0.0,
             roughness_factor: 0.0,
@@ -79,22 +90,28 @@ impl PushConstantMaterial {
         material.alpha_mode = primitive_material.alpha_mode() as i32;
         material.alpha_cutoff = primitive_material.alpha_cutoff();
         if let Some(base_color_texture) = pbr.base_color_texture() {
-            material.color_texture_set = base_color_texture.texture().index() as i32;
+            material.color_texture_index = base_color_texture.texture().index() as i32;
+            material.color_texture_set = base_color_texture.tex_coord() as i32;
         }
         if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
-            material.metallic_roughness_texture_set =
+            material.metallic_roughness_texture_index =
                 metallic_roughness_texture.texture().index() as i32;
+            material.metallic_roughness_texture_set = metallic_roughness_texture.tex_coord() as i32;
         }
         if let Some(normal_texture) = primitive_material.normal_texture() {
-            material.normal_texture_set = normal_texture.texture().index() as i32;
+            material.normal_texture_index = normal_texture.texture().index() as i32;
+            material.normal_texture_set = normal_texture.tex_coord() as i32;
         }
         if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
-            material.occlusion_texture_set = occlusion_texture.texture().index() as i32;
+            material.occlusion_texture_index = occlusion_texture.texture().index() as i32;
+            material.occlusion_texture_set = occlusion_texture.tex_coord() as i32;
         }
         if let Some(emissive_texture) = primitive_material.emissive_texture() {
-            material.emissive_texture_set = emissive_texture.texture().index() as i32;
+            material.emissive_texture_index = emissive_texture.texture().index() as i32;
+            material.emissive_texture_set = emissive_texture.tex_coord() as i32;
         }
 
+        log::debug!("MATERIAL: {:#?}", material);
         Ok(material)
     }
 }

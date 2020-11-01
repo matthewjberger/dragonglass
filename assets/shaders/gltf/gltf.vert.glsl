@@ -18,6 +18,7 @@ layout(binding=1) uniform UboInstance{
 } uboInstance;
 
 layout(location=0) out vec2 outUV0;
+layout(location=1) out vec2 outUV1;
 
 void main()
 {
@@ -25,4 +26,5 @@ void main()
   locPos.y = -locPos.y;
   gl_Position = uboView.projection * uboView.view * locPos;
   outUV0 = inUV0;
+  outUV1 = inUV1;
 }
