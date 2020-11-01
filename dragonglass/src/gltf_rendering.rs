@@ -183,7 +183,7 @@ impl GltfPipelineData {
             textures,
             geometry_buffer,
         };
-        data.update_descriptor_set(device, number_of_nodes);
+        data.update_descriptor_set(device);
         data.update_dynamic_ubo(asset)?;
         Ok(data)
     }
@@ -273,7 +273,7 @@ impl GltfPipelineData {
         Ok(geometry_buffer)
     }
 
-    fn update_descriptor_set(&self, device: Arc<Device>, number_of_nodes: usize) {
+    fn update_descriptor_set(&self, device: Arc<Device>) {
         let uniform_buffer_size = mem::size_of::<AssetUniformBuffer>() as vk::DeviceSize;
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
@@ -282,12 +282,10 @@ impl GltfPipelineData {
             .build();
         let buffer_infos = [buffer_info];
 
-        let dynamic_uniform_buffer_size =
-            (number_of_nodes as u64 * self.dynamic_alignment) as vk::DeviceSize;
         let dynamic_buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.dynamic_uniform_buffer.handle())
             .offset(0)
-            .range(dynamic_uniform_buffer_size)
+            .range(vk::WHOLE_SIZE)
             .build();
         let dynamic_buffer_infos = [dynamic_buffer_info];
 
