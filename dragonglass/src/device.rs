@@ -85,17 +85,24 @@ impl RenderingDevice {
         })?;
 
         if frame.recreated_swapchain {
-            self.scene = None;
-            let mut scene = Scene::new(
-                &self.context,
-                frame.swapchain()?,
-                &frame.swapchain_properties,
-            )?;
-            if let Some(asset) = self.asset.as_ref() {
-                scene.load_asset(&self.context, asset.clone())?;
-            }
-            self.scene = Some(scene);
+            self.reload()?;
         }
+
+        Ok(())
+    }
+
+    pub fn reload(&mut self) -> Result<()> {
+        unsafe { self.context.device.handle.device_wait_idle()? };
+        self.scene = None;
+        let mut scene = Scene::new(
+            &self.context,
+            self.frame.swapchain()?,
+            &self.frame.swapchain_properties,
+        )?;
+        if let Some(asset) = self.asset.as_ref() {
+            scene.load_asset(&self.context, asset.clone())?;
+        }
+        self.scene = Some(scene);
 
         Ok(())
     }

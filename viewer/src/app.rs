@@ -5,7 +5,7 @@ use image::ImageFormat;
 use log::{error, info};
 use winit::{
     dpi::PhysicalSize,
-    event::{Event, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
@@ -125,6 +125,30 @@ impl App {
                         }
                     }
                 }
+                Event::WindowEvent {
+                    event: WindowEvent::KeyboardInput {
+                        input: KeyboardInput {
+                            virtual_keycode: Some(keycode),
+                            state,
+                            ..
+                        },
+                        ..
+                    },
+                    ..
+                } => {
+                    match keycode {
+                        VirtualKeyCode::F5 if state == ElementState::Pressed => {
+                            match rendering_device.reload() {
+                                Ok(_) => log::info!("Reloaded successfully"),
+                                Err(error) => log::error!("Failed to reload: {}", error),
+                            }
+                        }
+                        VirtualKeyCode::R if state == ElementState::Pressed => {
+                            camera = OrbitalCamera::default();
+                        }
+                        _ => {}
+                    }
+                }
                 _ => {}
             }
         });
@@ -139,10 +163,6 @@ impl App {
         let drag_multiplier = 0.001;
 
         camera.forward(input.mouse.wheel_delta.y * scroll_multiplier);
-
-        if input.is_key_pressed(VirtualKeyCode::R) {
-            *camera = OrbitalCamera::default();
-        }
 
         if input.mouse.is_left_clicked {
             let mut delta = input.mouse.position_delta;
