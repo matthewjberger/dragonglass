@@ -3,6 +3,7 @@ use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
 use log::{error, info};
+use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, VirtualKeyCode, WindowEvent},
@@ -115,7 +116,12 @@ impl App {
                                         log::error!("Viewer error: {}", error);
                                         system.exit_requested = true;
                                     }
-                                    camera = OrbitalCamera::default();
+                                    if let Some(asset) = rendering_device.asset.as_ref() {
+                                        let center = asset.scenes[0].bounding_box(&asset.nodes).center();
+                                        camera = OrbitalCamera::default();
+                                        camera.offset = glm::vec3(center.x, center.y, center.z) * -1.0;
+                                        log::info!("Offset: {}", camera.offset);
+                                    }
                                     log::info!("Loaded gltf asset: '{}'", raw_path);
                                 }
                                 _ => log::warn!(

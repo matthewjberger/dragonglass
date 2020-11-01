@@ -6,7 +6,7 @@ pub struct OrbitalCamera {
     r: f32,
     min: f32,
     max: f32,
-    offset: glm::Vec3,
+    pub offset: glm::Vec3,
     world_up: glm::Vec3,
 }
 

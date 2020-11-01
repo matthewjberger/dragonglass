@@ -9,7 +9,7 @@ use std::{path::Path, sync::Arc};
 pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
-    asset: Option<Arc<Asset>>,
+    pub asset: Option<Arc<Asset>>,
     scene: Option<Scene>,
     context: Arc<Context>,
 }

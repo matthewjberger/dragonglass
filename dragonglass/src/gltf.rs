@@ -1,11 +1,32 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
+use ncollide3d::{bounding_volume::AABB, math::Point, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+}
+
+impl Scene {
+    pub fn bounding_box(&self, nodes: &[Node]) -> AABB<f32> {
+        let mut bounding_box = AABB::new(Point3::new(0.0, 0.0, 0.0), Point3::new(0.0, 0.0, 0.0));
+        for graph in self.graphs.iter() {
+            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            while let Some(node_index) = dfs.next(&graph) {
+                let offset = graph[node_index];
+                if let Some(mesh) = &nodes[offset].mesh {
+                    for primitive in mesh.primitives.iter() {
+                        let primitive_bounding_box = primitive.aabb;
+                        bounding_box.take_point(primitive_bounding_box.mins);
+                        bounding_box.take_point(primitive_bounding_box.maxs);
+                    }
+                }
+            }
+        }
+        bounding_box
+    }
 }
 
 pub struct Node {
@@ -27,6 +48,7 @@ pub struct Primitive {
     pub number_of_vertices: usize,
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
+    pub aabb: AABB<f32>,
 }
 
 #[derive(Default)]
@@ -178,12 +200,14 @@ impl Asset {
         let first_vertex = geometry.vertices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
         let number_of_vertices = Self::load_primitive_vertices(primitive, buffers, geometry)?;
+        let bounding_box = primitive.bounding_box();
         Ok(Primitive {
             first_index,
             first_vertex,
             number_of_indices,
             number_of_vertices,
             material_index: primitive.material().index(),
+            aabb: AABB::new(Point::from(bounding_box.min), Point::from(bounding_box.max)),
         })
     }
 
