@@ -97,8 +97,8 @@ impl App {
                 Event::MainEventsCleared => {
                     if let Err(error) = rendering_device.render(
                         &system.window_dimensions,
-                        &camera.view_matrix(),
-                        &camera.position(),
+                        camera.view_matrix(),
+                        camera.position(),
                     ) {
                         error!("{}", error);
                     }

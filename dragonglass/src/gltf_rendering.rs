@@ -114,6 +114,7 @@ impl PushConstantMaterial {
 pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
+    pub camera_position: glm::Vec3,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -612,9 +613,18 @@ impl AssetRendering {
         Ok(())
     }
 
-    pub fn update_ubo(&self, aspect_ratio: f32, view: glm::Mat4) -> Result<()> {
+    pub fn update_ubo(
+        &self,
+        aspect_ratio: f32,
+        view: glm::Mat4,
+        camera_position: glm::Vec3,
+    ) -> Result<()> {
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-        let ubo = AssetUniformBuffer { view, projection };
+        let ubo = AssetUniformBuffer {
+            view,
+            projection,
+            camera_position,
+        };
         self.pipeline_data.uniform_buffer.upload_data(&[ubo], 0)?;
         Ok(())
     }

@@ -64,8 +64,8 @@ impl RenderingDevice {
     pub fn render(
         &mut self,
         dimensions: &[u32; 2],
-        view: &glm::Mat4,
-        _camera_position: &glm::Vec3,
+        view: glm::Mat4,
+        camera_position: glm::Vec3,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -75,7 +75,9 @@ impl RenderingDevice {
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
                 if let Some(asset) = scene.asset.as_ref() {
-                    asset.borrow().update_ubo(aspect_ratio, *view)?
+                    asset
+                        .borrow()
+                        .update_ubo(aspect_ratio, view, camera_position)?
                 };
                 scene
                     .rendergraph

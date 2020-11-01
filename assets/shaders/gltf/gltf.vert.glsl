@@ -11,6 +11,7 @@ layout(location=5) in vec2 inWeights0;
 layout(binding=0) uniform UboView{
   mat4 view;
   mat4 projection;
+  vec3 cameraPosition;
 } uboView;
 
 layout(binding=1) uniform UboInstance{

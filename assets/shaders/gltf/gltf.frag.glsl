@@ -34,6 +34,7 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0) uniform UboView{
     mat4 view;
     mat4 projection;
+    vec3 cameraPosition;
 } uboView;
 
 vec4 srgb_to_linear(vec4 srgbIn)
