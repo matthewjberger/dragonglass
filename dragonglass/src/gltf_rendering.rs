@@ -22,20 +22,6 @@ pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
     std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
 }
 
-fn load_textures(
-    context: &Context,
-    command_pool: &CommandPool,
-    textures: &[gltf::image::Data],
-) -> Result<Vec<Texture>> {
-    textures
-        .iter()
-        .map(|texture| {
-            let description = ImageDescription::from_gltf(texture)?;
-            Texture::new(context, command_pool, &description)
-        })
-        .collect::<Result<Vec<_>>>()
-}
-
 #[derive(Debug)]
 pub struct PushConstantMaterial {
     pub base_color_factor: glm::Vec4,
@@ -143,8 +129,10 @@ pub struct GltfPipelineData {
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set: vk::DescriptorSet,
     pub textures: Vec<Texture>,
+    pub samplers: Vec<Sampler>,
     pub geometry_buffer: GeometryBuffer,
-    pub dummy: Texture,
+    pub dummy_texture: Texture,
+    pub dummy_sampler: Sampler,
 }
 
 impl GltfPipelineData {
@@ -152,9 +140,23 @@ impl GltfPipelineData {
     pub const MAX_TEXTURES: usize = 100;
 
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
-        let textures = load_textures(context, command_pool, &asset.textures)?;
         let device = context.device.clone();
         let allocator = context.allocator.clone();
+
+        let mut textures = Vec::new();
+        let mut samplers = Vec::new();
+        for (texture, gltf_texture) in asset.textures.iter().zip(asset.gltf.textures()) {
+            let description = ImageDescription::from_gltf(texture)?;
+            let texture = Texture::new(context, command_pool, &description)?;
+            textures.push(texture);
+
+            let sampler = sampler_from_gltf(
+                device.clone(),
+                description.mip_levels,
+                &gltf_texture.sampler(),
+            )?;
+            samplers.push(sampler);
+        }
 
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
         let descriptor_pool = Self::descriptor_pool(device.clone())?;
@@ -176,7 +178,8 @@ impl GltfPipelineData {
         let geometry_buffer = Self::geometry_buffer(context, command_pool, &asset.geometry)?;
 
         let empty_description = ImageDescription::empty(1, 1, vk::Format::R8G8B8A8_UNORM);
-        let dummy = Texture::new(context, command_pool, &empty_description)?;
+        let dummy_texture = Texture::new(context, command_pool, &empty_description)?;
+        let dummy_sampler = Sampler::default(device.clone())?;
 
         let mut data = Self {
             descriptor_pool,
@@ -184,10 +187,12 @@ impl GltfPipelineData {
             dynamic_uniform_buffer,
             descriptor_set,
             dynamic_alignment,
-            dummy,
             descriptor_set_layout,
             textures,
+            samplers,
             geometry_buffer,
+            dummy_texture,
+            dummy_sampler,
         };
         data.update_descriptor_set(device);
         data.update_dynamic_ubo(asset)?;
@@ -298,11 +303,12 @@ impl GltfPipelineData {
         let mut image_infos = self
             .textures
             .iter()
-            .map(|texture| {
+            .zip(self.samplers.iter())
+            .map(|(texture, sampler)| {
                 vk::DescriptorImageInfo::builder()
                     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                     .image_view(texture.view.handle)
-                    .sampler(texture.sampler.handle)
+                    .sampler(sampler.handle)
                     .build()
             })
             .collect::<Vec<_>>();
@@ -315,8 +321,8 @@ impl GltfPipelineData {
                 image_infos.push(
                     vk::DescriptorImageInfo::builder()
                         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                        .image_view(self.dummy.view.handle)
-                        .sampler(self.dummy.sampler.handle)
+                        .image_view(self.dummy_texture.view.handle)
+                        .sampler(self.dummy_sampler.handle)
                         .build(),
                 );
             }
@@ -674,7 +680,6 @@ fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
 pub struct Texture {
     pub image: AllocatedImage,
     pub view: ImageView,
-    pub sampler: Sampler, // TODO: Use samplers specified in file
 }
 
 impl Texture {
@@ -686,12 +691,7 @@ impl Texture {
         let image = description.as_image(context.allocator.clone())?;
         image.upload_data(context, command_pool, description)?;
         let view = Self::image_view(context.device.clone(), &image, description)?;
-        let sampler = Self::sampler(context.device.clone(), description.mip_levels)?;
-        let texture = Self {
-            image,
-            view,
-            sampler,
-        };
+        let texture = Self { image, view };
         Ok(texture)
     }
 
@@ -714,24 +714,71 @@ impl Texture {
 
         ImageView::new(device, create_info)
     }
+}
 
-    fn sampler(device: Arc<Device>, mip_levels: u32) -> Result<Sampler> {
-        let sampler_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::REPEAT)
-            .address_mode_v(vk::SamplerAddressMode::REPEAT)
-            .address_mode_w(vk::SamplerAddressMode::REPEAT)
-            .anisotropy_enable(true)
-            .max_anisotropy(16.0)
-            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-            .unnormalized_coordinates(false)
-            .compare_enable(false)
-            .compare_op(vk::CompareOp::ALWAYS)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .mip_lod_bias(0.0)
-            .min_lod(0.0)
-            .max_lod(mip_levels as _);
-        Sampler::new(device, sampler_info)
+fn sampler_from_gltf(
+    device: Arc<Device>,
+    mip_levels: u32,
+    sampler: &gltf::texture::Sampler,
+) -> Result<Sampler> {
+    let mut min_filter = vk::Filter::LINEAR;
+    let mut mipmap_mode = vk::SamplerMipmapMode::LINEAR;
+    if let Some(min) = sampler.min_filter() {
+        min_filter = match min {
+            gltf::texture::MinFilter::Linear
+            | gltf::texture::MinFilter::LinearMipmapLinear
+            | gltf::texture::MinFilter::LinearMipmapNearest => vk::Filter::LINEAR,
+            gltf::texture::MinFilter::Nearest
+            | gltf::texture::MinFilter::NearestMipmapLinear
+            | gltf::texture::MinFilter::NearestMipmapNearest => vk::Filter::NEAREST,
+        };
+        mipmap_mode = match min {
+            gltf::texture::MinFilter::Linear
+            | gltf::texture::MinFilter::LinearMipmapLinear
+            | gltf::texture::MinFilter::LinearMipmapNearest => vk::SamplerMipmapMode::LINEAR,
+            gltf::texture::MinFilter::Nearest
+            | gltf::texture::MinFilter::NearestMipmapLinear
+            | gltf::texture::MinFilter::NearestMipmapNearest => vk::SamplerMipmapMode::NEAREST,
+        };
     }
+
+    let mut mag_filter = vk::Filter::LINEAR;
+    if let Some(mag) = sampler.mag_filter() {
+        mag_filter = match mag {
+            gltf::texture::MagFilter::Nearest => vk::Filter::NEAREST,
+            gltf::texture::MagFilter::Linear => vk::Filter::LINEAR,
+        };
+    }
+
+    let address_mode_u = match sampler.wrap_s() {
+        gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
+
+    let address_mode_v = match sampler.wrap_t() {
+        gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
+
+    let address_mode_w = vk::SamplerAddressMode::REPEAT;
+
+    let sampler_info = vk::SamplerCreateInfo::builder()
+        .min_filter(min_filter)
+        .mag_filter(mag_filter)
+        .address_mode_u(address_mode_u)
+        .address_mode_v(address_mode_v)
+        .address_mode_w(address_mode_w)
+        .anisotropy_enable(true)
+        .max_anisotropy(16.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(mipmap_mode)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(mip_levels as _);
+    Sampler::new(device, sampler_info)
 }

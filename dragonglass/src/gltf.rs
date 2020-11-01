@@ -86,7 +86,7 @@ pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) ->
 const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub struct Asset {
-    gltf: gltf::Document,
+    pub gltf: gltf::Document,
     pub textures: Vec<gltf::image::Data>,
     pub nodes: Vec<Node>,
     pub scenes: Vec<Scene>,
