@@ -16,9 +16,10 @@ layout(push_constant) uniform Material{
     int metallicRoughnessTextureSet;
     int normalTextureIndex;
     int normalTextureSet;
+    float normalTextureScale;
     int occlusionTextureIndex;
     int occlusionTextureSet;
-    int occlusionStrength;
+    float occlusionStrength;
     int emissiveTextureIndex;
     int emissiveTextureSet;
     float metallicFactor;

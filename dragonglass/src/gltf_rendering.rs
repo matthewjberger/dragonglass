@@ -42,13 +42,14 @@ pub struct PushConstantMaterial {
     pub emissive_factor: glm::Vec3,
     pub color_texture_index: i32,
     pub color_texture_set: i32,
-    pub metallic_roughness_texture_index: i32, // B channel - metalness values. G channel - roughness values
-    pub metallic_roughness_texture_set: i32,
+    pub metallic_roughness_texture_index: i32,
+    pub metallic_roughness_texture_set: i32, // B channel - metalness values. G channel - roughness values
     pub normal_texture_index: i32,
     pub normal_texture_set: i32,
-    pub occlusion_texture_index: i32, // R channel - occlusion values
-    pub occlusion_texture_set: i32,   // R channel - occlusion values
-    pub occlusion_strength: i32,      // R channel - occlusion values
+    pub normal_texture_scale: f32,
+    pub occlusion_texture_index: i32,
+    pub occlusion_texture_set: i32, // R channel - occlusion values
+    pub occlusion_strength: f32,
     pub emissive_texture_index: i32,
     pub emissive_texture_set: i32,
     pub metallic_factor: f32,
@@ -69,12 +70,13 @@ impl Default for PushConstantMaterial {
             metallic_roughness_texture_set: -1,
             normal_texture_index: -1,
             normal_texture_set: -1,
+            normal_texture_scale: 1.0,
             occlusion_texture_index: -1,
             occlusion_texture_set: -1,
-            occlusion_strength: -1,
+            occlusion_strength: 1.0,
             emissive_texture_index: -1,
             emissive_texture_set: -1,
-            metallic_factor: 0.0,
+            metallic_factor: 1.0,
             roughness_factor: 0.0,
             alpha_mode: gltf::material::AlphaMode::Opaque as i32,
             alpha_cutoff: 0.0,
@@ -106,11 +108,12 @@ impl PushConstantMaterial {
         if let Some(normal_texture) = primitive_material.normal_texture() {
             material.normal_texture_index = normal_texture.texture().index() as i32;
             material.normal_texture_set = normal_texture.tex_coord() as i32;
+            material.normal_texture_scale = normal_texture.scale();
         }
         if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
             material.occlusion_texture_index = occlusion_texture.texture().index() as i32;
             material.occlusion_texture_set = occlusion_texture.tex_coord() as i32;
-            material.occlusion_strength = occlusion_texture.strength() as i32;
+            material.occlusion_strength = occlusion_texture.strength();
         }
         if let Some(emissive_texture) = primitive_material.emissive_texture() {
             material.emissive_texture_index = emissive_texture.texture().index() as i32;
