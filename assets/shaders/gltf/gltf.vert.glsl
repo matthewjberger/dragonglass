@@ -23,7 +23,6 @@ layout(location=1) out vec2 outUV1;
 void main()
 {
   vec4 locPos = uboInstance.model * vec4(inPos, 1.0);
-  locPos.y = -locPos.y;
   gl_Position = uboView.projection * uboView.view * locPos;
   outUV0 = inUV0;
   outUV1 = inUV1;

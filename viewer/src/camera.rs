@@ -13,7 +13,7 @@ pub struct OrbitalCamera {
 impl OrbitalCamera {
     pub fn pan(&mut self, offset: &glm::Vec2) {
         self.offset += self.right().normalize() * offset.x;
-        self.offset -= self.up().normalize() * offset.y;
+        self.offset += self.up().normalize() * offset.y;
     }
 
     pub fn up(&self) -> glm::Vec3 {

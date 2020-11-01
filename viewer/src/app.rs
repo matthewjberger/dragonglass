@@ -145,8 +145,7 @@ impl App {
         }
 
         if input.mouse.is_left_clicked {
-            let mut delta = input.mouse.position_delta;
-            delta.y *= -1.0;
+            let delta = input.mouse.position_delta;
             let rotation = delta * rotation_multiplier * system.delta_time as f32;
             camera.rotate(&rotation);
         } else if input.mouse.is_right_clicked {

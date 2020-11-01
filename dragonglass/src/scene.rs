@@ -153,6 +153,12 @@ impl Scene {
 
         rendergraph.build(device.clone(), allocator)?;
 
+        rendergraph
+            .passes
+            .get_mut(offscreen)
+            .context("Failed to get offscreen pass to flip viewport on!")?
+            .flip_viewport = true;
+
         let swapchain_images = swapchain
             .images()?
             .into_iter()

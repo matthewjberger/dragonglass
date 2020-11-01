@@ -91,11 +91,17 @@ impl Device {
         &self,
         command_buffer: vk::CommandBuffer,
         extent: vk::Extent2D,
+        flip_viewport: bool,
     ) -> Result<()> {
+        let (y, height) = if flip_viewport {
+            (extent.height as f32, -1.0 * extent.height as f32)
+        } else {
+            (0_f32, extent.height as f32)
+        };
         let viewport = vk::Viewport::builder()
-            .y(extent.height as _)
+            .y(y)
             .width(extent.width as _)
-            .height((-1.0 * extent.height as f32) as _)
+            .height(height)
             .max_depth(1.0)
             .build();
         let viewports = [viewport];

@@ -196,7 +196,7 @@ impl RenderGraph {
                 } else {
                     &self.framebuffers[&pass_node.name]
                 };
-                device.update_viewport(command_buffer, pass.extent)?;
+                device.update_viewport(command_buffer, pass.extent, pass.flip_viewport)?;
                 pass.execute(command_buffer, framebuffer.handle)?;
             }
         }
@@ -472,6 +472,7 @@ pub struct Pass<'a> {
     extent: vk::Extent2D,
     clear_values: Vec<vk::ClearValue>,
     callback: Box<dyn Fn(vk::CommandBuffer) -> Result<()> + 'a>,
+    pub flip_viewport: bool,
 }
 
 impl<'a> Pass<'a> {
@@ -591,6 +592,7 @@ impl PassBuilder {
             extent,
             clear_values,
             callback: Box::new(|_| Ok(())),
+            flip_viewport: false,
         })
     }
 
