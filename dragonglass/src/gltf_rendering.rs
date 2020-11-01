@@ -111,7 +111,6 @@ impl PushConstantMaterial {
             material.emissive_texture_set = emissive_texture.tex_coord() as i32;
         }
 
-        log::debug!("MATERIAL: {:#?}", material);
         Ok(material)
     }
 }

@@ -44,7 +44,7 @@ void main()
     vec4 baseColor;
     if(material.colorTextureIndex > -1) {
         vec2 tex_coord = inUV0;
-        if(material.colorTextureSet != 0) {
+        if(material.colorTextureSet == 1) {
             tex_coord = inUV1;
         }
         vec4 albedoMap = texture(textures[material.colorTextureIndex], tex_coord);
@@ -60,7 +60,7 @@ void main()
     vec3 color = baseColor.rgb;
     if(material.emissiveTextureIndex > -1) {
         vec2 tex_coord = inUV0;
-        if(material.emissiveTextureSet != 0) {
+        if(material.emissiveTextureSet == 1) {
             tex_coord = inUV1;
         }
         vec4 emissiveMap = texture(textures[material.emissiveTextureIndex], tex_coord);

@@ -67,39 +67,6 @@ impl GpuBuffer {
         Ok(())
     }
 
-    // TODO: Merge this with upload_data() and shorten parameter list
-    #[allow(clippy::clippy::too_many_arguments)]
-    pub fn upload_data_aligned<T: Copy>(
-        &self,
-        data: &[T],
-        offset: usize,
-        pool: &CommandPool,
-        graphics_queue: vk::Queue,
-        alignment: vk::DeviceSize,
-    ) -> Result<()> {
-        let size = data.len() * std::mem::size_of::<T>();
-
-        let staging_buffer = CpuToGpuBuffer::staging_buffer(self.allocator.clone(), size as _)?;
-        staging_buffer.upload_data_aligned(data, 0, alignment)?;
-
-        let region = vk::BufferCopy::builder()
-            .size(size as _)
-            .dst_offset(offset as _)
-            .build();
-
-        let info = BufferToBufferCopyBuilder::default()
-            .graphics_queue(graphics_queue)
-            .source(staging_buffer.buffer.handle)
-            .destination(self.buffer.handle)
-            .regions(vec![region])
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-
-        pool.copy_buffer_to_buffer(&info)?;
-
-        Ok(())
-    }
-
     pub fn vertex_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
         Self::new(allocator, size, vk::BufferUsageFlags::VERTEX_BUFFER)
     }
@@ -167,7 +134,7 @@ impl CpuToGpuBuffer {
             let mut align = ash::util::Align::new(data_pointer as _, alignment, size as _);
             align.copy_from_slice(data);
         }
-        self.buffer.flush(offset, size)?;
+        self.buffer.flush(0, size)?;
         self.unmap_memory()?;
         Ok(())
     }
