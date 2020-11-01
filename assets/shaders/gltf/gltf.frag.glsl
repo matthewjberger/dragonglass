@@ -24,7 +24,7 @@ layout(push_constant) uniform Material{
     float roughnessFactor;
     int alphaMode;
     float alphaCutoff;
-    bool isUnlit;
+    int isUnlit;
 } material;
 
 layout(location = 0) out vec4 outColor;
@@ -55,14 +55,14 @@ void main()
     } else {
         baseColor = material.baseColorFactor;
     }
-
-    if (material.isUnlit) {
-        outColor = baseColor;
-        return;
-    }
     
     if (material.alphaMode == 2 && baseColor.a < material.alphaCutoff) {
         discard;
+    }
+
+    if (material.isUnlit == 1) {
+        outColor = baseColor;
+        return;
     }
 
     vec3 color = baseColor.rgb;

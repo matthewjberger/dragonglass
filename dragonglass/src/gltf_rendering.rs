@@ -54,7 +54,7 @@ pub struct PushConstantMaterial {
     pub roughness_factor: f32,
     pub alpha_mode: i32,
     pub alpha_cutoff: f32,
-    pub is_unlit: bool,
+    pub is_unlit: i32,
 }
 
 impl Default for PushConstantMaterial {
@@ -76,7 +76,7 @@ impl Default for PushConstantMaterial {
             roughness_factor: 0.0,
             alpha_mode: gltf::material::AlphaMode::Opaque as i32,
             alpha_cutoff: 0.0,
-            is_unlit: false,
+            is_unlit: 0,
         }
     }
 }
@@ -91,7 +91,7 @@ impl PushConstantMaterial {
         material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
         material.alpha_mode = primitive_material.alpha_mode() as i32;
         material.alpha_cutoff = primitive_material.alpha_cutoff();
-        material.is_unlit = primitive_material.unlit();
+        material.is_unlit = if primitive_material.unlit() { 1 } else { 0 };
         if let Some(base_color_texture) = pbr.base_color_texture() {
             material.color_texture_index = base_color_texture.texture().index() as i32;
             material.color_texture_set = base_color_texture.tex_coord() as i32;
