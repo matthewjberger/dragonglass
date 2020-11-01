@@ -24,6 +24,7 @@ layout(push_constant) uniform Material{
     float roughnessFactor;
     int alphaMode;
     float alphaCutoff;
+    bool isUnlit;
 } material;
 
 layout(location = 0) out vec4 outColor;
@@ -36,13 +37,13 @@ layout(binding = 0) uniform UboView{
 vec4 srgb_to_linear(vec4 srgbIn)
 {
     vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
-    return vec4(linOut,srgbIn.w);;
+    return vec4(linOut,srgbIn.w);
 }
 
 void main()
 {
     vec4 baseColor;
-    if(material.colorTextureIndex > -1) {
+    if (material.colorTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.colorTextureSet == 1) {
             tex_coord = inUV1;
@@ -52,13 +53,18 @@ void main()
     } else {
         baseColor = material.baseColorFactor;
     }
+
+    if (material.isUnlit) {
+        outColor = baseColor;
+        return;
+    }
     
-    if(material.alphaMode == 2 && baseColor.a < material.alphaCutoff) {
+    if (material.alphaMode == 2 && baseColor.a < material.alphaCutoff) {
         discard;
     }
 
     vec3 color = baseColor.rgb;
-    if(material.emissiveTextureIndex > -1) {
+    if (material.emissiveTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.emissiveTextureSet == 1) {
             tex_coord = inUV1;
