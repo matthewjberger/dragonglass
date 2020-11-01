@@ -151,19 +151,13 @@ impl ImageDescription {
     fn convert_24bit_formats(&mut self) -> Result<()> {
         // 24-bit formats are unsupported, so they
         // need to have an alpha channel added to make them 32-bit
-        match self.format {
-            vk::Format::R8G8B8_UNORM => {
-                self.format = vk::Format::R8G8B8A8_UNORM;
-                self.attach_alpha_channel()?;
-            }
-            vk::Format::B8G8R8_UNORM => {
-                self.format = vk::Format::B8G8R8A8_UNORM;
-                self.attach_alpha_channel()?;
-            }
-            _ => {}
+        let format = match self.format {
+            vk::Format::R8G8B8_UNORM => vk::Format::R8G8B8A8_UNORM,
+            vk::Format::B8G8R8_UNORM => vk::Format::B8G8R8A8_UNORM,
+            _ => return Ok(()),
         };
-
-        Ok(())
+        self.format = format;
+        self.attach_alpha_channel()
     }
 
     fn attach_alpha_channel(&mut self) -> Result<()> {
