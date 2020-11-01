@@ -34,6 +34,8 @@ layout(binding = 0) uniform UboView{
     mat4 projection;
 } uboView;
 
+const float OcclusionStrength = 1.0f;
+
 vec4 srgb_to_linear(vec4 srgbIn)
 {
     vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
@@ -64,6 +66,16 @@ void main()
     }
 
     vec3 color = baseColor.rgb;
+
+    if (material.occlusionTextureIndex > -1) {
+        vec2 tex_coord = inUV0;
+        if(material.occlusionTextureSet == 1) {
+            tex_coord = inUV1;
+        }
+        vec4 occlusionMap = texture(textures[material.occlusionTextureIndex], tex_coord);
+        color = mix(color, color * occlusionMap.r, OcclusionStrength);
+    }
+
     if (material.emissiveTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.emissiveTextureSet == 1) {
