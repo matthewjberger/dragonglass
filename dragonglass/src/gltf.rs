@@ -59,7 +59,7 @@ pub fn graph_node(gltf_node: &gltf::Node, graph: &mut SceneGraph, parent_index: 
         graph.add_edge(parent_index, index, ());
     }
     for child in gltf_node.children() {
-        graph_node(&child, graph, parent_index);
+        graph_node(&child, graph, index);
     }
 }
 
