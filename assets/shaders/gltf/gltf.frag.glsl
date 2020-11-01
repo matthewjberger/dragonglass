@@ -18,6 +18,7 @@ layout(push_constant) uniform Material{
     int normalTextureSet;
     int occlusionTextureIndex;
     int occlusionTextureSet;
+    int occlusionStrength;
     int emissiveTextureIndex;
     int emissiveTextureSet;
     float metallicFactor;
@@ -33,8 +34,6 @@ layout(binding = 0) uniform UboView{
     mat4 view;
     mat4 projection;
 } uboView;
-
-const float OcclusionStrength = 1.0f;
 
 vec4 srgb_to_linear(vec4 srgbIn)
 {
@@ -73,7 +72,7 @@ void main()
             tex_coord = inUV1;
         }
         vec4 occlusionMap = texture(textures[material.occlusionTextureIndex], tex_coord);
-        color = mix(color, color * occlusionMap.r, OcclusionStrength);
+        color = mix(color, color * occlusionMap.r, material.occlusionStrength);
     }
 
     if (material.emissiveTextureIndex > -1) {

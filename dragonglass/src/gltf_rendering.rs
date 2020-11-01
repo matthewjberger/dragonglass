@@ -48,6 +48,7 @@ pub struct PushConstantMaterial {
     pub normal_texture_set: i32,
     pub occlusion_texture_index: i32, // R channel - occlusion values
     pub occlusion_texture_set: i32,   // R channel - occlusion values
+    pub occlusion_strength: i32,      // R channel - occlusion values
     pub emissive_texture_index: i32,
     pub emissive_texture_set: i32,
     pub metallic_factor: f32,
@@ -70,6 +71,7 @@ impl Default for PushConstantMaterial {
             normal_texture_set: -1,
             occlusion_texture_index: -1,
             occlusion_texture_set: -1,
+            occlusion_strength: -1,
             emissive_texture_index: -1,
             emissive_texture_set: -1,
             metallic_factor: 0.0,
@@ -108,6 +110,7 @@ impl PushConstantMaterial {
         if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
             material.occlusion_texture_index = occlusion_texture.texture().index() as i32;
             material.occlusion_texture_set = occlusion_texture.tex_coord() as i32;
+            material.occlusion_strength = occlusion_texture.strength() as i32;
         }
         if let Some(emissive_texture) = primitive_material.emissive_texture() {
             material.emissive_texture_index = emissive_texture.texture().index() as i32;
