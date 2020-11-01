@@ -99,6 +99,7 @@ impl App {
                         &system.window_dimensions,
                         &camera.view_matrix(),
                         &camera.position(),
+                        system.delta_time,
                     ) {
                         error!("{}", error);
                     }
