@@ -1,7 +1,7 @@
 #version 450
 
 
-layout(location=0) in vec3 inPos;
+layout(location=0) in vec3 inPosition;
 layout(location=1) in vec3 inNormal;
 layout(location=2) in vec2 inUV0;
 layout(location=3) in vec2 inUV1;
@@ -18,13 +18,19 @@ layout(binding=1) uniform UboInstance{
   mat4 model;
 } uboInstance;
 
-layout(location=0) out vec2 outUV0;
-layout(location=1) out vec2 outUV1;
+layout(location=0) out vec3 outPosition;
+layout(location=1) out vec3 outNormal;
+layout(location=2) out vec2 outUV0;
+layout(location=3) out vec2 outUV1;
 
 void main()
 {
-  vec4 locPos = uboInstance.model * vec4(inPos, 1.0);
-  gl_Position = uboView.projection * uboView.view * locPos;
+  mat4 mvp = uboView.projection * uboView.view * uboInstance.model;
+  vec4 position = mvp * vec4(inPosition, 1.0);
+  gl_Position = position;
+
+  outPosition = position.xyz; 
+  outNormal = mat3(mvp) * inNormal;
   outUV0 = inUV0;
   outUV1 = inUV1;
 }

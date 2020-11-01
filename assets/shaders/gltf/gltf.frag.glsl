@@ -2,8 +2,10 @@
 
 #define MAX_NUMBER_OF_TEXTURES 100
 
-layout(location=0) in vec2 inUV0;
-layout(location=1) in vec2 inUV1;
+layout(location=0) in vec3 inPosition;
+layout(location=1) in vec3 inNormal;
+layout(location=2) in vec2 inUV0;
+layout(location=3) in vec2 inUV1;
 
 layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
 
@@ -67,6 +69,35 @@ void main()
     }
 
     vec3 color = baseColor.rgb;
+
+/* Blinn-Phong Shading */
+    vec3 rotation = vec3(radians(75.0f), radians(40.0f), radians(0.0f));
+    vec3 lightPosition = vec3( sin(rotation.x) * cos(rotation.y),
+                               sin(rotation.y),
+                               cos(rotation.x) * cos(rotation.y));
+
+    vec3 normal = normalize(inNormal);
+    vec3 light = normalize(lightPosition - inPosition);
+    vec3 view = normalize(uboView.cameraPosition - inPosition);
+    vec3 halfway = normalize(view + light);
+
+    // Ambient
+    vec3 ambient = 0.05 * color;
+
+    // Diffuse
+    float diff = max(0.0, dot(normal, light));
+    vec3 diffuse = diff * color;
+
+    // Specular
+    vec3 specular = vec3(0.0);
+    if (diff > 0.0) {
+        float shine = 32.0;
+        float spec = pow(max(dot(halfway, normal), 0.0), shine);
+        specular = vec3(0.3) * spec; // Assumes a bright white light
+    }
+
+    color = ambient + diffuse + specular;
+/************/
 
     if (material.occlusionTextureIndex > -1) {
         vec2 tex_coord = inUV0;
