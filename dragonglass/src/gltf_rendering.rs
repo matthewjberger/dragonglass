@@ -630,7 +630,7 @@ impl AssetRendering {
     }
 }
 
-fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 6] {
+fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 7] {
     let float_size = std::mem::size_of::<f32>();
 
     let position = vk::VertexInputAttributeDescription::builder()
@@ -675,7 +675,14 @@ fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 6] {
         .offset((14 * float_size) as _)
         .build();
 
-    [position, normal, uv_0, uv_1, joint_0, weight_0]
+    let color_0 = vk::VertexInputAttributeDescription::builder()
+        .binding(0)
+        .location(6)
+        .format(vk::Format::R32G32B32_SFLOAT)
+        .offset((18 * float_size) as _)
+        .build();
+
+    [position, normal, uv_0, uv_1, joint_0, weight_0, color_0]
 }
 
 fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {

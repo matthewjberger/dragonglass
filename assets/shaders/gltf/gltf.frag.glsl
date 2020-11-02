@@ -6,6 +6,7 @@ layout(location=0) in vec3 inPosition;
 layout(location=1) in vec3 inNormal;
 layout(location=2) in vec2 inUV0;
 layout(location=3) in vec2 inUV1;
+layout(location=4) in vec3 inColor0;
 
 layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
 
@@ -54,9 +55,9 @@ void main()
             tex_coord = inUV1;
         }
         vec4 albedoMap = texture(textures[material.colorTextureIndex], tex_coord);
-        baseColor = srgb_to_linear(albedoMap) * material.baseColorFactor;
+        baseColor = srgb_to_linear(albedoMap) * material.baseColorFactor * vec4(inColor0, 1.0);
     } else {
-        baseColor = material.baseColorFactor;
+        baseColor = material.baseColorFactor * vec4(inColor0, 1.0);
     }
     
     if (material.alphaMode == 2 && baseColor.a < material.alphaCutoff) {
@@ -64,7 +65,7 @@ void main()
     }
 
     if (material.isUnlit == 1) {
-        outColor = baseColor;
+        outColor = vec4(pow(baseColor.rgb, vec3(1.0 / 2.2)), baseColor.a);
         return;
     }
 
@@ -117,5 +118,6 @@ void main()
         color += srgb_to_linear(emissiveMap).rgb * material.emissiveFactor;
     }
   
+    color = pow(color, vec3(1.0 / 2.2));
     outColor = vec4(color, baseColor.a);
 }

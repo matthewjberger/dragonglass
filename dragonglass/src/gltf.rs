@@ -53,8 +53,9 @@ pub struct Vertex {
     pub normal: glm::Vec3,
     pub uv_0: glm::Vec2,
     pub uv_1: glm::Vec2,
-    pub joints_0: glm::Vec4,
-    pub weights_0: glm::Vec4,
+    pub joint_0: glm::Vec4,
+    pub weight_0: glm::Vec4,
+    pub color_0: glm::Vec3,
 }
 
 #[derive(Debug)]
@@ -257,8 +258,8 @@ impl Asset {
             .read_tex_coords(1)
             .map_or(vec![glm::vec2(0.0, 0.0); number_of_vertices], map_to_vec2);
 
-        let convert_joints = |coords: gltf::mesh::util::ReadJoints<'_>| -> Vec<glm::Vec4> {
-            coords
+        let convert_joints = |joints: gltf::mesh::util::ReadJoints<'_>| -> Vec<glm::Vec4> {
+            joints
                 .into_u16()
                 .map(|joint| glm::vec4(joint[0] as _, joint[1] as _, joint[2] as _, joint[3] as _))
                 .collect::<Vec<_>>()
@@ -269,13 +270,25 @@ impl Asset {
             convert_joints,
         );
 
-        let convert_weights = |coords: gltf::mesh::util::ReadWeights<'_>| -> Vec<glm::Vec4> {
-            coords.into_f32().map(glm::Vec4::from).collect::<Vec<_>>()
+        let convert_weights = |weights: gltf::mesh::util::ReadWeights<'_>| -> Vec<glm::Vec4> {
+            weights.into_f32().map(glm::Vec4::from).collect::<Vec<_>>()
         };
 
         let weights_0 = reader.read_weights(0).map_or(
             vec![glm::vec4(1.0, 0.0, 0.0, 0.0); number_of_vertices],
             convert_weights,
+        );
+
+        let convert_colors = |colors: gltf::mesh::util::ReadColors<'_>| -> Vec<glm::Vec3> {
+            colors
+                .into_rgb_f32()
+                .map(glm::Vec3::from)
+                .collect::<Vec<_>>()
+        };
+
+        let colors_0 = reader.read_colors(0).map_or(
+            vec![glm::vec3(1.0, 1.0, 1.0); number_of_vertices],
+            convert_colors,
         );
 
         for (index, position) in positions.into_iter().enumerate() {
@@ -284,8 +297,9 @@ impl Asset {
                 normal: normals[index],
                 uv_0: uv_0[index],
                 uv_1: uv_1[index],
-                joints_0: joints_0[index],
-                weights_0: weights_0[index],
+                joint_0: joints_0[index],
+                weight_0: weights_0[index],
+                color_0: colors_0[index],
             });
         }
 
