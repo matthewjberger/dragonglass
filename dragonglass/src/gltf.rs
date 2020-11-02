@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use gltf::animation::{util::ReadOutputs, Interpolation};
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use std::path::Path;
@@ -43,6 +44,30 @@ pub struct Vertex {
     pub uv_1: glm::Vec2,
     pub joints_0: glm::Vec4,
     pub weights_0: glm::Vec4,
+}
+
+#[derive(Debug)]
+pub struct Animation {
+    pub name: String,
+    pub time: f32,
+    channels: Vec<Channel>,
+    max_animation_time: f32,
+}
+
+#[derive(Debug)]
+pub struct Channel {
+    target_node: usize,
+    inputs: Vec<f32>,
+    transformations: TransformationSet,
+    _interpolation: Interpolation,
+}
+
+#[derive(Debug)]
+pub enum TransformationSet {
+    Translations(Vec<glm::Vec3>),
+    Rotations(Vec<glm::Vec4>),
+    Scales(Vec<glm::Vec3>),
+    MorphTargetWeights(Vec<f32>),
 }
 
 pub type SceneGraph = Graph<usize, ()>;
@@ -90,6 +115,7 @@ pub struct Asset {
     pub textures: Vec<gltf::image::Data>,
     pub nodes: Vec<Node>,
     pub scenes: Vec<Scene>,
+    pub animations: Vec<Animation>,
     pub geometry: Geometry,
 }
 
@@ -102,12 +128,14 @@ impl Asset {
 
         let (nodes, geometry) = Self::load_nodes(&gltf, &buffers)?;
         let scenes = Self::load_scenes(&gltf);
+        let animations = Self::load_animations(&gltf, &buffers)?;
 
         Ok(Self {
             gltf,
             textures,
             nodes,
             scenes,
+            animations,
             geometry,
         })
     }
@@ -269,6 +297,139 @@ impl Asset {
             Ok(number_of_indices)
         } else {
             Ok(0)
+        }
+    }
+
+    fn load_animations(
+        gltf: &gltf::Document,
+        buffers: &[gltf::buffer::Data],
+    ) -> Result<Vec<Animation>> {
+        let mut animations = Vec::new();
+        for animation in gltf.animations() {
+            let name = animation.name().unwrap_or(DEFAULT_NAME).to_string();
+            let mut channels = Vec::new();
+            for channel in animation.channels() {
+                let sampler = channel.sampler();
+                let _interpolation = sampler.interpolation();
+                let target_node = channel.target().node().index();
+                let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+
+                let inputs = reader
+                    .read_inputs()
+                    .context("Failed to read animation channel inputs!")?
+                    .collect::<Vec<_>>();
+
+                let outputs = reader
+                    .read_outputs()
+                    .context("Failed to read animation channel outputs!")?;
+
+                let transformations: TransformationSet;
+                match outputs {
+                    ReadOutputs::Translations(translations) => {
+                        let translations = translations.map(glm::Vec3::from).collect::<Vec<_>>();
+                        transformations = TransformationSet::Translations(translations);
+                    }
+                    ReadOutputs::Rotations(rotations) => {
+                        let rotations = rotations
+                            .into_f32()
+                            .map(glm::Vec4::from)
+                            .collect::<Vec<_>>();
+                        transformations = TransformationSet::Rotations(rotations);
+                    }
+                    ReadOutputs::Scales(scales) => {
+                        let scales = scales.map(glm::Vec3::from).collect::<Vec<_>>();
+                        transformations = TransformationSet::Scales(scales);
+                    }
+                    ReadOutputs::MorphTargetWeights(weights) => {
+                        let morph_target_weights = weights.into_f32().collect::<Vec<_>>();
+                        transformations =
+                            TransformationSet::MorphTargetWeights(morph_target_weights);
+                    }
+                }
+                channels.push(Channel {
+                    target_node,
+                    inputs,
+                    transformations,
+                    _interpolation,
+                });
+            }
+
+            let max_animation_time = channels
+                .iter()
+                .flat_map(|channel| channel.inputs.iter().copied())
+                .fold(0.0, f32::max);
+
+            animations.push(Animation {
+                channels,
+                time: 0.0,
+                max_animation_time,
+                name,
+            });
+        }
+        Ok(animations)
+    }
+
+    pub fn animate(&mut self, index: usize, step: f32) {
+        if self.animations.get(index).is_none() {
+            log::warn!("No animation at index: {}. Skipping...", index);
+            return;
+        }
+        let mut animation = &mut self.animations[index];
+
+        animation.time += step;
+
+        // TODO: Allow for specifying a specific animation by name
+        if animation.time > animation.max_animation_time {
+            animation.time = 0.0;
+        }
+        if animation.time < 0.0 {
+            animation.time = animation.max_animation_time;
+        }
+        for channel in animation.channels.iter_mut() {
+            let mut input_iter = channel.inputs.iter().enumerate().peekable();
+            while let Some((previous_key, previous_time)) = input_iter.next() {
+                if let Some((next_key, next_time)) = input_iter.peek() {
+                    let next_key = *next_key;
+                    let next_time = **next_time;
+                    let previous_time = *previous_time;
+
+                    if animation.time < previous_time || animation.time > next_time {
+                        continue;
+                    }
+
+                    let interpolation =
+                        (animation.time - previous_time) / (next_time - previous_time);
+
+                    // TODO: Interpolate with other methods
+                    // Only Linear interpolation is used for now
+                    match &channel.transformations {
+                        TransformationSet::Translations(translations) => {
+                            let start = translations[previous_key];
+                            let end = translations[next_key];
+                            let translation_vec = glm::mix(&start, &end, interpolation);
+                            self.nodes[channel.target_node].transform =
+                                glm::translation(&translation_vec);
+                        }
+                        TransformationSet::Rotations(rotations) => {
+                            let start = rotations[previous_key];
+                            let end = rotations[next_key];
+                            let start_quat = glm::quat(start[3], start[0], start[1], start[2]);
+                            let end_quat = glm::quat(end[3], end[0], end[1], end[2]);
+                            let rotation_quat =
+                                glm::quat_slerp(&start_quat, &end_quat, interpolation);
+                            self.nodes[channel.target_node].transform =
+                                glm::quat_to_mat4(&rotation_quat); // TODO: maybe normalize??
+                        }
+                        TransformationSet::Scales(scales) => {
+                            let start = scales[previous_key];
+                            let end = scales[next_key];
+                            let scale_vec = glm::mix(&start, &end, interpolation);
+                            self.nodes[channel.target_node].transform = glm::scaling(&scale_vec);
+                        }
+                        TransformationSet::MorphTargetWeights(_weights) => unimplemented!(),
+                    }
+                }
+            }
         }
     }
 }
