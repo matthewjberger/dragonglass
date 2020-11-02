@@ -83,26 +83,26 @@ impl PushConstantMaterial {
         material.alpha_cutoff = primitive_material.alpha_cutoff();
         material.is_unlit = if primitive_material.unlit() { 1 } else { 0 };
         if let Some(base_color_texture) = pbr.base_color_texture() {
-            material.color_texture_index = base_color_texture.texture().index() as i32;
+            material.color_texture_index = base_color_texture.texture().source().index() as i32;
             material.color_texture_set = base_color_texture.tex_coord() as i32;
         }
         if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
             material.metallic_roughness_texture_index =
-                metallic_roughness_texture.texture().index() as i32;
+                metallic_roughness_texture.texture().source().index() as i32;
             material.metallic_roughness_texture_set = metallic_roughness_texture.tex_coord() as i32;
         }
         if let Some(normal_texture) = primitive_material.normal_texture() {
-            material.normal_texture_index = normal_texture.texture().index() as i32;
+            material.normal_texture_index = normal_texture.texture().source().index() as i32;
             material.normal_texture_set = normal_texture.tex_coord() as i32;
             material.normal_texture_scale = normal_texture.scale();
         }
         if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
-            material.occlusion_texture_index = occlusion_texture.texture().index() as i32;
+            material.occlusion_texture_index = occlusion_texture.texture().source().index() as i32;
             material.occlusion_texture_set = occlusion_texture.tex_coord() as i32;
             material.occlusion_strength = occlusion_texture.strength();
         }
         if let Some(emissive_texture) = primitive_material.emissive_texture() {
-            material.emissive_texture_index = emissive_texture.texture().index() as i32;
+            material.emissive_texture_index = emissive_texture.texture().source().index() as i32;
             material.emissive_texture_set = emissive_texture.tex_coord() as i32;
         }
 
