@@ -466,7 +466,7 @@ impl Asset {
                             let rotation_quat =
                                 glm::quat_slerp(&start_quat, &end_quat, interpolation);
                             self.nodes[channel.target_node].transform =
-                                glm::quat_to_mat4(&rotation_quat); // TODO: maybe normalize??
+                                glm::quat_to_mat4(&glm::quat_normalize(&rotation_quat));
                         }
                         TransformationSet::Scales(scales) => {
                             let start = scales[previous_key];

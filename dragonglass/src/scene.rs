@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 
 pub struct Scene {
     pub transient_command_pool: CommandPool,
@@ -169,7 +169,9 @@ impl Scene {
         Ok(rendergraph)
     }
 
-    pub fn load_asset(&mut self, context: &Context, asset: Arc<Asset>) -> Result<()> {
+    pub fn load_asset(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
+        let asset = Asset::new(path)?;
+
         let offscreen_renderpass = self
             .rendergraph
             .passes

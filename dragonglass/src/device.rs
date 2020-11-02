@@ -9,7 +9,6 @@ use std::{path::Path, sync::Arc};
 pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
-    asset: Option<Arc<Asset>>,
     scene: Option<Scene>,
     context: Arc<Context>,
 }
@@ -36,23 +35,16 @@ impl RenderingDevice {
         let renderer = Self {
             _command_pool: command_pool,
             frame,
-            asset: None,
             scene,
             context,
         };
         Ok(renderer)
     }
 
-    pub fn load_asset<P>(&mut self, path: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
+    pub fn load_asset(&mut self, path: impl AsRef<Path>) -> Result<()> {
         match self.scene.as_mut() {
             Some(scene) => {
-                self.asset = None;
-                let asset = Arc::new(Asset::new(path)?);
-                scene.load_asset(&self.context, asset.clone())?;
-                self.asset = Some(asset);
+                scene.load_asset(&self.context, path)?;
             }
             None => {
                 log::warn!("No scene was available to load the asset into!");
@@ -66,6 +58,7 @@ impl RenderingDevice {
         dimensions: &[u32; 2],
         view: glm::Mat4,
         camera_position: glm::Vec3,
+        delta_time: f32,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -75,6 +68,8 @@ impl RenderingDevice {
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
                 if let Some(asset) = scene.asset.as_ref() {
+                    // Only animate the first animation for now
+                    asset.borrow_mut().animate(0, 0.75 * delta_time)?;
                     asset
                         .borrow()
                         .update_ubo(aspect_ratio, view, camera_position)?
@@ -86,16 +81,14 @@ impl RenderingDevice {
             Ok(())
         })?;
 
+        // FIXME: Don't reload the whole scene, just reload what scene needs
         if frame.recreated_swapchain {
             self.scene = None;
-            let mut scene = Scene::new(
+            let scene = Scene::new(
                 &self.context,
                 frame.swapchain()?,
                 &frame.swapchain_properties,
             )?;
-            if let Some(asset) = self.asset.as_ref() {
-                scene.load_asset(&self.context, asset.clone())?;
-            }
             self.scene = Some(scene);
         }
 

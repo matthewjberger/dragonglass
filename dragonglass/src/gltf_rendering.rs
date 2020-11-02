@@ -115,11 +115,20 @@ pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec3,
+    pub joint_matrices: [glm::Mat4; Self::MAX_NUM_JOINTS],
+}
+
+impl AssetUniformBuffer {
+    pub const MAX_NUM_JOINTS: usize = 100;
 }
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct NodeDynamicUniformBuffer {
     pub model: glm::Mat4,
+    // X value is the joint count.
+    // Y value is the joint matrix offset.
+    // A vec4 is necessary for proper alignment
+    pub joint_info: glm::Vec4,
 }
 
 pub struct GltfPipelineData {
@@ -366,24 +375,37 @@ impl GltfPipelineData {
         }
     }
 
-    fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<()> {
+    pub fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<Vec<glm::Mat4>> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); asset.nodes.len()];
         let scene = asset
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
+
+        let mut joint_offset = 0;
+        let joint_matrices = vec![glm::Mat4::identity(); AssetUniformBuffer::MAX_NUM_JOINTS];
+
         for graph in scene.graphs.iter() {
             let mut dfs = Dfs::new(graph, NodeIndex::new(0));
             while let Some(node_index) = dfs.next(&graph) {
                 let offset = graph[node_index];
                 let model = global_transform(graph, node_index, &asset.nodes);
-                buffers[offset] = NodeDynamicUniformBuffer { model };
+
+                let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+                if let Some(skin) = &asset.nodes[offset].skin {
+                    let joint_count = skin.joints.len();
+                    joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
+                    joint_offset += joint_count;
+                }
+
+                buffers[offset] = NodeDynamicUniformBuffer { model, joint_info };
             }
         }
+
         let alignment = self.dynamic_alignment;
         self.dynamic_uniform_buffer
             .upload_data_aligned(&buffers, 0, alignment)?;
-        Ok(())
+        Ok(joint_matrices)
     }
 }
 
@@ -449,7 +471,6 @@ impl GltfRenderer {
                             if primitive_material.alpha_mode() != alpha_mode {
                                 continue;
                             }
-
                             PushConstantMaterial::from_gltf(&primitive_material)?
                         }
                         None => PushConstantMaterial::default(),
@@ -491,7 +512,7 @@ impl GltfRenderer {
 }
 
 pub struct AssetRendering {
-    pub asset: Arc<Asset>,
+    pub asset: Asset,
     pub pipeline_data: GltfPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
@@ -500,7 +521,7 @@ pub struct AssetRendering {
 }
 
 impl AssetRendering {
-    pub fn new(context: &Context, command_pool: &CommandPool, asset: Arc<Asset>) -> Result<Self> {
+    pub fn new(context: &Context, command_pool: &CommandPool, asset: Asset) -> Result<Self> {
         let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
         Ok(Self {
             pipeline: None,
@@ -620,12 +641,23 @@ impl AssetRendering {
         camera_position: glm::Vec3,
     ) -> Result<()> {
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
         let ubo = AssetUniformBuffer {
             view,
             projection,
             camera_position,
+            joint_matrices: [glm::Mat4::identity(); AssetUniformBuffer::MAX_NUM_JOINTS],
         };
         self.pipeline_data.uniform_buffer.upload_data(&[ubo], 0)?;
+        Ok(())
+    }
+
+    pub fn animate(&mut self, index: usize, step: f32) -> Result<()> {
+        if self.asset.animations.is_empty() {
+            return Ok(());
+        }
+        self.asset.animate(index, step);
+        self.pipeline_data.update_dynamic_ubo(&self.asset)?;
         Ok(())
     }
 }
