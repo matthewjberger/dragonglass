@@ -14,6 +14,15 @@ pub struct Node {
     pub transform: glm::Mat4,
     pub mesh: Option<Mesh>,
     pub skin: Option<Skin>,
+    pub light: Option<Light>,
+}
+
+pub struct Light {
+    pub name: String,
+    pub color: glm::Vec3,
+    pub intensity: f32,
+    pub range: f32,
+    pub kind: gltf::khr_lights_punctual::Kind,
 }
 
 pub struct Skin {
@@ -182,6 +191,7 @@ impl Asset {
                     transform: node_transform(&node),
                     mesh: Self::load_mesh(&node, buffers, &mut geometry)?,
                     skin: Self::load_skin(&node, buffers),
+                    light: Self::load_light(&node),
                 })
             })
             .collect::<Result<_>>()?;
@@ -429,6 +439,19 @@ impl Asset {
                 }
             })
             .collect()
+    }
+
+    fn load_light(node: &gltf::Node) -> Option<Light> {
+        match node.light() {
+            Some(light) => Some(Light {
+                name: light.name().unwrap_or(DEFAULT_NAME).to_string(),
+                color: glm::make_vec3(&light.color()),
+                intensity: light.intensity(),
+                range: light.range().unwrap_or(-1.0), // if no range is present, range is assumed to be infinite
+                kind: light.kind(),
+            }),
+            None => None,
+        }
     }
 
     pub fn animate(&mut self, index: usize, step: f32) {
