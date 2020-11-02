@@ -13,6 +13,17 @@ pub struct Node {
     pub name: String,
     pub transform: glm::Mat4,
     pub mesh: Option<Mesh>,
+    pub skin: Option<Skin>,
+}
+
+pub struct Skin {
+    pub name: String,
+    pub joints: Vec<Joint>,
+}
+
+pub struct Joint {
+    pub target_node: usize,
+    pub inverse_bind_matrix: glm::Mat4,
 }
 
 #[derive(Debug)]
@@ -169,6 +180,7 @@ impl Asset {
                     name: node.name().unwrap_or(DEFAULT_NAME).to_string(),
                     transform: node_transform(&node),
                     mesh: Self::load_mesh(&node, buffers, &mut geometry)?,
+                    skin: Self::load_skin(&node, buffers),
                 })
             })
             .collect::<Result<_>>()?;
@@ -367,6 +379,42 @@ impl Asset {
             });
         }
         Ok(animations)
+    }
+
+    fn load_skin(node: &gltf::Node, buffers: &[gltf::buffer::Data]) -> Option<Skin> {
+        match node.skin() {
+            Some(skin) => {
+                let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
+
+                let inverse_bind_matrices = reader
+                    .read_inverse_bind_matrices()
+                    .map_or(Vec::new(), |matrices| {
+                        matrices.map(glm::Mat4::from).collect::<Vec<_>>()
+                    });
+
+                let joints = Self::load_joints(&skin, &inverse_bind_matrices);
+
+                let name = skin.name().unwrap_or(DEFAULT_NAME).to_string();
+
+                Some(Skin { joints, name })
+            }
+            None => None,
+        }
+    }
+
+    fn load_joints(skin: &gltf::Skin, inverse_bind_matrices: &[glm::Mat4]) -> Vec<Joint> {
+        skin.joints()
+            .enumerate()
+            .map(|(index, joint_node)| {
+                let inverse_bind_matrix = *inverse_bind_matrices
+                    .get(index)
+                    .unwrap_or(&glm::Mat4::identity());
+                Joint {
+                    inverse_bind_matrix,
+                    target_node: joint_node.index(),
+                }
+            })
+            .collect()
     }
 
     pub fn animate(&mut self, index: usize, step: f32) {
