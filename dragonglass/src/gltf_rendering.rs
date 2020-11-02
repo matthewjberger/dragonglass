@@ -15,7 +15,7 @@ use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
-use std::{mem, sync::Arc};
+use std::{cell::RefCell, mem, rc::Rc, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
     let data_ptr = (data as *const T) as *const u8;
@@ -491,7 +491,7 @@ impl GltfRenderer {
 }
 
 pub struct AssetRendering {
-    pub asset: Arc<Asset>,
+    pub asset: Rc<RefCell<Asset>>,
     pub pipeline_data: GltfPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
@@ -500,8 +500,12 @@ pub struct AssetRendering {
 }
 
 impl AssetRendering {
-    pub fn new(context: &Context, command_pool: &CommandPool, asset: Arc<Asset>) -> Result<Self> {
-        let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        asset: Rc<RefCell<Asset>>,
+    ) -> Result<Self> {
+        let pipeline_data = GltfPipelineData::new(context, command_pool, &asset.borrow())?;
         Ok(Self {
             pipeline: None,
             pipeline_blended: None,
@@ -607,18 +611,24 @@ impl AssetRendering {
                     pipeline_blended.bind(&self.device.handle, command_buffer);
                 }
             }
-            renderer.draw_asset(&self.device.handle, &self.asset, *alpha_mode)?;
+            renderer.draw_asset(&self.device.handle, &self.asset.borrow(), *alpha_mode)?;
         }
 
         Ok(())
     }
 
     pub fn update_ubo(
-        &self,
+        &mut self,
         aspect_ratio: f32,
         view: glm::Mat4,
         camera_position: glm::Vec3,
+        delta_time: f32,
     ) -> Result<()> {
+        if !self.asset.borrow().animations.is_empty() {
+            self.asset.borrow_mut().animate(0, 0.75 * delta_time);
+        }
+        self.pipeline_data
+            .update_dynamic_ubo(&self.asset.borrow())?;
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
         let ubo = AssetUniformBuffer {
             view,

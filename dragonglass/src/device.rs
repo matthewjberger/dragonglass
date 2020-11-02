@@ -4,12 +4,12 @@ use ash::{version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
-use std::{path::Path, sync::Arc};
+use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 
 pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
-    asset: Option<Arc<Asset>>,
+    asset: Option<Rc<RefCell<Asset>>>,
     scene: Option<Scene>,
     context: Arc<Context>,
 }
@@ -50,7 +50,7 @@ impl RenderingDevice {
         match self.scene.as_mut() {
             Some(scene) => {
                 self.asset = None;
-                let asset = Arc::new(Asset::new(path)?);
+                let asset = Rc::new(RefCell::new(Asset::new(path)?));
                 scene.load_asset(&self.context, asset.clone())?;
                 self.asset = Some(asset);
             }
@@ -66,6 +66,7 @@ impl RenderingDevice {
         dimensions: &[u32; 2],
         view: glm::Mat4,
         camera_position: glm::Vec3,
+        delta_time: f32,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -75,9 +76,12 @@ impl RenderingDevice {
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
                 if let Some(asset) = scene.asset.as_ref() {
-                    asset
-                        .borrow()
-                        .update_ubo(aspect_ratio, view, camera_position)?
+                    asset.borrow_mut().update_ubo(
+                        aspect_ratio,
+                        view,
+                        camera_position,
+                        delta_time,
+                    )?
                 };
                 scene
                     .rendergraph

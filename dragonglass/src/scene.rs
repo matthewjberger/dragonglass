@@ -169,7 +169,7 @@ impl Scene {
         Ok(rendergraph)
     }
 
-    pub fn load_asset(&mut self, context: &Context, asset: Arc<Asset>) -> Result<()> {
+    pub fn load_asset(&mut self, context: &Context, asset: Rc<RefCell<Asset>>) -> Result<()> {
         let offscreen_renderpass = self
             .rendergraph
             .passes

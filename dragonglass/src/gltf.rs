@@ -475,8 +475,8 @@ impl Asset {
                         TransformationSet::Rotations(rotations) => {
                             let start = rotations[previous_key];
                             let end = rotations[next_key];
-                            let start_quat = glm::quat(start[3], start[0], start[1], start[2]);
-                            let end_quat = glm::quat(end[3], end[0], end[1], end[2]);
+                            let start_quat = glm::make_quat(start.as_slice());
+                            let end_quat = glm::make_quat(end.as_slice());
                             let rotation_quat =
                                 glm::quat_slerp(&start_quat, &end_quat, interpolation);
                             self.nodes[channel.target_node].transform =
