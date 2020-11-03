@@ -102,7 +102,7 @@ impl Scene {
                     format: vk::Format::R8G8B8A8_UNORM,
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
-                            float32: [0.39, 0.39, 0.39, 1.0],
+                            float32: [0.39, 0.58, 0.92, 1.0],
                         },
                     },
                     samples,
