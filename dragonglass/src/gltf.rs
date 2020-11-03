@@ -541,7 +541,12 @@ impl Asset {
                             let scale_vec = glm::mix(&start, &end, interpolation);
                             self.nodes[channel.target_node].transform.scale = scale_vec;
                         }
-                        TransformationSet::MorphTargetWeights(_weights) => unimplemented!(),
+                        TransformationSet::MorphTargetWeights(weights) => {
+                            let start = weights[previous_key];
+                            let end = weights[next_key];
+                            let _weight = glm::lerp_scalar(start, end, interpolation);
+                            // TODO: Assign this weight somewhere...
+                        }
                     }
                 }
             }
