@@ -72,6 +72,7 @@ pub struct Joint {
 pub struct Mesh {
     pub name: String,
     pub primitives: Vec<Primitive>,
+    pub weights: Option<Vec<f32>>,
 }
 
 #[derive(Debug)]
@@ -241,9 +242,14 @@ impl Asset {
                     .primitives()
                     .map(|primitive| Self::load_primitive(&primitive, buffers, geometry))
                     .collect::<Result<Vec<_>>>()?;
+                let weights = match mesh.weights() {
+                    Some(weights) => Some(weights.to_vec()),
+                    None => None,
+                };
                 Ok(Some(Mesh {
                     name: mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
                     primitives,
+                    weights,
                 }))
             }
             None => Ok(None),
