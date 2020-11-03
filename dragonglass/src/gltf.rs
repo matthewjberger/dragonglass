@@ -287,6 +287,31 @@ impl Asset {
         })
     }
 
+    fn load_morph_targets(
+        primitive: &gltf::Primitive,
+        buffers: &[gltf::buffer::Data],
+    ) -> Result<()> {
+        let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+        for (mut position_displacements, mut normal_displacements, mut tangent_displacements) in
+            reader.read_morph_targets()
+        {
+            if let Some(position_displacements) = position_displacements.as_mut() {
+                for displacement in position_displacements {
+                    log::info!("Found position displacement: {:#?}", displacement);
+                }
+            }
+
+            if let Some(normal_displacements) = normal_displacements.as_mut() {
+                for displacement in normal_displacements {
+                    log::info!("Found normal displacement: {:#?}", displacement);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn load_primitive_vertices(
         primitive: &gltf::Primitive,
         buffers: &[gltf::buffer::Data],
