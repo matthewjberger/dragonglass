@@ -11,10 +11,43 @@ pub struct Scene {
 
 pub struct Node {
     pub name: String,
-    pub transform: glm::Mat4,
+    pub transform: Transform,
     pub mesh: Option<Mesh>,
     pub skin: Option<Skin>,
     pub light: Option<Light>,
+}
+
+#[derive(Debug)]
+pub struct Transform {
+    pub translation: glm::Vec3,
+    pub rotation: glm::Quat,
+    pub scale: glm::Vec3,
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            translation: glm::vec3(0.0, 0.0, 0.0),
+            rotation: glm::Quat::identity(),
+            scale: glm::vec3(1.0, 1.0, 1.0),
+        }
+    }
+}
+
+impl Transform {
+    pub fn new(translation: glm::Vec3, rotation: glm::Quat, scale: glm::Vec3) -> Self {
+        Self {
+            translation,
+            rotation,
+            scale,
+        }
+    }
+
+    pub fn matrix(&self) -> glm::Mat4 {
+        glm::translation(&self.translation)
+            * glm::quat_to_mat4(&self.rotation)
+            * glm::scaling(&self.scale)
+    }
 }
 
 pub struct Light {
@@ -109,19 +142,18 @@ pub fn graph_node(gltf_node: &gltf::Node, graph: &mut SceneGraph, parent_index: 
     }
 }
 
-fn node_transform(gltf_node: &gltf::Node) -> glm::Mat4 {
-    let transform = gltf_node
-        .transform()
-        .matrix()
-        .iter()
-        .flatten()
-        .copied()
-        .collect::<Vec<_>>();
-    glm::make_mat4x4(&transform)
+fn node_transform(node: &gltf::Node) -> Transform {
+    let (translation, rotation, scale) = node.transform().decomposed();
+
+    let translation: glm::Vec3 = translation.into();
+    let scale: glm::Vec3 = scale.into();
+    let rotation = glm::quat_normalize(&glm::make_quat(&rotation));
+
+    Transform::new(translation, rotation, scale)
 }
 
 pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) -> glm::Mat4 {
-    let transform = nodes[graph[index]].transform;
+    let transform = nodes[graph[index]].transform.matrix();
     let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
     match incoming_walker.next_node(graph) {
         Some(parent_index) => global_transform(graph, parent_index, nodes) * transform,
@@ -492,8 +524,7 @@ impl Asset {
                             let start = translations[previous_key];
                             let end = translations[next_key];
                             let translation_vec = glm::mix(&start, &end, interpolation);
-                            self.nodes[channel.target_node].transform =
-                                glm::translation(&translation_vec);
+                            self.nodes[channel.target_node].transform.translation = translation_vec;
                         }
                         TransformationSet::Rotations(rotations) => {
                             let start = rotations[previous_key];
@@ -502,14 +533,13 @@ impl Asset {
                             let end_quat = glm::make_quat(end.as_slice());
                             let rotation_quat =
                                 glm::quat_slerp(&start_quat, &end_quat, interpolation);
-                            self.nodes[channel.target_node].transform =
-                                glm::quat_to_mat4(&rotation_quat); // TODO: maybe normalize??
+                            self.nodes[channel.target_node].transform.rotation = rotation_quat;
                         }
                         TransformationSet::Scales(scales) => {
                             let start = scales[previous_key];
                             let end = scales[next_key];
                             let scale_vec = glm::mix(&start, &end, interpolation);
-                            self.nodes[channel.target_node].transform = glm::scaling(&scale_vec);
+                            self.nodes[channel.target_node].transform.scale = scale_vec;
                         }
                         TransformationSet::MorphTargetWeights(_weights) => unimplemented!(),
                     }
