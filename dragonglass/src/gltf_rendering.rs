@@ -4,7 +4,7 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::{global_transform, Asset, Geometry, Vertex},
+    gltf::{global_transform, scene_aabb, Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
@@ -112,6 +112,7 @@ impl PushConstantMaterial {
 
 #[derive(Debug, Clone, Copy)]
 pub struct AssetUniformBuffer {
+    pub model: glm::Mat4,
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec3,
@@ -372,6 +373,7 @@ impl GltfPipelineData {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
+
         for graph in scene.graphs.iter() {
             let mut dfs = Dfs::new(graph, NodeIndex::new(0));
             while let Some(node_index) = dfs.next(&graph) {
@@ -630,7 +632,19 @@ impl AssetRendering {
         self.pipeline_data
             .update_dynamic_ubo(&self.asset.borrow())?;
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
+        let asset = self.asset.borrow();
+        let aabb = scene_aabb(&asset.scenes[0], &asset.nodes);
+        let scale = 1.0 / aabb.half_extents().max();
+        let scale = glm::vec3(scale, scale, scale);
+
+        let offset = -aabb.center().coords;
+        let mut model = glm::Mat4::identity();
+        // model = glm::translate(&model, &offset);
+        // model = glm::scale(&model, &scale);
+
         let ubo = AssetUniformBuffer {
+            model,
             view,
             projection,
             camera_position,

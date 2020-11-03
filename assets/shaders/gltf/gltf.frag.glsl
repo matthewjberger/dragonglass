@@ -35,6 +35,7 @@ layout(push_constant) uniform Material{
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0) uniform UboView{
+    mat4 model;
     mat4 view;
     mat4 projection;
     vec3 cameraPosition;

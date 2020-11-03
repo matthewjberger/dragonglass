@@ -10,6 +10,7 @@ layout(location=5) in vec2 inWeight0;
 layout(location=6) in vec3 inColor0;
 
 layout(binding=0) uniform UboView{
+  mat4 model;
   mat4 view;
   mat4 projection;
   vec3 cameraPosition;
@@ -27,7 +28,7 @@ layout(location=4) out vec3 outColor0;
 
 void main()
 {
-  mat4 mvp = uboView.projection * uboView.view * uboInstance.model;
+  mat4 mvp = uboView.projection * uboView.view * uboInstance.model * uboView.model ;
   vec4 position = mvp * vec4(inPosition, 1.0);
   gl_Position = position;
 
