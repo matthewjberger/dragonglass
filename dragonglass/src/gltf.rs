@@ -1,12 +1,14 @@
 use anyhow::{Context, Result};
 use gltf::animation::{util::ReadOutputs, Interpolation};
 use nalgebra_glm as glm;
+use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+    pub aabb: AABB<f32>,
 }
 
 pub struct Node {
@@ -161,6 +163,20 @@ pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) ->
     }
 }
 
+pub fn scene_aabb(scene: &gltf::Scene) -> AABB<f32> {
+    let mut aabb: AABB<f32> = AABB::new_invalid();
+    for node in scene.nodes() {
+        if let Some(mesh) = node.mesh() {
+            for primitive in mesh.primitives() {
+                let bounding_box = primitive.bounding_box();
+                aabb.take_point(Point3::from_slice(&bounding_box.min));
+                aabb.take_point(Point3::from_slice(&bounding_box.max));
+            }
+        }
+    }
+    aabb
+}
+
 const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub struct Asset {
@@ -206,6 +222,7 @@ impl Asset {
                     .nodes()
                     .map(|node| create_scene_graph(&node))
                     .collect(),
+                aabb: scene_aabb(&scene),
             })
             .collect::<Vec<_>>()
     }
