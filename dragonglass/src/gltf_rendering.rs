@@ -190,7 +190,7 @@ impl GltfPipelineData {
         let dummy_texture = Texture::new(context, command_pool, &empty_description)?;
         let dummy_sampler = Sampler::default(device.clone())?;
 
-        let mut data = Self {
+        let data = Self {
             descriptor_pool,
             uniform_buffer,
             dynamic_uniform_buffer,
@@ -374,7 +374,7 @@ impl GltfPipelineData {
         }
     }
 
-    fn update_dynamic_ubo(&mut self, asset: &Asset) -> Result<()> {
+    fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); asset.nodes.len()];
         let scene = asset
             .scenes
