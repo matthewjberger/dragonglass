@@ -1,6 +1,6 @@
 #version 450
 
-#define MAX_NUMBER_OF_TEXTURES 100
+#define MAX_NUMBER_OF_TEXTURES 200
 #define MAX_NUMBER_OF_JOINTS 128
 
 layout(location=0) in vec3 inPosition;

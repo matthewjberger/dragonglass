@@ -10,7 +10,7 @@ use crate::{
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
     },
 };
-use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
@@ -145,7 +145,8 @@ pub struct GltfPipelineData {
 
 impl GltfPipelineData {
     // This should match the number of textures defined in the shader
-    pub const MAX_TEXTURES: usize = 100;
+    // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
+    pub const MAX_NUMBER_OF_TEXTURES: usize = 200;
 
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
         let device = context.device.clone();
@@ -222,7 +223,7 @@ impl GltfPipelineData {
             .build();
         let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(2)
-            .descriptor_count(Self::MAX_TEXTURES as _)
+            .descriptor_count(Self::MAX_NUMBER_OF_TEXTURES as _)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
@@ -244,7 +245,7 @@ impl GltfPipelineData {
 
         let sampler_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            descriptor_count: Self::MAX_TEXTURES as _,
+            descriptor_count: Self::MAX_NUMBER_OF_TEXTURES as _,
         };
 
         let pool_sizes = [ubo_pool_size, dynamic_ubo_pool_size, sampler_pool_size];
@@ -322,7 +323,7 @@ impl GltfPipelineData {
             .collect::<Vec<_>>();
 
         let number_of_images = image_infos.len();
-        let required_images = Self::MAX_TEXTURES;
+        let required_images = Self::MAX_NUMBER_OF_TEXTURES;
         if number_of_images < required_images {
             let remaining = required_images - number_of_images;
             for _ in 0..remaining {
@@ -641,6 +642,7 @@ impl AssetRendering {
         camera_position: glm::Vec3,
         delta_time: f32,
     ) -> Result<()> {
+        // FIXME: Move all pipeline data update logic to this method
         if !self.asset.borrow().animations.is_empty() {
             self.asset.borrow_mut().animate(0, 0.75 * delta_time);
         }
