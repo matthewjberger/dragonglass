@@ -10,7 +10,7 @@ use crate::{
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
     },
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
@@ -379,15 +379,22 @@ impl GltfPipelineData {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
+
+        let mut joint_offset = 0;
         for graph in scene.graphs.iter() {
             let mut dfs = Dfs::new(graph, NodeIndex::new(0));
             while let Some(node_index) = dfs.next(&graph) {
                 let offset = graph[node_index];
                 let model = global_transform(graph, node_index, &asset.nodes);
-                buffers[offset] = NodeDynamicUniformBuffer {
-                    model,
-                    joint_info: glm::vec4(0.0, 0.0, 0.0, 0.0),
-                };
+
+                let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+                if let Some(skin) = asset.nodes[offset].skin.as_ref() {
+                    let joint_count = skin.joints.len();
+                    joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
+                    joint_offset += joint_count;
+                }
+
+                buffers[offset] = NodeDynamicUniformBuffer { model, joint_info };
             }
         }
         let alignment = self.dynamic_alignment;
@@ -644,48 +651,45 @@ impl AssetRendering {
         let mut camera_position = glm::vec3_to_vec4(&camera_position);
         camera_position.w = 1.0;
 
+        let mut joint_offset = 0;
         let asset = self.asset.borrow();
         let first_scene = asset.scenes.first().context("Failed to find a scene")?;
-        let mut joints = [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS];
+        let mut joint_matrices = [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS];
         for graph in first_scene.graphs.iter() {
             let mut dfs = Dfs::new(graph, NodeIndex::new(0));
             while let Some(node_index) = dfs.next(&graph) {
                 let node_offset = graph[node_index];
-                let global_transform = global_transform(graph, node_index, &asset.nodes);
+                let node_transform = global_transform(graph, node_index, &asset.nodes);
 
                 if let Some(skin) = asset.nodes[node_offset].skin.as_ref() {
                     let joint_count = skin.joints.len();
-                    let joint_offset = node_index.index();
                     let joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
                     for (index, joint) in skin.joints.iter().enumerate() {
                         if index > MAX_NUMBER_OF_JOINTS {
                             eprintln!("Skin joint count {} is greater than the maximum joint limit of {}!",joint_info, MAX_NUMBER_OF_JOINTS);
                         }
 
-                        let joint_node_index = graph
-                            .node_indices()
-                            .find(|i| graph[*i] == joint.target_node)
-                            .context(format!(
-                                "Failed to find node {} specified by a joint",
-                                joint.target_node
-                            ))?;
+                        let joint_transform = {
+                            let mut transform = glm::Mat4::identity();
+                            for graph in first_scene.graphs.iter() {
+                                if let Some(index) = graph
+                                    .node_indices()
+                                    .find(|i| graph[*i] == joint.target_node)
+                                {
+                                    transform = global_transform(graph, index, &asset.nodes);
+                                }
+                            }
+                            transform
+                        };
 
-                        // let global_transform = global_transform(graph, node_index, &asset.nodes);
+                        let joint_matrix = glm::inverse(&node_transform)
+                            * joint_transform
+                            * joint.inverse_bind_matrix;
 
-                        // let joint_global_transform =
-                        //     global_transform(graph, joint_node_index, &asset.nodes);
-
-                        // let joint_matrix = glm::inverse(&global_transform)
-                        //     * joint_global_transform
-                        //     * joint.inverse_bind_matrix;
-
-                        joints[joint_offset + index] = glm::Mat4::identity();
+                        joint_matrices[joint_offset + index] = joint_matrix;
                     }
+                    joint_offset += joint_count;
                 }
-
-                // let offset = graph[node_index];
-                // let model = global_transform(graph, node_index, &self.asset.borrow().nodes);
-                // joints[offset] = model;
             }
         }
 
@@ -693,7 +697,7 @@ impl AssetRendering {
             view,
             projection,
             camera_position,
-            joint_matrices: [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS],
+            joint_matrices,
         };
         self.pipeline_data.uniform_buffer.upload_data(&[ubo], 0)?;
         Ok(())
