@@ -403,7 +403,7 @@ impl GltfPipelineData {
         Ok(())
     }
 
-    // TODO: Group view, camera_position, aspect ratio, etc into some structure
+    // TODO: Shorten this after gltf cameras are implemented
     pub fn update_ubo(
         &mut self,
         aspect_ratio: f32,
