@@ -204,7 +204,6 @@ impl GltfPipelineData {
             dummy_sampler,
         };
         data.update_descriptor_set(device);
-        data.update_dynamic_ubo(asset)?;
         Ok(data)
     }
 
@@ -401,6 +400,75 @@ impl GltfPipelineData {
         let alignment = self.dynamic_alignment;
         self.dynamic_uniform_buffer
             .upload_data_aligned(&buffers, 0, alignment)?;
+        Ok(())
+    }
+
+    // TODO: Group view, camera_position, aspect ratio, etc into some structure
+    pub fn update_ubo(
+        &mut self,
+        aspect_ratio: f32,
+        view: glm::Mat4,
+        camera_position: glm::Vec3,
+        delta_time: f32,
+        asset: &mut Asset,
+    ) -> Result<()> {
+        if !asset.animations.is_empty() {
+            asset.animate(0, 0.75 * delta_time);
+        }
+        self.update_dynamic_ubo(asset)?;
+        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
+        let mut camera_position = glm::vec3_to_vec4(&camera_position);
+        camera_position.w = 1.0;
+
+        let mut joint_offset = 0;
+        let first_scene = asset.scenes.first().context("Failed to find a scene")?;
+        let mut joint_matrices = [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS];
+        for graph in first_scene.graphs.iter() {
+            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            while let Some(node_index) = dfs.next(&graph) {
+                let node_offset = graph[node_index];
+                let node_transform = global_transform(graph, node_index, &asset.nodes);
+
+                if let Some(skin) = asset.nodes[node_offset].skin.as_ref() {
+                    let joint_count = skin.joints.len();
+                    let joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
+                    for (index, joint) in skin.joints.iter().enumerate() {
+                        if index > MAX_NUMBER_OF_JOINTS {
+                            eprintln!("Skin joint count {} is greater than the maximum joint limit of {}!",joint_info, MAX_NUMBER_OF_JOINTS);
+                        }
+
+                        let joint_transform = {
+                            let mut transform = glm::Mat4::identity();
+                            for graph in first_scene.graphs.iter() {
+                                if let Some(index) = graph
+                                    .node_indices()
+                                    .find(|i| graph[*i] == joint.target_node)
+                                {
+                                    transform = global_transform(graph, index, &asset.nodes);
+                                }
+                            }
+                            transform
+                        };
+
+                        let joint_matrix = glm::inverse(&node_transform)
+                            * joint_transform
+                            * joint.inverse_bind_matrix;
+
+                        joint_matrices[joint_offset + index] = joint_matrix;
+                    }
+                    joint_offset += joint_count;
+                }
+            }
+        }
+
+        let ubo = AssetUniformBuffer {
+            view,
+            projection,
+            camera_position,
+            joint_matrices,
+        };
+        self.uniform_buffer.upload_data(&[ubo], 0)?;
         Ok(())
     }
 }
@@ -642,67 +710,13 @@ impl AssetRendering {
         camera_position: glm::Vec3,
         delta_time: f32,
     ) -> Result<()> {
-        // FIXME: Move all pipeline data update logic to this method
-        if !self.asset.borrow().animations.is_empty() {
-            self.asset.borrow_mut().animate(0, 0.75 * delta_time);
-        }
-        self.pipeline_data
-            .update_dynamic_ubo(&self.asset.borrow())?;
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-
-        let mut camera_position = glm::vec3_to_vec4(&camera_position);
-        camera_position.w = 1.0;
-
-        let mut joint_offset = 0;
-        let asset = self.asset.borrow();
-        let first_scene = asset.scenes.first().context("Failed to find a scene")?;
-        let mut joint_matrices = [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS];
-        for graph in first_scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
-                let node_offset = graph[node_index];
-                let node_transform = global_transform(graph, node_index, &asset.nodes);
-
-                if let Some(skin) = asset.nodes[node_offset].skin.as_ref() {
-                    let joint_count = skin.joints.len();
-                    let joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
-                    for (index, joint) in skin.joints.iter().enumerate() {
-                        if index > MAX_NUMBER_OF_JOINTS {
-                            eprintln!("Skin joint count {} is greater than the maximum joint limit of {}!",joint_info, MAX_NUMBER_OF_JOINTS);
-                        }
-
-                        let joint_transform = {
-                            let mut transform = glm::Mat4::identity();
-                            for graph in first_scene.graphs.iter() {
-                                if let Some(index) = graph
-                                    .node_indices()
-                                    .find(|i| graph[*i] == joint.target_node)
-                                {
-                                    transform = global_transform(graph, index, &asset.nodes);
-                                }
-                            }
-                            transform
-                        };
-
-                        let joint_matrix = glm::inverse(&node_transform)
-                            * joint_transform
-                            * joint.inverse_bind_matrix;
-
-                        joint_matrices[joint_offset + index] = joint_matrix;
-                    }
-                    joint_offset += joint_count;
-                }
-            }
-        }
-
-        let ubo = AssetUniformBuffer {
+        self.pipeline_data.update_ubo(
+            aspect_ratio,
             view,
-            projection,
             camera_position,
-            joint_matrices,
-        };
-        self.pipeline_data.uniform_buffer.upload_data(&[ubo], 0)?;
-        Ok(())
+            delta_time,
+            &mut self.asset.borrow_mut(),
+        )
     }
 }
 
