@@ -110,16 +110,23 @@ impl PushConstantMaterial {
     }
 }
 
+const MAX_NUMBER_OF_JOINTS: usize = 128;
+
 #[derive(Debug, Clone, Copy)]
 pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
-    pub camera_position: glm::Vec3,
+    pub camera_position: glm::Vec4,
+    pub joint_matrices: [glm::Mat4; MAX_NUMBER_OF_JOINTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct NodeDynamicUniformBuffer {
     pub model: glm::Mat4,
+    // X value is the joint count.
+    // Y value is the joint matrix offset.
+    // A vec4 is necessary for proper alignment
+    pub joint_info: glm::Vec4,
 }
 
 pub struct GltfPipelineData {
@@ -377,7 +384,10 @@ impl GltfPipelineData {
             while let Some(node_index) = dfs.next(&graph) {
                 let offset = graph[node_index];
                 let model = global_transform(graph, node_index, &asset.nodes);
-                buffers[offset] = NodeDynamicUniformBuffer { model };
+                buffers[offset] = NodeDynamicUniformBuffer {
+                    model,
+                    joint_info: glm::vec4(0.0, 0.0, 0.0, 0.0),
+                };
             }
         }
         let alignment = self.dynamic_alignment;
@@ -630,10 +640,60 @@ impl AssetRendering {
         self.pipeline_data
             .update_dynamic_ubo(&self.asset.borrow())?;
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
+        let mut camera_position = glm::vec3_to_vec4(&camera_position);
+        camera_position.w = 1.0;
+
+        let asset = self.asset.borrow();
+        let first_scene = asset.scenes.first().context("Failed to find a scene")?;
+        let mut joints = [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS];
+        for graph in first_scene.graphs.iter() {
+            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            while let Some(node_index) = dfs.next(&graph) {
+                let node_offset = graph[node_index];
+                let global_transform = global_transform(graph, node_index, &asset.nodes);
+
+                if let Some(skin) = asset.nodes[node_offset].skin.as_ref() {
+                    let joint_count = skin.joints.len();
+                    let joint_offset = node_index.index();
+                    let joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
+                    for (index, joint) in skin.joints.iter().enumerate() {
+                        if index > MAX_NUMBER_OF_JOINTS {
+                            eprintln!("Skin joint count {} is greater than the maximum joint limit of {}!",joint_info, MAX_NUMBER_OF_JOINTS);
+                        }
+
+                        let joint_node_index = graph
+                            .node_indices()
+                            .find(|i| graph[*i] == joint.target_node)
+                            .context(format!(
+                                "Failed to find node {} specified by a joint",
+                                joint.target_node
+                            ))?;
+
+                        // let global_transform = global_transform(graph, node_index, &asset.nodes);
+
+                        // let joint_global_transform =
+                        //     global_transform(graph, joint_node_index, &asset.nodes);
+
+                        // let joint_matrix = glm::inverse(&global_transform)
+                        //     * joint_global_transform
+                        //     * joint.inverse_bind_matrix;
+
+                        joints[joint_offset + index] = glm::Mat4::identity();
+                    }
+                }
+
+                // let offset = graph[node_index];
+                // let model = global_transform(graph, node_index, &self.asset.borrow().nodes);
+                // joints[offset] = model;
+            }
+        }
+
         let ubo = AssetUniformBuffer {
             view,
             projection,
             camera_position,
+            joint_matrices: [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS],
         };
         self.pipeline_data.uniform_buffer.upload_data(&[ubo], 0)?;
         Ok(())

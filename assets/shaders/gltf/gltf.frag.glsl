@@ -1,6 +1,7 @@
 #version 450
 
 #define MAX_NUMBER_OF_TEXTURES 100
+#define MAX_NUMBER_OF_JOINTS 128
 
 layout(location=0) in vec3 inPosition;
 layout(location=1) in vec3 inNormal;
@@ -37,7 +38,8 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0) uniform UboView{
     mat4 view;
     mat4 projection;
-    vec3 cameraPosition;
+    vec4 cameraPosition;
+    mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
 } uboView;
 
 vec4 srgb_to_linear(vec4 srgbIn)
@@ -79,7 +81,7 @@ void main()
 
     vec3 normal = normalize(inNormal);
     vec3 light = normalize(lightPosition - inPosition);
-    vec3 view = normalize(uboView.cameraPosition - inPosition);
+    vec3 view = normalize(uboView.cameraPosition.xyz - inPosition);
     vec3 halfway = normalize(view + light);
 
     // Ambient
