@@ -16,7 +16,6 @@ use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
-use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{cell::RefCell, mem, rc::Rc, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
@@ -118,6 +117,8 @@ pub struct AssetUniformBuffer {
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,
     pub joint_matrices: [glm::Mat4; GltfPipelineData::MAX_NUMBER_OF_JOINTS],
+    pub morph_targets: [glm::Vec4; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGETS],
+    pub morph_target_weights: [f32; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -127,6 +128,10 @@ pub struct NodeDynamicUniformBuffer {
     // Y value is the joint matrix offset.
     // A vec4 is necessary for proper alignment
     pub joint_info: glm::Vec4,
+    // X value is the morph target weight count.
+    // Y value is the morph target weight offset.
+    // A vec4 is necessary for proper alignment
+    pub morph_target_info: glm::Vec4,
 }
 
 pub struct GltfPipelineData {
@@ -147,6 +152,8 @@ impl GltfPipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
     pub const MAX_NUMBER_OF_JOINTS: usize = 128;
+    pub const MAX_NUMBER_OF_MORPH_TARGETS: usize = 128;
+    pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
         let device = context.device.clone();
@@ -397,11 +404,25 @@ impl GltfPipelineData {
             .zip(asset.joint_matrices()?.into_iter())
             .for_each(|(a, b)| *a = b);
 
+        let mut morph_targets = [glm::Vec4::identity(); Self::MAX_NUMBER_OF_MORPH_TARGETS];
+        morph_targets
+            .iter_mut()
+            .zip(asset.morph_targets()?.into_iter())
+            .for_each(|(a, b)| *a = b);
+
+        let mut morph_target_weights = [0.0; Self::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
+        morph_target_weights
+            .iter_mut()
+            .zip(asset.morph_target_weights()?.into_iter())
+            .for_each(|(a, b)| *a = b);
+
         let ubo = AssetUniformBuffer {
             view,
             projection,
             camera_position,
             joint_matrices,
+            morph_targets,
+            morph_target_weights,
         };
         self.uniform_buffer.upload_data(&[ubo], 0)?;
         Ok(())
@@ -441,7 +462,12 @@ impl GltfPipelineData {
                     joint_offset += joint_count;
                 }
 
-                buffers[offset] = NodeDynamicUniformBuffer { model, joint_info };
+                let mut morph_target_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+                buffers[offset] = NodeDynamicUniformBuffer {
+                    model,
+                    joint_info,
+                    morph_target_info,
+                };
 
                 Ok(())
             })?;
@@ -488,13 +514,12 @@ impl GltfRenderer {
             .first()
             .context("Failed to get first scene to render!")?;
         for graph in scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
+            walk_scenegraph(graph, |node_index| {
                 let node_offset = graph[node_index];
                 let node = &asset.nodes[node_offset];
                 let mesh = match node.mesh.as_ref() {
                     Some(mesh) => mesh,
-                    _ => continue,
+                    _ => return Ok(()),
                 };
 
                 unsafe {
@@ -550,7 +575,9 @@ impl GltfRenderer {
                         }
                     }
                 }
-            }
+
+                Ok(())
+            })?;
         }
         Ok(())
     }

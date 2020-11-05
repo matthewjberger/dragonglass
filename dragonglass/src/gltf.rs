@@ -83,7 +83,7 @@ pub struct Joint {
 pub struct Mesh {
     pub name: String,
     pub primitives: Vec<Primitive>,
-    pub weights: Option<Vec<f32>>,
+    pub weights: Vec<f32>,
 }
 
 #[derive(Debug)]
@@ -93,6 +93,20 @@ pub struct Primitive {
     pub number_of_vertices: usize,
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
+    pub morph_targets: Vec<MorphTarget>,
+}
+
+#[derive(Debug)]
+pub struct MorphTarget {
+    pub positions: Vec<glm::Vec4>,
+    pub normals: Vec<glm::Vec4>,
+    pub tangents: Vec<glm::Vec4>,
+}
+
+impl MorphTarget {
+    pub fn total_length(&self) -> usize {
+        self.positions.len() + self.normals.len() + self.tangents.len()
+    }
 }
 
 #[derive(Default)]
@@ -254,8 +268,8 @@ impl Asset {
                     .map(|primitive| Self::load_primitive(&primitive, buffers, geometry))
                     .collect::<Result<Vec<_>>>()?;
                 let weights = match mesh.weights() {
-                    Some(weights) => Some(weights.to_vec()),
-                    None => None,
+                    Some(weights) => weights.to_vec(),
+                    None => Vec::new(),
                 };
                 Ok(Some(Mesh {
                     name: mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
@@ -278,12 +292,14 @@ impl Asset {
         let first_vertex = geometry.vertices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
         let number_of_vertices = Self::load_primitive_vertices(primitive, buffers, geometry)?;
+        let morph_targets = Self::load_morph_targets(primitive, buffers)?;
         Ok(Primitive {
             first_index,
             first_vertex,
             number_of_indices,
             number_of_vertices,
             material_index: primitive.material().index(),
+            morph_targets,
         })
     }
 
@@ -503,6 +519,50 @@ impl Asset {
         }
     }
 
+    fn load_morph_targets(
+        primitive: &gltf::Primitive,
+        buffers: &[gltf::buffer::Data],
+    ) -> Result<Vec<MorphTarget>> {
+        let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+        let mut morph_targets = Vec::new();
+        for (mut position_displacements, mut normal_displacements, mut tangent_displacements) in
+            reader.read_morph_targets()
+        {
+            let positions = match position_displacements.as_mut() {
+                Some(position_displacements) => position_displacements
+                    .map(glm::Vec3::from)
+                    .map(|v| glm::vec3_to_vec4(&v))
+                    .collect::<Vec<_>>(),
+                None => Vec::new(),
+            };
+
+            let normals = match normal_displacements.as_mut() {
+                Some(normal_displacements) => normal_displacements
+                    .map(glm::Vec3::from)
+                    .map(|v| glm::vec3_to_vec4(&v))
+                    .collect::<Vec<_>>(),
+                None => Vec::new(),
+            };
+
+            let tangents = match tangent_displacements.as_mut() {
+                Some(tangent_displacements) => tangent_displacements
+                    .map(glm::Vec3::from)
+                    .map(|v| glm::vec3_to_vec4(&v))
+                    .collect::<Vec<_>>(),
+                None => Vec::new(),
+            };
+
+            morph_targets.push(MorphTarget {
+                positions,
+                normals,
+                tangents,
+            });
+        }
+
+        Ok(morph_targets)
+    }
+
     pub fn animate(&mut self, index: usize, step: f32) {
         if self.animations.get(index).is_none() {
             log::warn!("No animation at index: {}. Skipping...", index);
@@ -571,7 +631,6 @@ impl Asset {
     }
 
     pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
-        let mut offset = 0;
         let first_scene = self.scenes.first().context("Failed to find a scene")?;
         let number_of_joints = self
             .gltf
@@ -579,10 +638,10 @@ impl Asset {
             .map(|skin| skin.joints().collect::<Vec<_>>().iter().len())
             .sum();
 
+        let mut offset = 0;
         let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
         for graph in first_scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
+            walk_scenegraph(graph, |node_index| {
                 let node_offset = graph[node_index];
                 let node_transform = global_transform(graph, node_index, &self.nodes);
                 if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
@@ -607,8 +666,77 @@ impl Asset {
                         offset += 1;
                     }
                 }
-            }
+                Ok(())
+            })?;
         }
         Ok(joint_matrices)
+    }
+
+    pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
+        let first_scene = self.scenes.first().context("Failed to find a scene")?;
+        let number_of_morph_targets = self
+            .nodes
+            .iter()
+            .filter_map(|node| node.mesh.as_ref())
+            .flat_map(|mesh| &mesh.primitives)
+            .flat_map(|primitive| &primitive.morph_targets)
+            .map(|morph_target| morph_target.total_length())
+            .sum();
+
+        let mut offset = 0;
+        let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
+        for graph in first_scene.graphs.iter() {
+            walk_scenegraph(graph, |node_index| {
+                let node_offset = graph[node_index];
+                if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
+                    for primitive in mesh.primitives.iter() {
+                        for morph_target in primitive.morph_targets.iter() {
+                            for position in morph_target.positions.iter() {
+                                morph_targets[offset] = *position;
+                                offset += 1;
+                            }
+
+                            for normal in morph_target.normals.iter() {
+                                morph_targets[offset] = *normal;
+                                offset += 1;
+                            }
+
+                            for tangent in morph_target.tangents.iter() {
+                                morph_targets[offset] = *tangent;
+                                offset += 1;
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(morph_targets)
+    }
+
+    pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
+        let first_scene = self.scenes.first().context("Failed to find a scene")?;
+        let number_of_morph_target_weights = self
+            .nodes
+            .iter()
+            .filter_map(|node| node.mesh.as_ref())
+            .map(|mesh| mesh.weights.len())
+            .sum();
+
+        let mut offset = 0;
+        let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
+        for graph in first_scene.graphs.iter() {
+            walk_scenegraph(graph, |node_index| {
+                let node_offset = graph[node_index];
+                if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
+                    for weight in mesh.weights.iter() {
+                        morph_target_weights[offset] = *weight;
+                        offset += 1;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(morph_target_weights)
     }
 }
