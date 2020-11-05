@@ -560,7 +560,7 @@ impl Asset {
     }
 
     pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
-        let mut joint_offset = 0;
+        let mut offset = 0;
         let first_scene = self.scenes.first().context("Failed to find a scene")?;
         let number_of_joints = self
             .gltf
@@ -575,7 +575,7 @@ impl Asset {
                 let node_offset = graph[node_index];
                 let node_transform = global_transform(graph, node_index, &self.nodes);
                 if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
-                    for (index, joint) in skin.joints.iter().enumerate() {
+                    for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in first_scene.graphs.iter() {
@@ -589,9 +589,11 @@ impl Asset {
                             transform
                         };
 
-                        joint_matrices[joint_offset + index] = glm::inverse(&node_transform)
+                        joint_matrices[offset] = glm::inverse(&node_transform)
                             * joint_transform
                             * joint.inverse_bind_matrix;
+
+                        offset += 1;
                     }
                 }
             }
