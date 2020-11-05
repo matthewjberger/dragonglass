@@ -4,8 +4,9 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::SceneGraph,
-    gltf::{global_transform, Asset, Geometry, Vertex},
+    gltf::Node,
+    gltf::Scene,
+    gltf::{global_transform, walk_scenegraph, Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
@@ -372,47 +373,8 @@ impl GltfPipelineData {
         }
     }
 
-    fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
-        let mut buffers = vec![NodeDynamicUniformBuffer::default(); asset.nodes.len()];
-        let scene = asset
-            .scenes
-            .first()
-            .context("Failed to get first scene to render!")?;
-
-        let asset_joint_matrices = asset.joint_matrices()?;
-        let number_of_joints = asset_joint_matrices.len();
-        ensure!(
-            number_of_joints < Self::MAX_NUMBER_OF_JOINTS,
-            "Too many joints in scene: {}/{}",
-            number_of_joints,
-            Self::MAX_NUMBER_OF_JOINTS
-        );
-
-        let mut joint_offset = 0;
-        for graph in scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
-                let offset = graph[node_index];
-                let model = global_transform(graph, node_index, &asset.nodes);
-
-                let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
-                if let Some(skin) = asset.nodes[offset].skin.as_ref() {
-                    let joint_count = skin.joints.len();
-                    joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
-                    joint_offset += joint_count;
-                }
-
-                buffers[offset] = NodeDynamicUniformBuffer { model, joint_info };
-            }
-        }
-        let alignment = self.dynamic_alignment;
-        self.dynamic_uniform_buffer
-            .upload_data_aligned(&buffers, 0, alignment)?;
-        Ok(())
-    }
-
     // TODO: Shorten this after gltf cameras are implemented
-    pub fn update_ubo(
+    pub fn update(
         &mut self,
         aspect_ratio: f32,
         view: glm::Mat4,
@@ -447,6 +409,51 @@ impl GltfPipelineData {
             joint_matrices,
         };
         self.uniform_buffer.upload_data(&[ubo], 0)?;
+        Ok(())
+    }
+
+    fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
+        let asset_joint_matrices = asset.joint_matrices()?;
+        let number_of_joints = asset_joint_matrices.len();
+        ensure!(
+            number_of_joints < Self::MAX_NUMBER_OF_JOINTS,
+            "Too many joints in asset: {}/{}",
+            number_of_joints,
+            Self::MAX_NUMBER_OF_JOINTS
+        );
+
+        let scene = asset
+            .scenes
+            .first()
+            .context("Failed to get first scene to render!")?;
+        self.update_node_ubos(scene, &asset.nodes)?;
+
+        Ok(())
+    }
+
+    fn update_node_ubos(&self, scene: &Scene, nodes: &[Node]) -> Result<()> {
+        let mut buffers = vec![NodeDynamicUniformBuffer::default(); nodes.len()];
+        let mut joint_offset = 0;
+        for graph in scene.graphs.iter() {
+            walk_scenegraph(graph, |node_index| {
+                let offset = graph[node_index];
+                let model = global_transform(graph, node_index, nodes);
+
+                let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+                if let Some(skin) = nodes[offset].skin.as_ref() {
+                    let joint_count = skin.joints.len();
+                    joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
+                    joint_offset += joint_count;
+                }
+
+                buffers[offset] = NodeDynamicUniformBuffer { model, joint_info };
+
+                Ok(())
+            })?;
+        }
+        let alignment = self.dynamic_alignment;
+        self.dynamic_uniform_buffer
+            .upload_data_aligned(&buffers, 0, alignment)?;
         Ok(())
     }
 }
@@ -688,7 +695,7 @@ impl AssetRendering {
         camera_position: glm::Vec3,
         delta_time: f32,
     ) -> Result<()> {
-        self.pipeline_data.update_ubo(
+        self.pipeline_data.update(
             aspect_ratio,
             view,
             camera_position,

@@ -1,4 +1,4 @@
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use gltf::animation::{util::ReadOutputs, Interpolation};
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
@@ -7,6 +7,17 @@ use std::path::Path;
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+}
+
+pub fn walk_scenegraph(
+    graph: &SceneGraph,
+    mut action: impl FnMut(NodeIndex) -> Result<()>,
+) -> Result<()> {
+    let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+    while let Some(node_index) = dfs.next(&graph) {
+        action(node_index)?;
+    }
+    Ok(())
 }
 
 pub struct Node {
