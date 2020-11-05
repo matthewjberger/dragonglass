@@ -294,12 +294,14 @@ impl Asset {
     ) -> Result<usize> {
         let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
-        let positions = reader
-            .read_positions()
-            .context(
-                "Failed to read vertex positions from the model. Vertex positions are required.",
-            )?
-            .map(glm::Vec3::from);
+        let mut positions = Vec::new();
+
+        let read_positions = reader.read_positions().context(
+            "Failed to read vertex positions from the model. Vertex positions are required.",
+        )?;
+        for position in read_positions {
+            positions.push(glm::Vec3::from(position));
+        }
         let number_of_vertices = positions.len();
 
         let normals = reader.read_normals().map_or(
