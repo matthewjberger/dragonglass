@@ -4,13 +4,14 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
+    gltf::SceneGraph,
     gltf::{global_transform, Asset, Geometry, Vertex},
     resources::{
         AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
     },
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
@@ -110,14 +111,12 @@ impl PushConstantMaterial {
     }
 }
 
-const MAX_NUMBER_OF_JOINTS: usize = 128;
-
 #[derive(Debug, Clone, Copy)]
 pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,
-    pub joint_matrices: [glm::Mat4; MAX_NUMBER_OF_JOINTS],
+    pub joint_matrices: [glm::Mat4; GltfPipelineData::MAX_NUMBER_OF_JOINTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -144,9 +143,9 @@ pub struct GltfPipelineData {
 }
 
 impl GltfPipelineData {
-    // This should match the number of textures defined in the shader
-    // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
-    pub const MAX_NUMBER_OF_TEXTURES: usize = 200;
+    // These should match the constants defined in the shader
+    pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
+    pub const MAX_NUMBER_OF_JOINTS: usize = 128;
 
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
         let device = context.device.clone();
@@ -380,6 +379,15 @@ impl GltfPipelineData {
             .first()
             .context("Failed to get first scene to render!")?;
 
+        let asset_joint_matrices = asset.joint_matrices()?;
+        let number_of_joints = asset_joint_matrices.len();
+        ensure!(
+            number_of_joints < Self::MAX_NUMBER_OF_JOINTS,
+            "Too many joints in scene: {}/{}",
+            number_of_joints,
+            Self::MAX_NUMBER_OF_JOINTS
+        );
+
         let mut joint_offset = 0;
         for graph in scene.graphs.iter() {
             let mut dfs = Dfs::new(graph, NodeIndex::new(0));
@@ -421,46 +429,16 @@ impl GltfPipelineData {
         let mut camera_position = glm::vec3_to_vec4(&camera_position);
         camera_position.w = 1.0;
 
-        let mut joint_offset = 0;
-        let first_scene = asset.scenes.first().context("Failed to find a scene")?;
-        let mut joint_matrices = [glm::Mat4::identity(); MAX_NUMBER_OF_JOINTS];
-        for graph in first_scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
-                let node_offset = graph[node_index];
-                let node_transform = global_transform(graph, node_index, &asset.nodes);
-
-                if let Some(skin) = asset.nodes[node_offset].skin.as_ref() {
-                    let joint_count = skin.joints.len();
-                    let joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
-                    for (index, joint) in skin.joints.iter().enumerate() {
-                        if index > MAX_NUMBER_OF_JOINTS {
-                            eprintln!("Skin joint count {} is greater than the maximum joint limit of {}!",joint_info, MAX_NUMBER_OF_JOINTS);
-                        }
-
-                        let joint_transform = {
-                            let mut transform = glm::Mat4::identity();
-                            for graph in first_scene.graphs.iter() {
-                                if let Some(index) = graph
-                                    .node_indices()
-                                    .find(|i| graph[*i] == joint.target_node)
-                                {
-                                    transform = global_transform(graph, index, &asset.nodes);
-                                }
-                            }
-                            transform
-                        };
-
-                        let joint_matrix = glm::inverse(&node_transform)
-                            * joint_transform
-                            * joint.inverse_bind_matrix;
-
-                        joint_matrices[joint_offset + index] = joint_matrix;
-                    }
-                    joint_offset += joint_count;
+        let joint_matrices = {
+            let mut joint_matrices = [glm::Mat4::identity(); Self::MAX_NUMBER_OF_JOINTS];
+            for (index, joint) in asset.joint_matrices()?.into_iter().enumerate() {
+                if index > Self::MAX_NUMBER_OF_JOINTS as usize {
+                    break;
                 }
+                joint_matrices[index] = joint;
             }
-        }
+            joint_matrices
+        };
 
         let ubo = AssetUniformBuffer {
             view,

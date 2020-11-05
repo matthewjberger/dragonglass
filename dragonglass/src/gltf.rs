@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use gltf::animation::{util::ReadOutputs, Interpolation};
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
@@ -557,5 +557,45 @@ impl Asset {
                 }
             }
         }
+    }
+
+    pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
+        let mut joint_offset = 0;
+        let first_scene = self.scenes.first().context("Failed to find a scene")?;
+        let number_of_joints = self
+            .gltf
+            .skins()
+            .map(|skin| skin.joints().collect::<Vec<_>>().iter().len())
+            .sum();
+
+        let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
+        for graph in first_scene.graphs.iter() {
+            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+            while let Some(node_index) = dfs.next(&graph) {
+                let node_offset = graph[node_index];
+                let node_transform = global_transform(graph, node_index, &self.nodes);
+                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
+                    for (index, joint) in skin.joints.iter().enumerate() {
+                        let joint_transform = {
+                            let mut transform = glm::Mat4::identity();
+                            for graph in first_scene.graphs.iter() {
+                                if let Some(index) = graph
+                                    .node_indices()
+                                    .find(|i| graph[*i] == joint.target_node)
+                                {
+                                    transform = global_transform(graph, index, &self.nodes);
+                                }
+                            }
+                            transform
+                        };
+
+                        joint_matrices[joint_offset + index] = glm::inverse(&node_transform)
+                            * joint_transform
+                            * joint.inverse_bind_matrix;
+                    }
+                }
+            }
+        }
+        Ok(joint_matrices)
     }
 }
