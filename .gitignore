@@ -2,3 +2,4 @@
 settings.toml
 *.log
 **.spv
+.vscode

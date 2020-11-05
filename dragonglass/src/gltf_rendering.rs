@@ -391,16 +391,11 @@ impl GltfPipelineData {
         let mut camera_position = glm::vec3_to_vec4(&camera_position);
         camera_position.w = 1.0;
 
-        let joint_matrices = {
-            let mut joint_matrices = [glm::Mat4::identity(); Self::MAX_NUMBER_OF_JOINTS];
-            for (index, joint) in asset.joint_matrices()?.into_iter().enumerate() {
-                if index > Self::MAX_NUMBER_OF_JOINTS as usize {
-                    break;
-                }
-                joint_matrices[index] = joint;
-            }
-            joint_matrices
-        };
+        let mut joint_matrices = [glm::Mat4::identity(); Self::MAX_NUMBER_OF_JOINTS];
+        joint_matrices
+            .iter_mut()
+            .zip(asset.joint_matrices()?.into_iter())
+            .for_each(|(a, b)| *a = b);
 
         let ubo = AssetUniformBuffer {
             view,
