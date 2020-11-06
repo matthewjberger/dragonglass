@@ -83,6 +83,11 @@ impl RenderingDevice {
                         delta_time,
                     )?
                 };
+
+                let projection =
+                    glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+                scene.cube_rendering.borrow_mut().mvp = projection * view * glm::Mat4::identity();
+
                 scene
                     .rendergraph
                     .execute_at_index(device.clone(), command_buffer, image_index)?;

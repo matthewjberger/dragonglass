@@ -4,6 +4,8 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
+    cube::Cube,
+    cube::CubeRendering,
     gltf::Asset,
     gltf_rendering::AssetRendering,
     rendergraph::{ImageNode, RenderGraph},
@@ -18,6 +20,7 @@ pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub asset: Option<Rc<RefCell<AssetRendering>>>,
+    pub cube_rendering: Rc<RefCell<CubeRendering>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
     pub samples: vk::SampleCountFlags,
@@ -41,6 +44,29 @@ impl Scene {
 
         let mut shader_cache = ShaderCache::default();
 
+        let cube = Cube::new(context, &transient_command_pool)?;
+        let mut cube_rendering = CubeRendering::new(context.device.clone(), cube);
+
+        let offscreen_renderpass = rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene")?
+            .render_pass
+            .clone();
+        cube_rendering.wireframe_enabled = true;
+        cube_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
+
+        let cube_rendering = Rc::new(RefCell::new(cube_rendering));
+
+        let cube_rendering_ptr = cube_rendering.clone();
+        rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set callback")?
+            .set_callback(move |command_buffer| {
+                cube_rendering_ptr.borrow().issue_commands(command_buffer)
+            });
+
         let pipeline = PostProcessingPipeline::new(
             context,
             rendergraph.final_pass()?.render_pass.clone(),
@@ -60,9 +86,10 @@ impl Scene {
             });
 
         let path = Self {
-            asset: None,
             transient_command_pool,
             shader_cache,
+            asset: None,
+            cube_rendering,
             rendergraph,
             pipeline,
             samples,
