@@ -115,6 +115,9 @@ pub struct GraphicsPipelineSettings {
 
     #[builder(default = "vk::PrimitiveTopology::TRIANGLE_LIST")]
     pub topology: vk::PrimitiveTopology,
+
+    #[builder(default = "vk::PolygonMode::FILL")]
+    pub polygon_mode: vk::PolygonMode,
 }
 
 impl GraphicsPipelineSettings {
@@ -169,7 +172,7 @@ impl GraphicsPipelineSettings {
         vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
-            .polygon_mode(vk::PolygonMode::FILL)
+            .polygon_mode(self.polygon_mode)
             .line_width(1.0)
             .cull_mode(self.cull_mode)
             .front_face(self.front_face)
