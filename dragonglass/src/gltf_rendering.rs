@@ -561,7 +561,9 @@ pub struct AssetRendering {
     pub pipeline_data: GltfPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
+    pub pipeline_wireframe: Option<GraphicsPipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
+    pub wireframe_enabled: bool,
     device: Arc<Device>,
 }
 
@@ -573,12 +575,14 @@ impl AssetRendering {
     ) -> Result<Self> {
         let pipeline_data = GltfPipelineData::new(context, command_pool, &asset.borrow())?;
         Ok(Self {
+            asset,
+            pipeline_data,
             pipeline: None,
             pipeline_blended: None,
+            pipeline_wireframe: None,
             pipeline_layout: None,
-            pipeline_data,
+            wireframe_enabled: false,
             device: context.device.clone(),
-            asset,
         })
     }
 
@@ -620,10 +624,15 @@ impl AssetRendering {
         let mut blend_settings = settings.clone();
         blend_settings.blended(true);
 
+        let mut wireframe_settings = settings.clone();
+        wireframe_settings.polygon_mode(vk::PolygonMode::LINE);
+
         self.pipeline = None;
         self.pipeline_blended = None;
+        self.pipeline_wireframe = None;
         self.pipeline_layout = None;
 
+        // TODO: Reuse the pipeline layout across these pipelines since they are the same
         let (pipeline, pipeline_layout) = settings
             .build()
             .map_err(|error| anyhow!("{}", error))?
@@ -634,8 +643,14 @@ impl AssetRendering {
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
 
+        let (pipeline_wireframe, _) = wireframe_settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
         self.pipeline = Some(pipeline);
         self.pipeline_blended = Some(pipeline_blended);
+        self.pipeline_wireframe = Some(pipeline_wireframe);
         self.pipeline_layout = Some(pipeline_layout);
 
         Ok(())
@@ -651,6 +666,11 @@ impl AssetRendering {
             .pipeline_blended
             .as_ref()
             .context("Failed to get blend pipeline for rendering asset!")?;
+
+        let pipeline_wireframe = self
+            .pipeline_wireframe
+            .as_ref()
+            .context("Failed to get wireframe pipeline for rendering asset!")?;
 
         let pipeline_layout = self
             .pipeline_layout
@@ -669,12 +689,16 @@ impl AssetRendering {
             .bind(&self.device.handle, command_buffer)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
-            match alpha_mode {
-                AlphaMode::Opaque | AlphaMode::Mask => {
-                    pipeline.bind(&self.device.handle, command_buffer);
-                }
-                AlphaMode::Blend => {
-                    pipeline_blended.bind(&self.device.handle, command_buffer);
+            if self.wireframe_enabled {
+                pipeline_wireframe.bind(&self.device.handle, command_buffer);
+            } else {
+                match alpha_mode {
+                    AlphaMode::Opaque | AlphaMode::Mask => {
+                        pipeline.bind(&self.device.handle, command_buffer);
+                    }
+                    AlphaMode::Blend => {
+                        pipeline_blended.bind(&self.device.handle, command_buffer);
+                    }
                 }
             }
             renderer.draw_asset(&self.device.handle, &self.asset.borrow(), *alpha_mode)?;

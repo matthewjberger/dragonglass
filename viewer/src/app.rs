@@ -5,6 +5,8 @@ use image::ImageFormat;
 use log::{error, info};
 use winit::{
     dpi::PhysicalSize,
+    event::ElementState,
+    event::KeyboardInput,
     event::{Event, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
@@ -124,6 +126,23 @@ impl App {
                                     extension),
                             }
                         }
+                    }
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::KeyboardInput {
+                        input:
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(keycode),
+                            ..
+                        },
+                        ..
+                    },
+                    ..
+                } => {
+                    match keycode {
+                        VirtualKeyCode::T  => rendering_device.toggle_wireframe(),
+                        _ => {}
                     }
                 }
                 _ => {}

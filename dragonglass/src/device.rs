@@ -105,6 +105,15 @@ impl RenderingDevice {
 
         Ok(())
     }
+
+    pub fn toggle_wireframe(&mut self) {
+        if let Some(scene) = self.scene.as_mut() {
+            if let Some(asset) = scene.asset.as_mut() {
+                let mut asset = asset.borrow_mut();
+                asset.wireframe_enabled = !asset.wireframe_enabled;
+            }
+        }
+    }
 }
 
 impl Drop for RenderingDevice {
