@@ -1,12 +1,34 @@
 use anyhow::{Context, Result};
-use gltf::animation::{util::ReadOutputs, Interpolation};
+use gltf::{
+    animation::{util::ReadOutputs, Interpolation},
+    mesh::BoundingBox,
+};
 use nalgebra_glm as glm;
+use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+}
+
+pub fn scene_aabb(scene: &Scene, nodes: &[Node]) -> AABB<f32> {
+    let mut aabb: AABB<f32> = AABB::new(Point3::origin(), Point3::origin());
+    for graph in scene.graphs.iter() {
+        let indices = graph.raw_nodes().iter().map(|node| node.weight);
+        for index in indices {
+            let node = &nodes[index];
+            if let Some(mesh) = node.mesh.as_ref() {
+                for primitive in mesh.primitives.iter() {
+                    let bounding_box = &primitive.bounding_box;
+                    aabb.take_point(Point3::from_slice(&bounding_box.min));
+                    aabb.take_point(Point3::from_slice(&bounding_box.max));
+                }
+            }
+        }
+    }
+    aabb
 }
 
 pub fn walk_scenegraph(
@@ -93,6 +115,7 @@ pub struct Primitive {
     pub number_of_vertices: usize,
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
+    pub bounding_box: BoundingBox,
 }
 
 #[derive(Default)]
@@ -278,12 +301,14 @@ impl Asset {
         let first_vertex = geometry.vertices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
         let number_of_vertices = Self::load_primitive_vertices(primitive, buffers, geometry)?;
+        let bounding_box = primitive.bounding_box();
         Ok(Primitive {
             first_index,
             first_vertex,
             number_of_indices,
             number_of_vertices,
             material_index: primitive.material().index(),
+            bounding_box,
         })
     }
 

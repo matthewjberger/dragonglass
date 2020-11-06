@@ -1,5 +1,5 @@
 use crate::{adapters::CommandPool, context::Context, frame::Frame, gltf::Asset, scene::Scene};
-use anyhow::Result;
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
@@ -75,18 +75,27 @@ impl RenderingDevice {
 
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
-                if let Some(asset) = scene.asset.as_ref() {
-                    asset.borrow_mut().update_ubo(
+                if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
+                    asset_rendering.borrow_mut().update_ubo(
                         aspect_ratio,
                         view,
                         camera_position,
                         delta_time,
-                    )?
-                };
+                    )?;
 
-                let projection =
-                    glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-                scene.cube_rendering.borrow_mut().mvp = projection * view * glm::Mat4::identity();
+                    let asset_rendering = asset_rendering.borrow();
+                    let asset = asset_rendering.asset.borrow();
+                    let first_scene = asset.scenes.first().context("Failed to get first scene")?;
+                    let aabb = crate::gltf::scene_aabb(first_scene, &asset.nodes);
+
+                    let mut model = glm::Mat4::identity();
+                    model = glm::translate(&model, &aabb.center().coords);
+                    model = glm::scale(&model, &aabb.half_extents());
+
+                    let projection =
+                        glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+                    scene.cube_rendering.borrow_mut().mvp = projection * view * model;
+                };
 
                 scene
                     .rendergraph
@@ -113,7 +122,7 @@ impl RenderingDevice {
 
     pub fn toggle_wireframe(&mut self) {
         if let Some(scene) = self.scene.as_mut() {
-            if let Some(asset) = scene.asset.as_mut() {
+            if let Some(asset) = scene.asset_rendering.as_mut() {
                 let mut asset = asset.borrow_mut();
                 asset.wireframe_enabled = !asset.wireframe_enabled;
             }

@@ -19,7 +19,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
-    pub asset: Option<Rc<RefCell<AssetRendering>>>,
+    pub asset_rendering: Option<Rc<RefCell<AssetRendering>>>,
     pub cube_rendering: Rc<RefCell<CubeRendering>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
@@ -58,15 +58,6 @@ impl Scene {
 
         let cube_rendering = Rc::new(RefCell::new(cube_rendering));
 
-        let cube_rendering_ptr = cube_rendering.clone();
-        rendergraph
-            .passes
-            .get_mut("offscreen")
-            .context("Failed to get offscreen pass to set callback")?
-            .set_callback(move |command_buffer| {
-                cube_rendering_ptr.borrow().issue_commands(command_buffer)
-            });
-
         let pipeline = PostProcessingPipeline::new(
             context,
             rendergraph.final_pass()?.render_pass.clone(),
@@ -88,7 +79,7 @@ impl Scene {
         let path = Self {
             transient_command_pool,
             shader_cache,
-            asset: None,
+            asset_rendering: None,
             cube_rendering,
             rendergraph,
             pipeline,
@@ -208,17 +199,21 @@ impl Scene {
         let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
 
-        self.asset = None;
+        self.asset_rendering = None;
         let asset_rendering = Rc::new(RefCell::new(rendering));
         let asset_rendering_ptr = asset_rendering.clone();
-        self.asset = Some(asset_rendering);
+        self.asset_rendering = Some(asset_rendering);
 
+        let cube_rendering_ptr = self.cube_rendering.clone();
         self.rendergraph
             .passes
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
             .set_callback(move |command_buffer| {
-                asset_rendering_ptr.borrow().issue_commands(command_buffer)
+                asset_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
+                cube_rendering_ptr.borrow().issue_commands(command_buffer)
             });
 
         Ok(())
