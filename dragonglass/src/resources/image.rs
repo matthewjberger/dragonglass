@@ -52,6 +52,7 @@ impl ImageDescription {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_file<P>(path: P) -> Result<Self>
     where
         P: AsRef<Path> + Into<PathBuf>,
@@ -91,6 +92,7 @@ impl ImageDescription {
         })
     }
 
+    #[allow(dead_code)]
     pub fn from_image(image: &DynamicImage) -> Result<Self> {
         let (format, (width, height)) = match image {
             DynamicImage::ImageRgb8(buffer) => (vk::Format::R8G8B8_UNORM, buffer.dimensions()),

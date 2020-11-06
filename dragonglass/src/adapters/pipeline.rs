@@ -112,6 +112,9 @@ pub struct GraphicsPipelineSettings {
 
     #[builder(default = "vk::FrontFace::COUNTER_CLOCKWISE")]
     pub front_face: vk::FrontFace,
+
+    #[builder(default = "vk::PrimitiveTopology::TRIANGLE_LIST")]
+    pub topology: vk::PrimitiveTopology,
 }
 
 impl GraphicsPipelineSettings {
@@ -121,7 +124,7 @@ impl GraphicsPipelineSettings {
     ) -> Result<(GraphicsPipeline, PipelineLayout)> {
         let stages = self.shader_set.stages()?;
         let vertex_state_info = self.vertex_input_state();
-        let input_assembly_create_info = Self::input_assembly_create_info();
+        let input_assembly_create_info = self.input_assembly_create_info();
         let rasterizer_create_info = self.rasterizer_create_info();
         let multisampling_create_info = self.multisampling_create_info();
         let depth_stencil_info = self.depth_stencil_info();
@@ -154,10 +157,11 @@ impl GraphicsPipelineSettings {
             .vertex_attribute_descriptions(&self.vertex_attributes)
     }
 
-    fn input_assembly_create_info<'a>() -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
+    fn input_assembly_create_info<'a>(
+        &self,
+    ) -> vk::PipelineInputAssemblyStateCreateInfoBuilder<'a> {
         vk::PipelineInputAssemblyStateCreateInfo::builder()
-            // TODO: This topology should be configurable. gltf assets will need to use it
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .topology(self.topology)
             .primitive_restart_enable(false)
     }
 
