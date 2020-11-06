@@ -19,6 +19,7 @@ pub use self::device::RenderingDevice;
 
 mod adapters;
 mod context;
+mod cube;
 mod device;
 mod frame;
 mod gltf;
