@@ -386,7 +386,7 @@ impl GltfPipelineData {
             asset.animate(0, 0.75 * delta_time);
         }
         self.update_dynamic_ubo(asset)?;
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.01_f32, 1000_f32);
 
         let mut camera_position = glm::vec3_to_vec4(&camera_position);
         camera_position.w = 1.0;

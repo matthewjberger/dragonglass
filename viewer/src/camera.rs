@@ -65,7 +65,7 @@ impl Default for OrbitalCamera {
         Self {
             direction: glm::vec2(0_f32.to_radians(), 45_f32.to_radians()),
             r: 5.0,
-            min: 1.0,
+            min: 0.1,
             max: 100.0,
             offset: glm::vec3(0.0, 0.0, 0.0),
             world_up: glm::vec3(0.0, 1.0, 0.0),
