@@ -582,3 +582,42 @@ impl MipmapBlitDimensions {
         ]
     }
 }
+
+pub struct Texture {
+    pub image: AllocatedImage,
+    pub view: ImageView,
+}
+
+impl Texture {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        description: &ImageDescription,
+    ) -> Result<Self> {
+        let image = description.as_image(context.allocator.clone())?;
+        image.upload_data(context, command_pool, description)?;
+        let view = Self::image_view(context.device.clone(), &image, description)?;
+        let texture = Self { image, view };
+        Ok(texture)
+    }
+
+    fn image_view(
+        device: Arc<Device>,
+        image: &AllocatedImage,
+        description: &ImageDescription,
+    ) -> Result<ImageView> {
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1)
+            .level_count(description.mip_levels);
+
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image.handle)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(description.format)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(subresource_range.build());
+
+        ImageView::new(device, create_info)
+    }
+}

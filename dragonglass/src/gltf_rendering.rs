@@ -7,9 +7,10 @@ use crate::{
     gltf::Node,
     gltf::Scene,
     gltf::{global_transform, walk_scenegraph, Asset, Geometry, Vertex},
+    resources::Texture,
     resources::{
-        AllocatedImage, CpuToGpuBuffer, GeometryBuffer, ImageDescription, ImageView, Sampler,
-        ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+        CpuToGpuBuffer, GeometryBuffer, ImageDescription, Sampler, ShaderCache, ShaderPathSet,
+        ShaderPathSetBuilder,
     },
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
@@ -786,45 +787,6 @@ fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
         .input_rate(vk::VertexInputRate::VERTEX)
         .build();
     [vertex_input_binding_description]
-}
-
-pub struct Texture {
-    pub image: AllocatedImage,
-    pub view: ImageView,
-}
-
-impl Texture {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        description: &ImageDescription,
-    ) -> Result<Self> {
-        let image = description.as_image(context.allocator.clone())?;
-        image.upload_data(context, command_pool, description)?;
-        let view = Self::image_view(context.device.clone(), &image, description)?;
-        let texture = Self { image, view };
-        Ok(texture)
-    }
-
-    fn image_view(
-        device: Arc<Device>,
-        image: &AllocatedImage,
-        description: &ImageDescription,
-    ) -> Result<ImageView> {
-        let subresource_range = vk::ImageSubresourceRange::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .layer_count(1)
-            .level_count(description.mip_levels);
-
-        let create_info = vk::ImageViewCreateInfo::builder()
-            .image(image.handle)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(description.format)
-            .components(vk::ComponentMapping::default())
-            .subresource_range(subresource_range.build());
-
-        ImageView::new(device, create_info)
-    }
 }
 
 fn sampler_from_gltf(
