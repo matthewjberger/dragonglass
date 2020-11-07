@@ -76,6 +76,21 @@ impl RenderingDevice {
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
                 if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
+                    let aabb = {
+                        let asset_rendering = asset_rendering.borrow();
+                        let asset = asset_rendering.asset.borrow();
+                        let first_scene =
+                            asset.scenes.first().context("Failed to get first scene")?;
+                        crate::gltf::scene_aabb(first_scene, &asset.nodes)?
+                    };
+
+                    let offset = glm::translation(&(aabb.center().coords * -1.0));
+                    let scale = 1.0 / aabb.half_extents().max();
+                    let scale = glm::scaling(&glm::vec3(scale, scale, scale));
+                    let original_view = view;
+                    let transform = scale * offset;
+                    let view = view * transform;
+
                     asset_rendering.borrow_mut().update_ubo(
                         aspect_ratio,
                         view,
@@ -83,18 +98,11 @@ impl RenderingDevice {
                         delta_time,
                     )?;
 
-                    let asset_rendering = asset_rendering.borrow();
-                    let asset = asset_rendering.asset.borrow();
-                    let first_scene = asset.scenes.first().context("Failed to get first scene")?;
-                    let aabb = crate::gltf::scene_aabb(first_scene, &asset.nodes);
-
-                    let mut model = glm::Mat4::identity();
-                    model = glm::translate(&model, &aabb.center().coords);
-                    model = glm::scale(&model, &aabb.half_extents());
-
+                    let offset = glm::translation(&aabb.center().coords);
+                    let scale = glm::scaling(&aabb.half_extents());
                     let projection =
                         glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-                    scene.cube_rendering.borrow_mut().mvp = projection * view * model;
+                    scene.cube_rendering.borrow_mut().mvp = projection * view * offset * scale;
                 };
 
                 scene

@@ -407,7 +407,7 @@ impl GltfPipelineData {
         Ok(())
     }
 
-    fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
+    fn update_dynamic_ubo(&self, asset: &mut Asset) -> Result<()> {
         let asset_joint_matrices = asset.joint_matrices()?;
         let number_of_joints = asset_joint_matrices.len();
         ensure!(
@@ -421,12 +421,12 @@ impl GltfPipelineData {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
-        self.update_node_ubos(scene, &asset.nodes)?;
+        self.update_node_ubos(scene, &mut asset.nodes)?;
 
         Ok(())
     }
 
-    fn update_node_ubos(&self, scene: &Scene, nodes: &[Node]) -> Result<()> {
+    fn update_node_ubos(&self, scene: &Scene, nodes: &mut [Node]) -> Result<()> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); nodes.len()];
         let mut joint_offset = 0;
         for graph in scene.graphs.iter() {

@@ -13,22 +13,31 @@ pub struct Scene {
     pub graphs: Vec<SceneGraph>,
 }
 
-pub fn scene_aabb(scene: &Scene, nodes: &[Node]) -> AABB<f32> {
+pub fn scene_aabb(scene: &Scene, nodes: &[Node]) -> Result<AABB<f32>> {
     let mut aabb: AABB<f32> = AABB::new(Point3::origin(), Point3::origin());
     for graph in scene.graphs.iter() {
-        let indices = graph.raw_nodes().iter().map(|node| node.weight);
-        for index in indices {
-            let node = &nodes[index];
+        walk_scenegraph(graph, |node_index| {
+            let offset = graph[node_index];
+            let node = &nodes[offset];
             if let Some(mesh) = node.mesh.as_ref() {
+                let transform = global_transform(graph, node_index, nodes);
                 for primitive in mesh.primitives.iter() {
-                    let bounding_box = &primitive.bounding_box;
-                    aabb.take_point(Point3::from_slice(&bounding_box.min));
-                    aabb.take_point(Point3::from_slice(&bounding_box.max));
+                    let min = glm::Vec3::from(primitive.bounding_box.min);
+                    let mut min = glm::vec3_to_vec4(&min);
+                    min.w = 1.0;
+                    let min = transform * min;
+                    let max = glm::Vec3::from(primitive.bounding_box.max);
+                    let mut max = glm::vec3_to_vec4(&max);
+                    max.w = 1.0;
+                    let max = transform * max;
+                    aabb.take_point(Point3::from_slice(min.xyz().as_slice()));
+                    aabb.take_point(Point3::from_slice(max.xyz().as_slice()));
                 }
             }
-        }
+            Ok(())
+        })?;
     }
-    aabb
+    Ok(aabb)
 }
 
 pub fn walk_scenegraph(
@@ -301,14 +310,13 @@ impl Asset {
         let first_vertex = geometry.vertices.len();
         let number_of_indices = Self::load_primitive_indices(primitive, buffers, geometry)?;
         let number_of_vertices = Self::load_primitive_vertices(primitive, buffers, geometry)?;
-        let bounding_box = primitive.bounding_box();
         Ok(Primitive {
             first_index,
             first_vertex,
             number_of_indices,
             number_of_vertices,
             material_index: primitive.material().index(),
-            bounding_box,
+            bounding_box: primitive.bounding_box(),
         })
     }
 
