@@ -12,55 +12,41 @@ use nalgebra_glm as glm;
 use std::sync::Arc;
 
 #[rustfmt::skip]
-pub const VERTICES: &[f32; 108] =
+pub const VERTICES: &[f32; 24] =
     &[
-       -1.0,  1.0, -1.0,
-       -1.0, -1.0, -1.0,
-        1.0, -1.0, -1.0,
+        // Front
+       -0.5, -0.5,  0.5,
+        0.5, -0.5,  0.5,
+        0.5,  0.5,  0.5,
+       -0.5,  0.5,  0.5,
+        // Back
+       -0.5, -0.5, -0.5,
+        0.5, -0.5, -0.5,
+        0.5,  0.5, -0.5,
+       -0.5,  0.5, -0.5
+    ];
 
-        1.0, -1.0, -1.0,
-        1.0,  1.0, -1.0,
-       -1.0,  1.0, -1.0,
-
-        1.0, -1.0, -1.0,
-        1.0, -1.0,  1.0,
-        1.0,  1.0, -1.0,
-
-        1.0, -1.0,  1.0,
-        1.0,  1.0,  1.0,
-        1.0,  1.0, -1.0,
-
-        1.0, -1.0,  1.0,
-       -1.0, -1.0,  1.0,
-        1.0,  1.0,  1.0,
-
-       -1.0, -1.0,  1.0,
-       -1.0,  1.0,  1.0,
-        1.0,  1.0,  1.0,
-
-       -1.0, -1.0,  1.0,
-       -1.0, -1.0, -1.0,
-       -1.0,  1.0,  1.0,
-
-       -1.0, -1.0, -1.0,
-       -1.0,  1.0, -1.0,
-       -1.0,  1.0,  1.0,
-
-       -1.0, -1.0,  1.0,
-        1.0, -1.0,  1.0,
-        1.0, -1.0, -1.0,
-
-        1.0, -1.0, -1.0,
-       -1.0, -1.0, -1.0,
-       -1.0, -1.0,  1.0,
-
-       -1.0,  1.0, -1.0,
-        1.0,  1.0, -1.0,
-        1.0,  1.0,  1.0,
-
-        1.0,  1.0,  1.0,
-       -1.0,  1.0,  1.0,
-       -1.0,  1.0, -1.0
+#[rustfmt::skip]
+pub const INDICES: &[u32; 36] =
+    &[
+        // Front
+        0, 1, 2,
+        2, 3, 0,
+        // Right
+        1, 5, 6,
+        6, 2, 1,
+        // Back
+        7, 6, 5,
+        5, 4, 7,
+        // Left
+        4, 0, 3,
+        3, 7, 4,
+        // Bottom
+        4, 5, 1,
+        1, 0, 4,
+        // Top
+        3, 2, 6,
+        6, 7, 3
     ];
 
 pub struct Cube {
@@ -72,7 +58,7 @@ impl Cube {
         let geometry_buffer = GeometryBuffer::new(
             context.allocator.clone(),
             (VERTICES.len() * std::mem::size_of::<f32>()) as _,
-            None,
+            Some((INDICES.len() * std::mem::size_of::<u32>()) as _),
         )?;
 
         geometry_buffer.vertex_buffer.upload_data(
@@ -81,6 +67,13 @@ impl Cube {
             command_pool,
             context.graphics_queue(),
         )?;
+
+        geometry_buffer
+            .index_buffer
+            .as_ref()
+            .context("Failed to access cube index buffer!")?
+            .upload_data(INDICES, 0, command_pool, context.graphics_queue())?;
+
         Ok(Self { geometry_buffer })
     }
 
@@ -107,7 +100,7 @@ impl Cube {
     pub fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.geometry_buffer.bind(device, command_buffer)?;
         unsafe {
-            device.cmd_draw(command_buffer, VERTICES.len() as _, 1, 0, 0);
+            device.cmd_draw_indexed(command_buffer, INDICES.len() as _, 1, 0, 0, 0);
         }
         Ok(())
     }
