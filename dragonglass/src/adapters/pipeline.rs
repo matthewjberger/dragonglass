@@ -118,6 +118,9 @@ pub struct GraphicsPipelineSettings {
 
     #[builder(default = "vk::PolygonMode::FILL")]
     pub polygon_mode: vk::PolygonMode,
+
+    #[builder(default)]
+    pub dynamic_states: Vec<vk::DynamicState>,
 }
 
 impl GraphicsPipelineSettings {
@@ -135,8 +138,7 @@ impl GraphicsPipelineSettings {
         let color_blend_state = Self::color_blend_state(&blend_attachment);
         let pipeline_layout = self.create_pipeline_layout(device.clone());
         let viewport_create_info = Self::viewport_create_info();
-        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = Self::dynamic_state(&dynamic_states);
+        let dynamic_state = Self::dynamic_state(&self.dynamic_states);
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&stages)
             .vertex_input_state(&vertex_state_info)

@@ -179,6 +179,7 @@ impl CubeRendering {
             .cull_mode(vk::CullModeFlags::NONE)
             .polygon_mode(vk::PolygonMode::LINE)
             .topology(vk::PrimitiveTopology::LINE_STRIP)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .push_constant_range(push_constant_range);
 
         let mut wireframe_settings = settings.clone();
@@ -234,7 +235,7 @@ impl CubeRendering {
             self.device.handle.cmd_push_constants(
                 command_buffer,
                 pipeline_layout.handle,
-                vk::ShaderStageFlags::VERTEX,
+                vk::ShaderStageFlags::ALL_GRAPHICS,
                 0,
                 byte_slice_from(&push_constants),
             );

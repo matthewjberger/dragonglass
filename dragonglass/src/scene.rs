@@ -210,9 +210,9 @@ impl Scene {
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
             .set_callback(move |command_buffer| {
-                // asset_rendering_ptr
-                //     .borrow()
-                //     .issue_commands(command_buffer)?;
+                asset_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
                 cube_rendering_ptr.borrow().issue_commands(command_buffer)
             });
 
@@ -284,6 +284,7 @@ impl PostProcessingPipeline {
             .vertex_inputs(Vec::new())
             .vertex_attributes(Vec::new())
             .descriptor_set_layout(descriptor_set_layout)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(settings)
