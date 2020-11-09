@@ -197,7 +197,7 @@ impl CubeRendering {
                 vk::DynamicState::VIEWPORT,
                 vk::DynamicState::SCISSOR,
                 vk::DynamicState::LINE_WIDTH,
-                vk::DynamicState::DEPTH_BIAS,
+                // vk::DynamicState::DEPTH_BIAS,
             ]);
 
         let mut segment_settings = settings.clone();
@@ -245,9 +245,9 @@ impl CubeRendering {
             );
 
             self.device.handle.cmd_set_line_width(command_buffer, 3.0);
-            self.device
-                .handle
-                .cmd_set_depth_bias(command_buffer, 1.25, 0.0, 1.0)
+            // self.device
+            //     .handle
+            //     .cmd_set_depth_bias(command_buffer, 1.25, 0.0, 1.0);
         }
 
         self.cube.draw_loops(&self.device.handle, command_buffer)?;
