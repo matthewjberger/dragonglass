@@ -15,38 +15,31 @@ use std::sync::Arc;
 pub const VERTICES: &[f32; 24] =
     &[
         // Front
-       -0.5, -0.5,  0.5,
-        0.5, -0.5,  0.5,
-        0.5,  0.5,  0.5,
-       -0.5,  0.5,  0.5,
+       -1.0, -1.0,  1.0,
+        1.0, -1.0,  1.0,
+        1.0,  1.0,  1.0,
+       -1.0,  1.0,  1.0,
         // Back
-       -0.5, -0.5, -0.5,
-        0.5, -0.5, -0.5,
-        0.5,  0.5, -0.5,
-       -0.5,  0.5, -0.5
+       -1.0, -1.0, -1.0,
+        1.0, -1.0, -1.0,
+        1.0,  1.0, -1.0,
+       -1.0,  1.0, -1.0
     ];
 
 #[rustfmt::skip]
-pub const INDICES: &[u32; 36] =
+pub const INDICES: &[u32; 20] =
     &[
         // Front
         0, 1, 2,
         2, 3, 0,
-        // Right
-        1, 5, 6,
-        6, 2, 1,
         // Back
         7, 6, 5,
         5, 4, 7,
-        // Left
-        4, 0, 3,
-        3, 7, 4,
-        // Bottom
-        4, 5, 1,
-        1, 0, 4,
-        // Top
-        3, 2, 6,
-        6, 7, 3
+        // Line Segments
+        0,4,
+        1,5,
+        2,6,
+        3,7,
     ];
 
 pub struct Cube {
@@ -97,11 +90,27 @@ impl Cube {
         [vertex_input_binding_description]
     }
 
-    pub fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) -> Result<()> {
+    pub fn draw_loops(
+        &self,
+        device: &ash::Device,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
         self.geometry_buffer.bind(device, command_buffer)?;
         unsafe {
             device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
-            device.cmd_draw_indexed(command_buffer, 6, 1, 12, 0, 0);
+            device.cmd_draw_indexed(command_buffer, 6, 1, 6, 0, 0);
+        }
+        Ok(())
+    }
+
+    pub fn draw_segments(
+        &self,
+        device: &ash::Device,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
+        self.geometry_buffer.bind(device, command_buffer)?;
+        unsafe {
+            device.cmd_draw_indexed(command_buffer, 8, 1, 12, 0, 0);
         }
         Ok(())
     }
@@ -120,9 +129,9 @@ pub struct CubePushConstantBlock {
 pub struct CubeRendering {
     pub cube: Cube,
     pub pipeline: Option<GraphicsPipeline>,
-    pub pipeline_wireframe: Option<GraphicsPipeline>,
+    pub segment_pipeline: Option<GraphicsPipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
-    pub wireframe_enabled: bool,
+    pub is_bounding_box: bool,
     pub mvp: glm::Mat4,
     device: Arc<Device>,
 }
@@ -132,9 +141,9 @@ impl CubeRendering {
         Self {
             cube,
             pipeline: None,
-            pipeline_wireframe: None,
+            segment_pipeline: None,
             pipeline_layout: None,
-            wireframe_enabled: false,
+            is_bounding_box: false,
             mvp: glm::Mat4::identity(),
             device,
         }
@@ -168,6 +177,10 @@ impl CubeRendering {
             vk::DescriptorSetLayoutCreateInfo::builder(),
         )?);
 
+        self.pipeline = None;
+        self.segment_pipeline = None;
+        self.pipeline_layout = None;
+
         let mut settings = GraphicsPipelineSettingsBuilder::default();
         settings
             .render_pass(render_pass)
@@ -176,32 +189,32 @@ impl CubeRendering {
             .descriptor_set_layout(descriptor_set_layout)
             .shader_set(shader_set)
             .rasterization_samples(samples)
-            .cull_mode(vk::CullModeFlags::NONE)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
+            .push_constant_range(push_constant_range)
             .polygon_mode(vk::PolygonMode::LINE)
             .topology(vk::PrimitiveTopology::LINE_STRIP)
-            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-            .push_constant_range(push_constant_range);
+            .dynamic_states(vec![
+                vk::DynamicState::VIEWPORT,
+                vk::DynamicState::SCISSOR,
+                vk::DynamicState::LINE_WIDTH,
+                vk::DynamicState::DEPTH_BIAS,
+            ]);
 
-        let mut wireframe_settings = settings.clone();
-        wireframe_settings.polygon_mode(vk::PolygonMode::LINE);
+        let mut segment_settings = settings.clone();
+        segment_settings.topology(vk::PrimitiveTopology::LINE_LIST);
 
-        self.pipeline = None;
-        self.pipeline_wireframe = None;
-        self.pipeline_layout = None;
-
-        // TODO: Reuse the pipeline layout across these pipelines since they are the same
         let (pipeline, pipeline_layout) = settings
             .build()
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
 
-        let (pipeline_wireframe, _) = wireframe_settings
+        let (segment_pipeline, _) = segment_settings
             .build()
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
 
         self.pipeline = Some(pipeline);
-        self.pipeline_wireframe = Some(pipeline_wireframe);
+        self.segment_pipeline = Some(segment_pipeline);
         self.pipeline_layout = Some(pipeline_layout);
 
         Ok(())
@@ -211,11 +224,6 @@ impl CubeRendering {
         let pipeline = self
             .pipeline
             .as_ref()
-            .context("Failed to get pipeline for rendering asset!")?;
-
-        let pipeline_wireframe = self
-            .pipeline_wireframe
-            .as_ref()
             .context("Failed to get wireframe pipeline for rendering asset!")?;
 
         let pipeline_layout = self
@@ -223,11 +231,7 @@ impl CubeRendering {
             .as_ref()
             .context("Failed to get pipeline layout for rendering asset!")?;
 
-        if self.wireframe_enabled {
-            pipeline_wireframe.bind(&self.device.handle, command_buffer);
-        } else {
-            pipeline.bind(&self.device.handle, command_buffer);
-        }
+        pipeline.bind(&self.device.handle, command_buffer);
 
         let push_constants = CubePushConstantBlock { mvp: self.mvp };
 
@@ -239,9 +243,24 @@ impl CubeRendering {
                 0,
                 byte_slice_from(&push_constants),
             );
+
+            self.device.handle.cmd_set_line_width(command_buffer, 3.0);
+            self.device
+                .handle
+                .cmd_set_depth_bias(command_buffer, 1.25, 0.0, 1.0)
         }
 
-        self.cube.draw(&self.device.handle, command_buffer)?;
+        self.cube.draw_loops(&self.device.handle, command_buffer)?;
+
+        let segment_pipeline = self
+            .segment_pipeline
+            .as_ref()
+            .context("Failed to get wireframe pipeline for rendering asset!")?;
+
+        segment_pipeline.bind(&self.device.handle, command_buffer);
+
+        self.cube
+            .draw_segments(&self.device.handle, command_buffer)?;
 
         Ok(())
     }

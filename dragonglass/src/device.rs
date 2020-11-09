@@ -87,7 +87,6 @@ impl RenderingDevice {
                     let offset = glm::translation(&(aabb.center().coords * -1.0));
                     let scale = 1.0 / aabb.half_extents().max();
                     let scale = glm::scaling(&glm::vec3(scale, scale, scale));
-                    let original_view = view;
                     let transform = scale * offset;
                     let view = view * transform;
 

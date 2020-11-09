@@ -53,7 +53,6 @@ impl Scene {
             .context("Failed to get offscreen pass to create scene")?
             .render_pass
             .clone();
-        // cube_rendering.wireframe_enabled = true;
         cube_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
 
         let cube_rendering = Rc::new(RefCell::new(cube_rendering));
@@ -213,7 +212,8 @@ impl Scene {
                 asset_rendering_ptr
                     .borrow()
                     .issue_commands(command_buffer)?;
-                cube_rendering_ptr.borrow().issue_commands(command_buffer)
+                cube_rendering_ptr.borrow().issue_commands(command_buffer)?;
+                Ok(())
             });
 
         Ok(())

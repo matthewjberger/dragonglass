@@ -618,7 +618,6 @@ impl AssetRendering {
             .shader_set(shader_set)
             .rasterization_samples(samples)
             .sample_shading_enabled(true)
-            .cull_mode(vk::CullModeFlags::NONE)
             .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .push_constant_range(push_constant_range);
 
