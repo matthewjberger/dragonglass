@@ -100,7 +100,8 @@ impl Cube {
     pub fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.geometry_buffer.bind(device, command_buffer)?;
         unsafe {
-            device.cmd_draw_indexed(command_buffer, INDICES.len() as _, 1, 0, 0, 0);
+            device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
+            device.cmd_draw_indexed(command_buffer, 6, 1, 12, 0, 0);
         }
         Ok(())
     }
@@ -176,6 +177,8 @@ impl CubeRendering {
             .shader_set(shader_set)
             .rasterization_samples(samples)
             .cull_mode(vk::CullModeFlags::NONE)
+            .polygon_mode(vk::PolygonMode::LINE)
+            .topology(vk::PrimitiveTopology::LINE_STRIP)
             .push_constant_range(push_constant_range);
 
         let mut wireframe_settings = settings.clone();
