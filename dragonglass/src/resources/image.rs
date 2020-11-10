@@ -176,6 +176,19 @@ impl ImageDescription {
     }
 
     pub fn as_image(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
+        self.create_image(allocator, vk::ImageCreateFlags::empty(), 1)
+    }
+
+    pub fn as_cubemap(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
+        self.create_image(allocator, vk::ImageCreateFlags::CUBE_COMPATIBLE, 6)
+    }
+
+    fn create_image(
+        &self,
+        allocator: Arc<Allocator>,
+        flags: vk::ImageCreateFlags,
+        layers: u32,
+    ) -> Result<AllocatedImage> {
         let extent = vk::Extent3D::builder()
             .width(self.width)
             .height(self.height)
@@ -185,7 +198,7 @@ impl ImageDescription {
             .image_type(vk::ImageType::TYPE_2D)
             .extent(extent.build())
             .mip_levels(self.mip_levels)
-            .array_layers(1)
+            .array_layers(layers)
             .format(self.format)
             .tiling(vk::ImageTiling::OPTIMAL)
             .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -196,7 +209,7 @@ impl ImageDescription {
             )
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .flags(vk::ImageCreateFlags::empty());
+            .flags(flags);
 
         let allocation_create_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::GpuOnly,
