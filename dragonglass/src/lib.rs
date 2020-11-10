@@ -21,7 +21,7 @@ mod adapters;
 mod context;
 mod device;
 mod frame;
-mod gltf_rendering;
+mod gltf;
 mod rendergraph;
 mod resources;
 mod scene;

@@ -4,7 +4,7 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf_rendering::AssetRendering,
+    gltf::AssetRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     swapchain::{Swapchain, SwapchainProperties},
