@@ -4,9 +4,6 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::Node,
-    gltf::Scene,
-    gltf::{global_transform, walk_scenegraph, Asset, Geometry, Vertex},
     resources::Texture,
     resources::{
         CpuToGpuBuffer, GeometryBuffer, ImageDescription, Sampler, ShaderCache, ShaderPathSet,
@@ -18,6 +15,7 @@ use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
+use scene::gltf::{global_transform, walk_scenegraph, Asset, Geometry, Node, Scene, Vertex};
 use std::{cell::RefCell, mem, rc::Rc, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {

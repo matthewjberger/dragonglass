@@ -2,5 +2,6 @@
 members = [
   "dragonglass",
   "shader-compilation",
+  "scene",
   "viewer",
 ]

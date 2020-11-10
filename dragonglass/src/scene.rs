@@ -4,7 +4,6 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::Asset,
     gltf_rendering::AssetRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
@@ -12,6 +11,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use scene::gltf::Asset;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 pub struct Scene {
