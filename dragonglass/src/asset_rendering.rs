@@ -4,13 +4,9 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::Node,
-    gltf::Scene,
-    gltf::{global_transform, walk_scenegraph, Asset, Geometry, Vertex},
-    resources::Texture,
     resources::{
         CpuToGpuBuffer, GeometryBuffer, ImageDescription, Sampler, ShaderCache, ShaderPathSet,
-        ShaderPathSetBuilder,
+        ShaderPathSetBuilder, Texture,
     },
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
@@ -18,6 +14,7 @@ use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
+use scene::{global_transform, walk_scenegraph, Asset, Geometry, Node, Scene, Vertex};
 use std::{cell::RefCell, mem, rc::Rc, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
@@ -118,7 +115,7 @@ pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,
-    pub joint_matrices: [glm::Mat4; GltfPipelineData::MAX_NUMBER_OF_JOINTS],
+    pub joint_matrices: [glm::Mat4; PipelineData::MAX_NUMBER_OF_JOINTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -130,7 +127,7 @@ pub struct NodeDynamicUniformBuffer {
     pub joint_info: glm::Vec4,
 }
 
-pub struct GltfPipelineData {
+pub struct PipelineData {
     pub uniform_buffer: CpuToGpuBuffer,
     pub dynamic_uniform_buffer: CpuToGpuBuffer,
     pub dynamic_alignment: u64,
@@ -144,7 +141,7 @@ pub struct GltfPipelineData {
     pub dummy_sampler: Sampler,
 }
 
-impl GltfPipelineData {
+impl PipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
     pub const MAX_NUMBER_OF_JOINTS: usize = 128;
@@ -454,7 +451,7 @@ impl GltfPipelineData {
     }
 }
 
-pub struct GltfRenderer {
+pub struct AssetRenderer {
     command_buffer: vk::CommandBuffer,
     pipeline_layout: vk::PipelineLayout,
     dynamic_alignment: u64,
@@ -462,11 +459,11 @@ pub struct GltfRenderer {
     has_indices: bool,
 }
 
-impl GltfRenderer {
+impl AssetRenderer {
     pub fn new(
         command_buffer: vk::CommandBuffer,
         pipeline_layout: &PipelineLayout,
-        pipeline_data: &GltfPipelineData,
+        pipeline_data: &PipelineData,
         has_indices: bool,
     ) -> Self {
         Self {
@@ -559,7 +556,7 @@ impl GltfRenderer {
 
 pub struct AssetRendering {
     pub asset: Rc<RefCell<Asset>>,
-    pub pipeline_data: GltfPipelineData,
+    pub pipeline_data: PipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
     pub pipeline_wireframe: Option<GraphicsPipeline>,
@@ -574,7 +571,7 @@ impl AssetRendering {
         command_pool: &CommandPool,
         asset: Rc<RefCell<Asset>>,
     ) -> Result<Self> {
-        let pipeline_data = GltfPipelineData::new(context, command_pool, &asset.borrow())?;
+        let pipeline_data = PipelineData::new(context, command_pool, &asset.borrow())?;
         Ok(Self {
             asset,
             pipeline_data,
@@ -678,7 +675,7 @@ impl AssetRendering {
             .as_ref()
             .context("Failed to get pipeline layout for rendering asset!")?;
 
-        let renderer = GltfRenderer::new(
+        let renderer = AssetRenderer::new(
             command_buffer,
             pipeline_layout,
             &self.pipeline_data,

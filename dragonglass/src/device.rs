@@ -1,9 +1,10 @@
-use crate::{adapters::CommandPool, context::Context, frame::Frame, gltf::Asset, scene::Scene};
+use crate::{adapters::CommandPool, context::Context, frame::Frame, scene::Scene};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
+use scene::Asset;
 use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 
 pub struct RenderingDevice {

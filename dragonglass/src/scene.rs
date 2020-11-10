@@ -3,15 +3,15 @@ use crate::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
+    asset_rendering::AssetRendering,
     context::{Context, Device},
-    gltf::Asset,
-    gltf_rendering::AssetRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     swapchain::{Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use scene::Asset;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 pub struct Scene {

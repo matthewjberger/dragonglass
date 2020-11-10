@@ -18,11 +18,10 @@
 pub use self::device::RenderingDevice;
 
 mod adapters;
+mod asset_rendering;
 mod context;
 mod device;
 mod frame;
-mod gltf;
-mod gltf_rendering;
 mod rendergraph;
 mod resources;
 mod scene;
