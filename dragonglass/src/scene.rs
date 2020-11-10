@@ -3,7 +3,7 @@ use crate::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
-    asset_rendering::AssetRendering,
+    asset::AssetRendering,
     context::{Context, Device},
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
@@ -17,7 +17,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
-    pub asset: Option<Rc<RefCell<AssetRendering>>>,
+    pub asset_rendering: Option<Rc<RefCell<AssetRendering>>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
     pub samples: vk::SampleCountFlags,
@@ -60,7 +60,7 @@ impl Scene {
             });
 
         let path = Self {
-            asset: None,
+            asset_rendering: None,
             transient_command_pool,
             shader_cache,
             rendergraph,
@@ -181,10 +181,10 @@ impl Scene {
         let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
 
-        self.asset = None;
+        self.asset_rendering = None;
         let asset_rendering = Rc::new(RefCell::new(rendering));
         let asset_rendering_ptr = asset_rendering.clone();
-        self.asset = Some(asset_rendering);
+        self.asset_rendering = Some(asset_rendering);
 
         self.rendergraph
             .passes

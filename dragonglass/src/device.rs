@@ -76,7 +76,7 @@ impl RenderingDevice {
 
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(scene) = scene.as_ref() {
-                if let Some(asset) = scene.asset.as_ref() {
+                if let Some(asset) = scene.asset_rendering.as_ref() {
                     asset.borrow_mut().update_ubo(
                         aspect_ratio,
                         view,
@@ -109,7 +109,7 @@ impl RenderingDevice {
 
     pub fn toggle_wireframe(&mut self) {
         if let Some(scene) = self.scene.as_mut() {
-            if let Some(asset) = scene.asset.as_mut() {
+            if let Some(asset) = scene.asset_rendering.as_mut() {
                 let mut asset = asset.borrow_mut();
                 asset.wireframe_enabled = !asset.wireframe_enabled;
             }

@@ -586,8 +586,8 @@ impl AssetRendering {
 
     fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/gltf/gltf.vert.spv")
-            .fragment("assets/shaders/gltf/gltf.frag.spv")
+            .vertex("assets/shaders/asset/asset.vert.spv")
+            .fragment("assets/shaders/asset/asset.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)

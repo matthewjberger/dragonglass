@@ -18,7 +18,7 @@
 pub use self::device::RenderingDevice;
 
 mod adapters;
-mod asset_rendering;
+mod asset;
 mod context;
 mod device;
 mod frame;
