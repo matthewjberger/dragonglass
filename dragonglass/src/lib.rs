@@ -20,6 +20,7 @@ pub use self::device::RenderingDevice;
 mod adapters;
 mod asset;
 mod context;
+mod cube;
 mod device;
 mod frame;
 mod rendergraph;

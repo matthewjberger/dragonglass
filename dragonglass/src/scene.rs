@@ -5,6 +5,8 @@ use crate::{
     },
     asset::AssetRendering,
     context::{Context, Device},
+    cube::Cube,
+    cube::CubeRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     swapchain::{Swapchain, SwapchainProperties},
@@ -18,6 +20,7 @@ pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub asset_rendering: Option<Rc<RefCell<AssetRendering>>>,
+    pub cube_rendering: Rc<RefCell<CubeRendering>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
     pub samples: vk::SampleCountFlags,
@@ -59,8 +62,31 @@ impl Scene {
                 pipeline_ptr.borrow().issue_commands(command_buffer)
             });
 
+        let cube = Cube::new(context, &transient_command_pool)?;
+        let mut cube_rendering = CubeRendering::new(context.device.clone(), cube);
+
+        let offscreen_renderpass = rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene")?
+            .render_pass
+            .clone();
+        cube_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
+
+        let cube_rendering = Rc::new(RefCell::new(cube_rendering));
+        let cube_rendering_ptr = cube_rendering.clone();
+
+        rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set scene callback")?
+            .set_callback(move |command_buffer| {
+                cube_rendering_ptr.borrow().issue_commands(command_buffer)
+            });
+
         let path = Self {
             asset_rendering: None,
+            cube_rendering,
             transient_command_pool,
             shader_cache,
             rendergraph,
