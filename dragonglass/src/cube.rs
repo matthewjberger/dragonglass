@@ -175,7 +175,6 @@ impl CubeRendering {
             .descriptor_set_layout(descriptor_set_layout)
             .shader_set(shader_set)
             .rasterization_samples(samples)
-            .cull_mode(vk::CullModeFlags::NONE)
             .push_constant_range(push_constant_range);
 
         let mut wireframe_settings = settings.clone();

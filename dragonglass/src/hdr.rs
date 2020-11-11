@@ -1,23 +1,26 @@
 use crate::{
-    adapters::{CommandPool, DescriptorPool, DescriptorSetLayout},
-    context::Context,
-    context::Device,
+    adapters::{CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipelineSettingsBuilder},
+    context::{Context, Device},
+    cube::Cube,
     rendergraph::{ImageNode, RenderGraph},
-    resources::{Cubemap, ImageDescription, Sampler, ShaderCache, Texture},
+    resources::{
+        Cubemap, ImageDescription, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+        Texture,
+    },
 };
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
-use std::sync::Arc;
+use std::{mem, slice, sync::Arc};
 use vk_mem::Allocator;
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
     let data_ptr = (data as *const T) as *const u8;
-    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
+    slice::from_raw_parts(data_ptr, mem::size_of::<T>())
 }
 
 #[allow(dead_code)]
-struct PushBlockHdr {
+struct PushConstantHdr {
     mvp: glm::Mat4,
 }
 
@@ -54,41 +57,34 @@ pub fn hdr_cubemap(
         hdr_sampler.handle,
     );
 
-    /* Pipeline creation */
-    // Build vertex state info
-    //    Get Unit cube vertex input descriptions
-    //    Get Unit cube vertex attributes
-    // Setup push constant range
-    //    vertex and fragment stages
-    //    size of PushBlockHdr
-    // Setup shader set
-    //    filtercube.vert.spv
-    //    equirectangular_to_cubemap.frag.spv
-    // Build pipeline settings
-    //    render_pass = rendergraph's color pass
-    //    vertex_state_info
-    //    push_constant_range
-    //    shader_set
-    //    descriptor_set_layout
-    // Create pipeline from settings
+    let push_constant_range = vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+        .size(mem::size_of::<PushConstantHdr>() as u32)
+        .build();
+    let shader_paths = shader_paths()?;
+    let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
+    let offscreen_renderpass = rendergraph
+        .passes
+        .get("offscreen")
+        .context("Failed to get offscreen pass to create scene")?
+        .render_pass
+        .clone();
+    let mut settings = GraphicsPipelineSettingsBuilder::default();
+    settings
+        .render_pass(offscreen_renderpass)
+        .vertex_inputs(Cube::vertex_inputs())
+        .vertex_attributes(Cube::vertex_attributes())
+        .descriptor_set_layout(descriptor_set_layout)
+        .shader_set(shader_set)
+        .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+        .push_constant_range(push_constant_range);
+    let (pipeline, pipeline_layout) = settings
+        .build()
+        .map_err(|error| anyhow!("{}", error))?
+        .create_pipeline(device.clone())?;
 
-    /* Matrix declaration for capturing render of each face */
-    // let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
-    // let origin = glm::vec3::origin();
-    // let up = glm::vec3(0.0, 1.0, 0.0);
-    // let down = glm::vec3(0.0, -1.0, 0.0);
-    // let left = glm::vec3(-1.0, 0.0, 0.0);
-    // let right = glm::vec3(1.0, 0.0, 0.0);
-    // let forward = glm::vec3(0.0, 0.0, 1.0);
-    // let backward = glm::vec3(0.0, 0.0, -1.0);
-    // let matrices = vec![
-    //     glm::look_at(&origin, &right, &up),
-    //     glm::look_at(&origin, &left, &up),
-    //     glm::look_at(&origin, &up, &forward),
-    //     glm::look_at(&origin, &down, &left),
-    //     glm::look_at(&origin, &forward, &up),
-    //     glm::look_at(&origin, &backward, &up),
-    // ];
+    let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
+    let matrices = cubemap_matrices();
 
     // TODO: Transition cubemap
     // let transition = ImageLayoutTransition {
@@ -104,6 +100,7 @@ pub fn hdr_cubemap(
     //     .unwrap();
 
     // Create a unit cube
+    let cube = Cube::new(context, command_pool)?;
 
     /*******************/
     /* Declare initial viewport and scissor */
@@ -275,22 +272,29 @@ fn update_descriptor_set(
     unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
 }
 
-fn pipeline() {
-    /* Pipeline creation */
-    // Build vertex state info
-    //    Get Unit cube vertex input descriptions
-    //    Get Unit cube vertex attributes
-    // Setup push constant range
-    //    vertex and fragment stages
-    //    size of PushBlockHdr
-    // Setup shader set
-    //    filtercube.vert.spv
-    //    equirectangular_to_cubemap.frag.spv
-    // Build pipeline settings
-    //    render_pass = rendergraph's color pass
-    //    vertex_state_info
-    //    push_constant_range
-    //    shader_set
-    //    descriptor_set_layout
-    // Create pipeline from settings
+fn shader_paths() -> Result<ShaderPathSet> {
+    let shader_path_set = ShaderPathSetBuilder::default()
+        .vertex("assets/shaders/environment/filtercube.vert.spv")
+        .fragment("assets/shaders/environment/equirectangular_to_cubemap.frag.spv")
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    Ok(shader_path_set)
+}
+
+fn cubemap_matrices() -> [glm::Mat4; 6] {
+    let origin = glm::vec3(0.0, 0.0, 0.0);
+    let up = glm::vec3(0.0, 1.0, 0.0);
+    let down = glm::vec3(0.0, -1.0, 0.0);
+    let left = glm::vec3(-1.0, 0.0, 0.0);
+    let right = glm::vec3(1.0, 0.0, 0.0);
+    let forward = glm::vec3(0.0, 0.0, 1.0);
+    let backward = glm::vec3(0.0, 0.0, -1.0);
+    [
+        glm::look_at(&origin, &right, &up),
+        glm::look_at(&origin, &left, &up),
+        glm::look_at(&origin, &up, &forward),
+        glm::look_at(&origin, &down, &left),
+        glm::look_at(&origin, &forward, &up),
+        glm::look_at(&origin, &backward, &up),
+    ]
 }
