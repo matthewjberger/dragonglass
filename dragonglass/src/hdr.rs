@@ -1,5 +1,8 @@
 use crate::{
-    adapters::{CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipelineSettingsBuilder},
+    adapters::{
+        CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipelineSettingsBuilder,
+        ImageToImageCopyBuilder,
+    },
     context::{Context, Device},
     cube::Cube,
     rendergraph::{ImageNode, RenderGraph},
@@ -170,57 +173,74 @@ pub fn hdr_cubemap(
             command_pool.execute_once(context.graphics_queue(), |command_buffer| {
                 rendergraph.execute(device.clone(), command_buffer)
             })?;
+
+            // Transition backbuffer image to be a transfer source
+            let transition = ImageLayoutTransitionBuilder::default()
+                .graphics_queue(context.graphics_queue())
+                .base_mip_level(cubemap_description.mip_levels)
+                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+                .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+                .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+                .build()
+                .map_err(|error| anyhow!("{}", error))?;
+            // TODO: get backbuffer and transition
+            //rendergraph.images["backbuffer"].transition(command_pool, &transition)?;
+
+            let src_subresource = vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_array_layer(0)
+                .mip_level(0)
+                .layer_count(1)
+                .build();
+
+            let dst_subresource = vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_array_layer(face_index as _)
+                .mip_level(mip_level)
+                .layer_count(1)
+                .build();
+
+            let extent = vk::Extent3D::builder()
+                .width(dimension as _)
+                .height(dimension as _)
+                .depth(1)
+                .build();
+
+            let region = vk::ImageCopy::builder()
+                .src_subresource(src_subresource)
+                .dst_subresource(dst_subresource)
+                .extent(extent)
+                .build();
+
+            let backbuffer_image = rendergraph.images["backbuffer"].handle();
+            let copy_info = ImageToImageCopyBuilder::default()
+                .source(backbuffer_image)
+                .destination(backbuffer_image)
+                .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .regions(vec![region])
+                .build()
+                .map_err(|error| anyhow!("{}", error))?;
+            command_pool.copy_image_to_image(&copy_info)?;
+
+            // Transition backbuffer image to be a color attachment again now that transfer is over
+            let transition = ImageLayoutTransitionBuilder::default()
+                .graphics_queue(context.graphics_queue())
+                .base_mip_level(cubemap_description.mip_levels)
+                .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+                .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+                .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+                .build()
+                .map_err(|error| anyhow!("{}", error))?;
+            // TODO: get backbuffer and transition
+            //rendergraph.images["backbuffer"].transition(command_pool, &transition)?;
         }
-
-        // Transition backbuffer image to be a transfer source
-        let transition = ImageLayoutTransitionBuilder::default()
-            .graphics_queue(context.graphics_queue())
-            .base_mip_level(cubemap_description.mip_levels)
-            .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
-            .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-            .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        // TODO: get backbuffer and transition
-        //rendergraph.images["backbuffer"].transition(command_pool, &transition)?;
-
-        //          Copy backbuffer to layer of output cubemap
-        //               regions
-        //                 src (backbuffer)
-        //                     aspect_mask = color
-        //                     base_array_layer = 0
-        //                     mip_level = 0
-        //                     layer_count = 1
-        //                 dst (face of output cubemap)
-        //                     aspect_mask = color
-        //                     base_array_layer = face_index
-        //                     mip_level = current mip level
-        //                     layer_count = 1
-        //                 extent is (dimension x dimension)
-        //               execute copy image to image
-        //                   src image = backbuffer image
-        //                   dst image = output cubemap image
-        //                   src layout = TRANSFER_SRC_OPTIMAL
-        //                   dst layout = TRANSFER_DST_OPTIMAL
-        //                   regions = regions
-
-        // Transition backbuffer image to be a color attachment again now that transfer is over
-        let transition = ImageLayoutTransitionBuilder::default()
-            .graphics_queue(context.graphics_queue())
-            .base_mip_level(cubemap_description.mip_levels)
-            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-            .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        // TODO: get backbuffer and transition
-        //rendergraph.images["backbuffer"].transition(command_pool, &transition)?;
     }
 
     // Transition output cubemap image to be read by the fragment shader
