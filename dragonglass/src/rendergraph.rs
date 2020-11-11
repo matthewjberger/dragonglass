@@ -177,6 +177,10 @@ impl RenderGraph {
         None
     }
 
+    pub fn execute(&self, device: Arc<Device>, command_buffer: vk::CommandBuffer) -> Result<()> {
+        self.execute_at_index(device, command_buffer, 0)
+    }
+
     pub fn execute_at_index(
         &self,
         device: Arc<Device>,

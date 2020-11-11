@@ -4,8 +4,8 @@ use crate::{
     cube::Cube,
     rendergraph::{ImageNode, RenderGraph},
     resources::{
-        Cubemap, ImageDescription, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
-        Texture,
+        Cubemap, ImageDescription, ImageLayoutTransitionBuilder, Sampler, ShaderCache,
+        ShaderPathSet, ShaderPathSetBuilder, Texture,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -44,7 +44,7 @@ pub fn hdr_cubemap(
     let device = context.device.clone();
     let allocator = context.allocator.clone();
 
-    let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+    let mut rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
 
     let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
     let descriptor_pool = descriptor_pool(device.clone())?;
@@ -86,97 +86,158 @@ pub fn hdr_cubemap(
     let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
     let matrices = cubemap_matrices();
 
-    // TODO: Transition cubemap
-    // let transition = ImageLayoutTransition {
-    //     old_layout: vk::ImageLayout::UNDEFINED,
-    //     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-    //     src_access_mask: vk::AccessFlags::empty(),
-    //     dst_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-    //     src_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    //     dst_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    // };
-    // output_cubemap
-    //     .transition(&command_pool, &transition)
-    //     .unwrap();
+    // Transition output cubemap image to be a transfer destination
+    let transition = ImageLayoutTransitionBuilder::default()
+        .graphics_queue(context.graphics_queue())
+        .base_mip_level(cubemap_description.mip_levels)
+        .old_layout(vk::ImageLayout::UNDEFINED)
+        .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+        .src_access_mask(vk::AccessFlags::empty())
+        .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    cubemap.image.transition(command_pool, &transition)?;
 
     // Create a unit cube
-    let cube = Cube::new(context, command_pool)?;
+    let cube = Arc::new(Cube::new(context, command_pool)?);
+
+    let dimension = hdr_description.width;
+    let mut viewport = vk::Viewport::builder()
+        .width(dimension as _)
+        .height(dimension as _)
+        .build();
+    let scissor = vk::Rect2D::builder()
+        .extent(hdr_description.as_extent2D())
+        .build();
+    let scissors = [scissor];
 
     /*******************/
     /* Declare initial viewport and scissor */
-    // viewport = dimension
-    // scissor = extent (dimension x dimension)
-    // for mip_level in output_cubemap mip levels
-    //     for (face_index, matrix) in matrices
-    //         current_dimension = dimension * 0.5_f32.powf(mip_level)
-    //         viewport.width = current_dimension
-    //         viewport.height = current_dimension
-    //         update viewport to current_dimension
-    //         update scissor to current_dimension
-    //         assign offscreen callback
-    //              update push block with projection * matrix
-    //              update push constants (Vertex | Fragment)
-    //              bind pipeline
-    //              bind descriptor set
-    //              draw unit cube
-    //         execute rendergraph to update backbuffer
-    //         transition backbuffer image to TRANSFER_READ
-    // ***
-    //         ImageLayoutTransition {
-    //             old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-    //             new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-    //             src_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-    //             dst_access_mask: vk::AccessFlags::TRANSFER_READ,
-    //             src_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    //             dst_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    //         }
-    // ***
-    //          Copy backbuffer to layer of output cubemap
-    //               regions
-    //                 src (backbuffer)
-    //                     aspect_mask = color
-    //                     base_array_layer = 0
-    //                     mip_level = 0
-    //                     layer_count = 1
-    //                 dst (face of output cubemap)
-    //                     aspect_mask = color
-    //                     base_array_layer = face_index
-    //                     mip_level = current mip level
-    //                     layer_count = 1
-    //                 extent is (dimension x dimension)
-    //               execute copy image to image
-    //                   src image = backbuffer image
-    //                   dst image = output cubemap image
-    //                   src layout = TRANSFER_SRC_OPTIMAL
-    //                   dst layout = TRANSFER_DST_OPTIMAL
-    //                   regions = regions
-    //
-    //     Transition offscreen texture to COLOR_ATTACHMENT_OPTIMAL
-    //***
-    //     ImageLayoutTransition {
-    //         old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-    //         new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-    //         src_access_mask: vk::AccessFlags::TRANSFER_READ,
-    //         dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-    //         src_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    //         dst_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    //     }
-    //***
-    // repeat loop
-    /*******************/
+    for mip_level in 0..cubemap_description.mip_levels {
+        for (face_index, matrix) in matrices.iter().enumerate() {
+            let dimension = cubemap_description.width as f32 * 0.5_f32.powf(mip_level as _);
+            viewport.width = dimension;
+            viewport.height = dimension;
+            let viewports = [viewport];
+            let device_ptr = device.clone();
+            let pipeline_layout_handle = pipeline_layout.handle.clone();
+            let push_constants_hdr = PushConstantHdr {
+                mvp: projection * matrix,
+            };
+            let pipeline_handle = pipeline.handle.clone();
+            let cube_ptr = cube.clone();
+            rendergraph
+                .passes
+                .get_mut("offscreen")
+                .context("Failed to get offscreen pass to set scene callback")?
+                .set_callback(move |command_buffer| {
+                    unsafe {
+                        device_ptr
+                            .handle
+                            .cmd_set_viewport(command_buffer, 0, &viewports);
+                        device_ptr
+                            .handle
+                            .cmd_set_scissor(command_buffer, 0, &scissors);
+                        device_ptr.handle.cmd_push_constants(
+                            command_buffer,
+                            pipeline_layout_handle,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                            0,
+                            byte_slice_from(&push_constants_hdr),
+                        );
+                        device_ptr.handle.cmd_bind_pipeline(
+                            command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline_handle,
+                        );
+                        device_ptr.handle.cmd_bind_descriptor_sets(
+                            command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline_layout_handle,
+                            0,
+                            &[descriptor_set],
+                            &[],
+                        );
+                    }
 
-    /* Transition output cubemap */
-    // ImageLayoutTransition {
-    //     old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-    //     new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-    //     src_access_mask: vk::AccessFlags::TRANSFER_WRITE,
-    //     dst_access_mask: vk::AccessFlags::HOST_WRITE | vk::AccessFlags::TRANSFER_WRITE,
-    //     src_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    //     dst_stage_mask: vk::PipelineStageFlags::ALL_COMMANDS,
-    // }
+                    cube_ptr.draw(&device_ptr.handle, command_buffer)?;
 
-    // return output cubemap
-    todo!()
+                    Ok(())
+                });
+
+            command_pool.execute_once(context.graphics_queue(), |command_buffer| {
+                rendergraph.execute(device.clone(), command_buffer)
+            })?;
+        }
+
+        // Transition backbuffer image to be a transfer source
+        let transition = ImageLayoutTransitionBuilder::default()
+            .graphics_queue(context.graphics_queue())
+            .base_mip_level(cubemap_description.mip_levels)
+            .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+            .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        // TODO: get backbuffer and transition
+        //rendergraph.images["backbuffer"].transition(command_pool, &transition)?;
+
+        //          Copy backbuffer to layer of output cubemap
+        //               regions
+        //                 src (backbuffer)
+        //                     aspect_mask = color
+        //                     base_array_layer = 0
+        //                     mip_level = 0
+        //                     layer_count = 1
+        //                 dst (face of output cubemap)
+        //                     aspect_mask = color
+        //                     base_array_layer = face_index
+        //                     mip_level = current mip level
+        //                     layer_count = 1
+        //                 extent is (dimension x dimension)
+        //               execute copy image to image
+        //                   src image = backbuffer image
+        //                   dst image = output cubemap image
+        //                   src layout = TRANSFER_SRC_OPTIMAL
+        //                   dst layout = TRANSFER_DST_OPTIMAL
+        //                   regions = regions
+
+        // Transition backbuffer image to be a color attachment again now that transfer is over
+        let transition = ImageLayoutTransitionBuilder::default()
+            .graphics_queue(context.graphics_queue())
+            .base_mip_level(cubemap_description.mip_levels)
+            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+            .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        // TODO: get backbuffer and transition
+        //rendergraph.images["backbuffer"].transition(command_pool, &transition)?;
+    }
+
+    // Transition output cubemap image to be read by the fragment shader
+    let transition = ImageLayoutTransitionBuilder::default()
+        .graphics_queue(context.graphics_queue())
+        .base_mip_level(cubemap_description.mip_levels)
+        .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+        .dst_access_mask(vk::AccessFlags::HOST_WRITE | vk::AccessFlags::TRANSFER_WRITE)
+        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    cubemap.image.transition(command_pool, &transition)?;
+
+    Ok(cubemap)
 }
 
 fn rendergraph(

@@ -361,7 +361,7 @@ impl AllocatedImage {
         self.transition(pool, &transition)
     }
 
-    fn transition(&self, pool: &CommandPool, info: &ImageLayoutTransition) -> Result<()> {
+    pub fn transition(&self, pool: &CommandPool, info: &ImageLayoutTransition) -> Result<()> {
         let subresource_range = vk::ImageSubresourceRange::builder()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .base_mip_level(info.base_mip_level)
