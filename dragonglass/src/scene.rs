@@ -8,6 +8,7 @@ use crate::{
     gltf_rendering::AssetRendering,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
+    skybox::SkyboxRendering,
     swapchain::{Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -18,6 +19,7 @@ pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub asset: Option<Rc<RefCell<AssetRendering>>>,
+    pub skybox_rendering: Rc<RefCell<SkyboxRendering>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
     pub samples: vk::SampleCountFlags,
@@ -59,8 +61,30 @@ impl Scene {
                 pipeline_ptr.borrow().issue_commands(command_buffer)
             });
 
+        let mut skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
+        let offscreen_renderpass = rendergraph
+            .passes
+            .get("offscreen")
+            .context("Failed to get offscreen pass to create scene")?
+            .render_pass
+            .clone();
+        skybox_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
+        let skybox_rendering = Rc::new(RefCell::new(skybox_rendering));
+        let skybox_rendering_ptr = skybox_rendering.clone();
+        rendergraph
+            .passes
+            .get_mut("offscreen")
+            .context("Failed to get offscreen pass to set scene callback")?
+            .set_callback(move |command_buffer| {
+                skybox_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
+                Ok(())
+            });
+
         let path = Self {
             asset: None,
+            skybox_rendering,
             transient_command_pool,
             shader_cache,
             rendergraph,
@@ -186,12 +210,19 @@ impl Scene {
         let asset_rendering_ptr = asset_rendering.clone();
         self.asset = Some(asset_rendering);
 
+        let skybox_rendering_ptr = self.skybox_rendering.clone();
         self.rendergraph
             .passes
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
             .set_callback(move |command_buffer| {
-                asset_rendering_ptr.borrow().issue_commands(command_buffer)
+                skybox_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
+                asset_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
+                Ok(())
             });
 
         Ok(())

@@ -58,6 +58,7 @@ impl Device {
         vk::PhysicalDeviceFeatures::builder()
             .sample_rate_shading(true)
             .sampler_anisotropy(true)
+            .fill_mode_non_solid(true)
     }
 
     fn queue_create_info_list(queue_indices: &[u32]) -> Vec<vk::DeviceQueueCreateInfo> {

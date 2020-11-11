@@ -19,6 +19,7 @@ pub use self::device::RenderingDevice;
 
 mod adapters;
 mod context;
+mod cube;
 mod device;
 mod frame;
 mod gltf;
@@ -26,4 +27,5 @@ mod gltf_rendering;
 mod rendergraph;
 mod resources;
 mod scene;
+mod skybox;
 mod swapchain;
