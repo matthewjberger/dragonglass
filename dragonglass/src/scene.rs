@@ -5,10 +5,10 @@ use crate::{
     },
     asset::AssetRendering,
     context::{Context, Device},
-    cube::Cube,
-    cube::CubeRendering,
+    cube::{Cube, CubeRendering},
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
+    skybox::SkyboxRendering,
     swapchain::{Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -21,6 +21,7 @@ pub struct Scene {
     pub shader_cache: ShaderCache,
     pub asset_rendering: Option<Rc<RefCell<AssetRendering>>>,
     pub cube_rendering: Rc<RefCell<CubeRendering>>,
+    pub skybox_rendering: Rc<RefCell<SkyboxRendering>>,
     pub rendergraph: RenderGraph,
     pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
     pub samples: vk::SampleCountFlags,
@@ -64,6 +65,7 @@ impl Scene {
 
         let cube = Cube::new(context, &transient_command_pool)?;
         let mut cube_rendering = CubeRendering::new(context.device.clone(), cube);
+        let mut skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
 
         let offscreen_renderpass = rendergraph
             .passes
@@ -71,22 +73,30 @@ impl Scene {
             .context("Failed to get offscreen pass to create scene")?
             .render_pass
             .clone();
-        cube_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
+        cube_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass.clone(), samples)?;
+        skybox_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
 
         let cube_rendering = Rc::new(RefCell::new(cube_rendering));
         let cube_rendering_ptr = cube_rendering.clone();
+        let skybox_rendering = Rc::new(RefCell::new(skybox_rendering));
+        let skybox_rendering_ptr = skybox_rendering.clone();
 
         rendergraph
             .passes
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
             .set_callback(move |command_buffer| {
-                cube_rendering_ptr.borrow().issue_commands(command_buffer)
+                skybox_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
+                cube_rendering_ptr.borrow().issue_commands(command_buffer)?;
+                Ok(())
             });
 
         let path = Self {
             asset_rendering: None,
             cube_rendering,
+            skybox_rendering,
             transient_command_pool,
             shader_cache,
             rendergraph,
@@ -212,12 +222,19 @@ impl Scene {
         let asset_rendering_ptr = asset_rendering.clone();
         self.asset_rendering = Some(asset_rendering);
 
+        let skybox_rendering_ptr = self.skybox_rendering.clone();
         self.rendergraph
             .passes
             .get_mut("offscreen")
             .context("Failed to get offscreen pass to set scene callback")?
             .set_callback(move |command_buffer| {
-                asset_rendering_ptr.borrow().issue_commands(command_buffer)
+                // skybox_rendering_ptr
+                //     .borrow()
+                //     .issue_commands(command_buffer)?;
+                asset_rendering_ptr
+                    .borrow()
+                    .issue_commands(command_buffer)?;
+                Ok(())
             });
 
         Ok(())

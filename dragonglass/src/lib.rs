@@ -27,4 +27,5 @@ mod hdr;
 mod rendergraph;
 mod resources;
 mod scene;
+mod skybox;
 mod swapchain;
