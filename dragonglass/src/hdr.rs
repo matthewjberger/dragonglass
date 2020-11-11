@@ -261,7 +261,7 @@ fn rendergraph(
         }],
         &[(offscreen, &RenderGraph::backbuffer_name(0))],
     )?;
-    rendergraph.build(device.clone(), allocator)?;
+    rendergraph.build(device, allocator)?;
     rendergraph
         .passes
         .get_mut(offscreen)

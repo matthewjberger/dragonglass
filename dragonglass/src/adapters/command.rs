@@ -56,6 +56,23 @@ impl CommandPool {
         })
     }
 
+    pub fn copy_image_to_image(&self, info: &ImageToImageCopy) -> Result<()> {
+        let device = self.device.handle.clone();
+        self.execute_once(info.graphics_queue, |command_buffer| {
+            unsafe {
+                device.cmd_copy_image(
+                    command_buffer,
+                    info.source,
+                    info.source_layout,
+                    info.destination,
+                    info.destination_layout,
+                    &info.regions,
+                )
+            };
+            Ok(())
+        })
+    }
+
     pub fn transition_image_layout(&self, info: &PipelineBarrier) -> Result<()> {
         let device = self.device.handle.clone();
         self.execute_once(info.graphics_queue, |command_buffer| {
@@ -152,6 +169,16 @@ pub struct BufferToImageCopy {
     pub regions: Vec<vk::BufferImageCopy>,
     #[builder(default = "vk::ImageLayout::TRANSFER_DST_OPTIMAL")]
     pub dst_image_layout: vk::ImageLayout,
+}
+
+#[derive(Builder)]
+pub struct ImageToImageCopy {
+    pub graphics_queue: vk::Queue,
+    pub source: vk::Image,
+    pub source_layout: vk::ImageLayout,
+    pub destination: vk::Image,
+    pub destination_layout: vk::ImageLayout,
+    pub regions: Vec<vk::ImageCopy>,
 }
 
 #[derive(Builder)]
