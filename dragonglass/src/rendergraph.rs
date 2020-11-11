@@ -365,6 +365,8 @@ impl ImageNode {
 
         if self.is_backbuffer() {
             store_op = vk::AttachmentStoreOp::STORE;
+            // TODO: Need to add a flag to know if this actually presents or not
+            // if doesn't present, leave it at default setting
             final_layout = vk::ImageLayout::PRESENT_SRC_KHR;
         }
 

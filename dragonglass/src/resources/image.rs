@@ -9,11 +9,7 @@ use derive_builder::Builder;
 use gltf::image::Format;
 use image::{hdr::HdrDecoder, DynamicImage, ImageBuffer, Pixel, RgbImage};
 use log::error;
-use std::{
-    io::BufReader,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io::BufReader, path::Path, sync::Arc};
 use vk_mem::Allocator;
 
 #[derive(Builder)]
@@ -42,6 +38,13 @@ pub struct ImageDescription {
 }
 
 impl ImageDescription {
+    pub fn as_extent2D(&self) -> vk::Extent2D {
+        vk::Extent2D::builder()
+            .width(self.width as _)
+            .height(self.height as _)
+            .build()
+    }
+
     pub fn empty(width: u32, height: u32, format: vk::Format) -> Self {
         Self {
             format,
@@ -53,21 +56,14 @@ impl ImageDescription {
     }
 
     #[allow(dead_code)]
-    pub fn from_file<P>(path: P) -> Result<Self>
-    where
-        P: AsRef<Path> + Into<PathBuf>,
-    {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path_display = path.as_ref().display().to_string();
         let image =
             image::open(path).map_err(|error| anyhow!("{}\npath: {}", error, path_display))?;
         Self::from_image(&image)
     }
 
-    #[allow(dead_code)]
-    pub fn from_hdr<P>(path: P) -> Result<Self>
-    where
-        P: AsRef<Path> + Into<PathBuf>,
-    {
+    pub fn from_hdr(path: impl AsRef<Path>) -> Result<Self> {
         let file = std::fs::File::open(&path)?;
         let decoder = HdrDecoder::new(BufReader::new(file))?;
         let metadata = decoder.metadata();
@@ -608,7 +604,9 @@ impl Texture {
         description: &ImageDescription,
     ) -> Result<Self> {
         let image = description.as_image(context.allocator.clone())?;
-        image.upload_data(context, command_pool, description)?;
+        if description.pixels.is_empty() {
+            image.upload_data(context, command_pool, description)?;
+        }
         let view = Self::image_view(context.device.clone(), &image, description)?;
         let texture = Self { image, view };
         Ok(texture)
@@ -647,7 +645,9 @@ impl Cubemap {
         description: &ImageDescription,
     ) -> Result<Self> {
         let image = description.as_cubemap(context.allocator.clone())?;
-        image.upload_data(context, command_pool, description)?;
+        if !description.pixels.is_empty() {
+            image.upload_data(context, command_pool, description)?;
+        }
         let view = Self::image_view(context.device.clone(), &image, description)?;
         let texture = Self { image, view };
         Ok(texture)

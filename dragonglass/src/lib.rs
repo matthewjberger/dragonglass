@@ -23,6 +23,7 @@ mod context;
 mod cube;
 mod device;
 mod frame;
+mod hdr;
 mod rendergraph;
 mod resources;
 mod scene;
