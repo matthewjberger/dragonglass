@@ -18,7 +18,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 pub struct Scene {
     pub asset_rendering: Option<AssetRendering>,
     pub skybox_rendering: SkyboxRendering,
-    pub post_processing_pipeline: Option<PostProcessingPipeline>,
+    pub fullscreen_pipeline: Option<FullscreenPipeline>,
     pub rendergraph: RenderGraph,
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
@@ -43,7 +43,7 @@ impl Scene {
         let mut scene = Self {
             asset_rendering: None,
             skybox_rendering,
-            post_processing_pipeline: None,
+            fullscreen_pipeline: None,
             rendergraph,
             transient_command_pool,
             shader_cache,
@@ -54,15 +54,15 @@ impl Scene {
     }
 
     pub fn create_pipelines(&mut self, context: &Context) -> Result<()> {
-        self.post_processing_pipeline = None;
-        let post_processing_pipeline = PostProcessingPipeline::new(
+        self.fullscreen_pipeline = None;
+        let fullscreen_pipeline = FullscreenPipeline::new(
             context,
-            self.rendergraph.pass_handle("postprocessing")?,
+            self.rendergraph.pass_handle("fullscreen")?,
             &mut self.shader_cache,
             self.rendergraph.image_view("color_resolve")?.handle,
             self.rendergraph.sampler("default")?.handle,
         )?;
-        self.post_processing_pipeline = Some(post_processing_pipeline);
+        self.fullscreen_pipeline = Some(fullscreen_pipeline);
 
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         self.skybox_rendering.create_pipeline(
@@ -100,12 +100,12 @@ impl Scene {
         let allocator = context.allocator.clone();
 
         let offscreen = "offscreen";
-        let postprocessing = "postprocessing";
+        let fullscreen = "fullscreen";
         let color = "color";
         let color_resolve = "color_resolve";
         let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
         let mut rendergraph = RenderGraph::new(
-            &[offscreen, postprocessing],
+            &[offscreen, fullscreen],
             vec![
                 ImageNode {
                     name: color.to_string(),
@@ -157,8 +157,8 @@ impl Scene {
                 (offscreen, color),
                 (offscreen, color_resolve),
                 (offscreen, RenderGraph::DEPTH_STENCIL),
-                (color_resolve, postprocessing),
-                (postprocessing, &RenderGraph::backbuffer_name(0)),
+                (color_resolve, fullscreen),
+                (fullscreen, &RenderGraph::backbuffer_name(0)),
             ],
         )?;
 
@@ -184,7 +184,7 @@ impl Scene {
     }
 }
 
-pub struct PostProcessingPipeline {
+pub struct FullscreenPipeline {
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_layout: PipelineLayout,
     pub descriptor_pool: DescriptorPool,
@@ -193,7 +193,7 @@ pub struct PostProcessingPipeline {
     device: Arc<Device>,
 }
 
-impl PostProcessingPipeline {
+impl FullscreenPipeline {
     pub fn new(
         context: &Context,
         render_pass: Arc<RenderPass>,
@@ -302,7 +302,7 @@ impl PostProcessingPipeline {
         let pipeline = self
             .pipeline
             .as_ref()
-            .context("Failed to get post-processing pipeline!")?;
+            .context("Failed to get fullscreen pipeline!")?;
         pipeline.bind(&self.device.handle, command_buffer);
 
         unsafe {

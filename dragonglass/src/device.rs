@@ -89,13 +89,12 @@ impl RenderingDevice {
 
             scene.rendergraph.execute_pass(
                 command_buffer,
-                "postprocessing",
+                "fullscreen",
                 image_index,
                 |pass, command_buffer| {
                     device.update_viewport(command_buffer, pass.extent, false)?;
-                    if let Some(post_processing_pipeline) = scene.post_processing_pipeline.as_ref()
-                    {
-                        post_processing_pipeline.issue_commands(command_buffer)?;
+                    if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
+                        fullscreen_pipeline.issue_commands(command_buffer)?;
                     }
                     Ok(())
                 },
