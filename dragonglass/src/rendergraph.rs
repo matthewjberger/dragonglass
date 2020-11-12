@@ -209,6 +209,7 @@ impl RenderGraph {
         self.framebuffers.get(name).context(error_message)
     }
 
+    #[allow(dead_code)]
     pub fn image(&self, name: &str) -> Result<&Box<dyn Image>> {
         let error_message = format!(
             "Attempted to access image with the key '{}' that was not found in the rendergraph",

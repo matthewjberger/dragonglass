@@ -140,9 +140,8 @@ impl App {
                     },
                     ..
                 } => {
-                    match keycode {
-                        VirtualKeyCode::T  => rendering_device.toggle_wireframe(),
-                        _ => {}
+                    if let VirtualKeyCode::T = keycode {
+                        rendering_device.toggle_wireframe();
                     }
                 }
                 _ => {}

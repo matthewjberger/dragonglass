@@ -1,15 +1,6 @@
-use crate::{
-    adapters::{
-        CommandPool, DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettingsBuilder,
-        PipelineLayout, RenderPass,
-    },
-    context::{Context, Device},
-    resources::{GeometryBuffer, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
-};
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use crate::{adapters::CommandPool, context::Context, resources::GeometryBuffer};
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use nalgebra_glm as glm;
-use std::sync::Arc;
 
 #[rustfmt::skip]
 pub const VERTICES: &[f32; 24] =
