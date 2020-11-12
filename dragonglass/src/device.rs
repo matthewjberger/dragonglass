@@ -89,10 +89,33 @@ impl RenderingDevice {
                     scene.skybox_rendering.borrow_mut().projection = projection;
                     scene.skybox_rendering.borrow_mut().view = view;
                 }
-                // FIXME: RENDERGRAPH
-                // scene
-                //     .rendergraph
-                //     .execute_at_index(device.clone(), command_buffer, image_index)?;
+
+                scene.rendergraph.execute_pass(
+                    command_buffer,
+                    "offscreen",
+                    image_index,
+                    |pass, command_buffer| {
+                        device.update_viewport(command_buffer, pass.extent, true)?;
+                        scene
+                            .skybox_rendering
+                            .borrow()
+                            .issue_commands(command_buffer)?;
+                        if let Some(asset_rendering) = scene.asset.as_ref() {
+                            asset_rendering.borrow().issue_commands(command_buffer)?;
+                        }
+                        Ok(())
+                    },
+                )?;
+
+                scene.rendergraph.execute_pass(
+                    command_buffer,
+                    "postprocessing",
+                    image_index,
+                    |pass, command_buffer| {
+                        device.update_viewport(command_buffer, pass.extent, false)?;
+                        scene.pipeline.borrow().issue_commands(command_buffer)
+                    },
+                )?;
             }
             Ok(())
         })?;

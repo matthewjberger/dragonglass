@@ -4,9 +4,9 @@ use crate::{
     resources::AllocatedImage,
     resources::{Image, ImageView, Sampler},
 };
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use ash::vk;
-use petgraph::{algo::toposort, prelude::*};
+use petgraph::prelude::*;
 use std::{collections::HashMap, fmt, sync::Arc};
 use vk_mem::Allocator;
 
@@ -94,7 +94,7 @@ impl RenderGraph {
         for index in self.graph.node_indices() {
             if let Node::Pass(pass_node) = &self.graph[index] {
                 let pass = self.create_pass(index, device.clone())?;
-                if pass.presents_to_backbuffer {
+                if !pass.presents_to_backbuffer {
                     let attachments = self.framebuffer_attachments(index)?;
                     let framebuffer = pass.create_framebuffer(device.clone(), &attachments)?;
                     self.framebuffers
@@ -145,10 +145,10 @@ impl RenderGraph {
                 }
             }?;
 
-            let (_, final_pass_index) = self.final_pass_node()?;
+            let (final_pass_node, final_pass_index) = self.final_pass_node()?;
             let mut attachments = vec![view.handle];
             attachments.extend_from_slice(&self.framebuffer_attachments(final_pass_index)?);
-            let final_pass = self.final_pass()?;
+            let final_pass = self.lookup_pass(&final_pass_node.name)?;
             let framebuffer = final_pass.create_framebuffer(device.clone(), &attachments)?;
 
             let key = format!("{} {}", Self::BACKBUFFER_PREFIX, index);
@@ -171,60 +171,62 @@ impl RenderGraph {
         None
     }
 
-    // FIXME: RENDERGRAPH
-    // pub fn execute_at_index(
-    //     &self,
-    //     device: Arc<Device>,
-    //     command_buffer: vk::CommandBuffer,
-    //     backbuffer_index: usize,
-    // ) -> Result<()> {
-    //     let indices = toposort(&self.graph, None).map_err(|_| {
-    //         anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
-    //     })?;
-    //     for index in indices.into_iter() {
-    //         if let Node::Pass(pass_node) = &self.graph[index] {
-    //             let pass = &self.passes[&pass_node.name];
-    //             let framebuffer = if self.presents_to_backbuffer(index)? {
-    //                 let backbuffer_name = format!("backbuffer {}", backbuffer_index).to_string();
-    //                 &self.framebuffers[&backbuffer_name]
-    //             } else {
-    //                 &self.framebuffers[&pass_node.name]
-    //             };
-    //             device.update_viewport(command_buffer, pass.extent, pass.flip_viewport)?;
-    //             pass.execute(command_buffer, framebuffer.handle)?;
-    //         }
-    //     }
-    //     Ok(())
-    // }
+    pub fn execute_pass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        name: &str,
+        backbuffer_image_index: usize,
+        action: impl Fn(&Pass, vk::CommandBuffer) -> Result<()>,
+    ) -> Result<()> {
+        let pass = self.lookup_pass(name)?;
+        let framebuffer = if pass.presents_to_backbuffer {
+            self.lookup_framebuffer(&format!("backbuffer {}", backbuffer_image_index))
+        } else {
+            self.lookup_framebuffer(name)
+        }?;
+        pass.execute(command_buffer, framebuffer.handle, |command_buffer| {
+            action(pass, command_buffer)
+        })
+    }
 
     pub fn lookup_pass(&self, name: &str) -> Result<&Pass> {
         let error_message = format!(
-            "Attempted to access renderpass named {} that was not found in the rendergraph",
+            "Attempted to access renderpass with the key '{}' that was not found in the rendergraph",
             name
         );
         self.passes.get(name).context(error_message)
     }
 
+    pub fn lookup_framebuffer(&self, name: &str) -> Result<&Framebuffer> {
+        let error_message = format!(
+            "Attempted to access framebuffer with the key '{}' that was not found in the rendergraph",
+            name
+        );
+        self.framebuffers.get(name).context(error_message)
+    }
+
+    pub fn lookup_image(&self, name: &str) -> Result<&Box<dyn Image>> {
+        let error_message = format!(
+            "Attempted to access image with the key '{}' that was not found in the rendergraph",
+            name
+        );
+        self.images.get(name).context(error_message)
+    }
+
     pub fn final_pass_node(&self) -> Result<(&PassNode, NodeIndex)> {
         for index in self.graph.node_indices() {
-            if let Node::Pass(node) = &self.graph[index] {
-                if self.lookup_pass(&node.name)?.presents_to_backbuffer {
-                    return Ok((node, index));
+            if let Node::Pass(pass) = &self.graph[index] {
+                let mut outgoing_walker = self.graph.neighbors_directed(index, Outgoing).detach();
+                while let Some(index) = outgoing_walker.next_node(&self.graph) {
+                    if let Node::Image(image_node) = &self.graph[index] {
+                        if image_node.is_backbuffer() {
+                            return Ok((pass, index));
+                        }
+                    }
                 }
-            } else {
-                bail!("The backbuffer rendergraph node was not a pass node!")
             }
         }
         bail!("No pass in the rendergraph writes to the backbuffer!")
-    }
-
-    pub fn final_pass(&self) -> Result<&Pass> {
-        let (node, _) = self.final_pass_node()?;
-        let pass = self.passes.get(&node.name).context(format!(
-            "Failed to get rendergraph pass named '{}' that writes to backbuffer",
-            node.name
-        ))?;
-        Ok(pass)
     }
 
     fn create_pass(&self, index: NodeIndex, device: Arc<Device>) -> Result<Pass> {
@@ -461,13 +463,12 @@ impl ImageNode {
 pub struct Pass {
     pub render_pass: Arc<RenderPass>,
     pub presents_to_backbuffer: bool,
-    pub flip_viewport: bool,
-    extent: vk::Extent2D,
-    clear_values: Vec<vk::ClearValue>,
+    pub extent: vk::Extent2D,
+    pub clear_values: Vec<vk::ClearValue>,
 }
 
 impl Pass {
-    fn execute(
+    pub fn execute(
         &self,
         command_buffer: vk::CommandBuffer,
         framebuffer: vk::Framebuffer,
@@ -584,7 +585,6 @@ impl PassBuilder {
             presents_to_backbuffer: self.presents_to_backbuffer,
             extent,
             clear_values,
-            flip_viewport: false,
         })
     }
 
