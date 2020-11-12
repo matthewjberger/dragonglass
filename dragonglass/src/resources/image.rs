@@ -42,6 +42,13 @@ pub struct ImageDescription {
 }
 
 impl ImageDescription {
+    pub fn as_extent2D(&self) -> vk::Extent2D {
+        vk::Extent2D::builder()
+            .width(self.width as _)
+            .height(self.height as _)
+            .build()
+    }
+
     pub fn empty(width: u32, height: u32, format: vk::Format) -> Self {
         Self {
             format,
@@ -66,7 +73,7 @@ impl ImageDescription {
     #[allow(dead_code)]
     pub fn from_hdr<P>(path: P) -> Result<Self>
     where
-        P: AsRef<Path> + Into<PathBuf>,
+        P: AsRef<Path>,
     {
         let file = std::fs::File::open(&path)?;
         let decoder = HdrDecoder::new(BufReader::new(file))?;
@@ -176,6 +183,19 @@ impl ImageDescription {
     }
 
     pub fn as_image(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
+        self.create_image(allocator, vk::ImageCreateFlags::empty(), 1)
+    }
+
+    pub fn as_cubemap(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
+        self.create_image(allocator, vk::ImageCreateFlags::CUBE_COMPATIBLE, 6)
+    }
+
+    fn create_image(
+        &self,
+        allocator: Arc<Allocator>,
+        flags: vk::ImageCreateFlags,
+        layers: u32,
+    ) -> Result<AllocatedImage> {
         let extent = vk::Extent3D::builder()
             .width(self.width)
             .height(self.height)
@@ -185,7 +205,7 @@ impl ImageDescription {
             .image_type(vk::ImageType::TYPE_2D)
             .extent(extent.build())
             .mip_levels(self.mip_levels)
-            .array_layers(1)
+            .array_layers(layers)
             .format(self.format)
             .tiling(vk::ImageTiling::OPTIMAL)
             .initial_layout(vk::ImageLayout::UNDEFINED)
@@ -196,7 +216,7 @@ impl ImageDescription {
             )
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .flags(vk::ImageCreateFlags::empty());
+            .flags(flags);
 
         let allocation_create_info = vk_mem::AllocationCreateInfo {
             usage: vk_mem::MemoryUsage::GpuOnly,
@@ -205,6 +225,38 @@ impl ImageDescription {
 
         AllocatedImage::new(allocator, &allocation_create_info, &create_info)
     }
+}
+
+pub fn transition_image(
+    image: vk::Image,
+    pool: &CommandPool,
+    info: &ImageLayoutTransition,
+) -> Result<()> {
+    let subresource_range = vk::ImageSubresourceRange::builder()
+        .aspect_mask(vk::ImageAspectFlags::COLOR)
+        .base_mip_level(info.base_mip_level)
+        .level_count(info.level_count)
+        .layer_count(1)
+        .build();
+    let image_barrier = vk::ImageMemoryBarrier::builder()
+        .old_layout(info.old_layout)
+        .new_layout(info.new_layout)
+        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .image(image)
+        .subresource_range(subresource_range)
+        .src_access_mask(info.src_access_mask)
+        .dst_access_mask(info.dst_access_mask)
+        .build();
+    let pipeline_barrier_info = PipelineBarrierBuilder::default()
+        .graphics_queue(info.graphics_queue)
+        .src_stage_mask(info.src_stage_mask)
+        .dst_stage_mask(info.dst_stage_mask)
+        .image_memory_barriers(vec![image_barrier])
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    pool.transition_image_layout(&pipeline_barrier_info)?;
+    Ok(())
 }
 
 pub trait Image {
@@ -288,7 +340,7 @@ impl AllocatedImage {
             .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-        self.transition(pool, &transition)
+        transition_image(self.handle, pool, &transition)
     }
 
     fn transition_base_to_shader_read(
@@ -308,7 +360,7 @@ impl AllocatedImage {
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-        self.transition(pool, &transition)
+        transition_image(self.handle, pool, &transition)
     }
 
     fn transition_mip_transfer_dst_to_src(
@@ -329,7 +381,7 @@ impl AllocatedImage {
             .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-        self.transition(pool, &transition)
+        transition_image(self.handle, pool, &transition)
     }
 
     fn transition_mip_to_shader_read(
@@ -349,35 +401,7 @@ impl AllocatedImage {
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
             .build()
             .map_err(|error| anyhow!("{}", error))?;
-        self.transition(pool, &transition)
-    }
-
-    fn transition(&self, pool: &CommandPool, info: &ImageLayoutTransition) -> Result<()> {
-        let subresource_range = vk::ImageSubresourceRange::builder()
-            .aspect_mask(vk::ImageAspectFlags::COLOR)
-            .base_mip_level(info.base_mip_level)
-            .level_count(info.level_count)
-            .layer_count(1)
-            .build();
-        let image_barrier = vk::ImageMemoryBarrier::builder()
-            .old_layout(info.old_layout)
-            .new_layout(info.new_layout)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(self.handle)
-            .subresource_range(subresource_range)
-            .src_access_mask(info.src_access_mask)
-            .dst_access_mask(info.dst_access_mask)
-            .build();
-        let pipeline_barrier_info = PipelineBarrierBuilder::default()
-            .graphics_queue(info.graphics_queue)
-            .src_stage_mask(info.src_stage_mask)
-            .dst_stage_mask(info.dst_stage_mask)
-            .image_memory_barriers(vec![image_barrier])
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        pool.transition_image_layout(&pipeline_barrier_info)?;
-        Ok(())
+        transition_image(self.handle, pool, &transition)
     }
 
     fn copy_to_gpu_buffer(
@@ -614,6 +638,47 @@ impl Texture {
         let create_info = vk::ImageViewCreateInfo::builder()
             .image(image.handle)
             .view_type(vk::ImageViewType::TYPE_2D)
+            .format(description.format)
+            .components(vk::ComponentMapping::default())
+            .subresource_range(subresource_range.build());
+
+        ImageView::new(device, create_info)
+    }
+}
+
+pub struct Cubemap {
+    pub image: AllocatedImage,
+    pub view: ImageView,
+}
+
+impl Cubemap {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        description: &ImageDescription,
+    ) -> Result<Self> {
+        let image = description.as_cubemap(context.allocator.clone())?;
+        if !description.pixels.is_empty() {
+            image.upload_data(context, command_pool, description)?;
+        }
+        let view = Self::image_view(context.device.clone(), &image, description)?;
+        let texture = Self { image, view };
+        Ok(texture)
+    }
+
+    fn image_view(
+        device: Arc<Device>,
+        image: &AllocatedImage,
+        description: &ImageDescription,
+    ) -> Result<ImageView> {
+        let subresource_range = vk::ImageSubresourceRange::builder()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(6)
+            .level_count(description.mip_levels);
+
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image.handle)
+            .view_type(vk::ImageViewType::CUBE)
             .format(description.format)
             .components(vk::ComponentMapping::default())
             .subresource_range(subresource_range.build());

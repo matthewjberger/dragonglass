@@ -6,6 +6,7 @@ use crate::{
     context::{Context, Device},
     gltf::Asset,
     gltf_rendering::AssetRendering,
+    hdr::hdr_cubemap,
     rendergraph::{ImageNode, RenderGraph},
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     skybox::SkyboxRendering,
@@ -38,8 +39,16 @@ impl Scene {
         let samples = context.max_usable_samples();
         let rendergraph =
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
-        let shader_cache = ShaderCache::default();
+        let mut shader_cache = ShaderCache::default();
         let skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
+
+        let hdr = hdr_cubemap(
+            context,
+            &transient_command_pool,
+            "assets/skyboxes/walk_of_fame.hdr",
+            &mut shader_cache,
+        )?;
+
         let mut scene = Self {
             asset_rendering: None,
             skybox_rendering,

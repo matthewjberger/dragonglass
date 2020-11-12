@@ -24,6 +24,7 @@ mod device;
 mod frame;
 mod gltf;
 mod gltf_rendering;
+mod hdr;
 mod rendergraph;
 mod resources;
 mod scene;
