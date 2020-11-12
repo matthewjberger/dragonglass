@@ -89,9 +89,10 @@ impl RenderingDevice {
                     scene.skybox_rendering.borrow_mut().projection = projection;
                     scene.skybox_rendering.borrow_mut().view = view;
                 }
-                scene
-                    .rendergraph
-                    .execute_at_index(device.clone(), command_buffer, image_index)?;
+                // FIXME: RENDERGRAPH
+                // scene
+                //     .rendergraph
+                //     .execute_at_index(device.clone(), command_buffer, image_index)?;
             }
             Ok(())
         })?;

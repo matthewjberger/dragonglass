@@ -13,7 +13,7 @@ use vk_mem::Allocator;
 #[derive(Default)]
 pub struct RenderGraph {
     graph: Graph<Node, ()>,
-    pub passes: HashMap<String, Pass<'static>>,
+    pub passes: HashMap<String, Pass>,
     pub images: HashMap<String, Box<dyn Image>>,
     pub image_views: HashMap<String, ImageView>,
     pub samplers: HashMap<String, Sampler>,
@@ -65,12 +65,6 @@ impl RenderGraph {
     }
 
     pub fn build(&mut self, device: Arc<Device>, allocator: Arc<Allocator>) -> Result<()> {
-        // hash the array of passes
-        // check if we already have a cached graph with the same hash
-        // if not, construct a new one
-        // Graph construction only happens on app init, window resize, shader hot-reload,
-        // or if rendering logic changes
-
         self.process_images(device.clone(), allocator)?;
         self.process_passes(device.clone())?;
 
@@ -100,7 +94,7 @@ impl RenderGraph {
         for index in self.graph.node_indices() {
             if let Node::Pass(pass_node) = &self.graph[index] {
                 let pass = self.create_pass(index, device.clone())?;
-                if !self.presents_to_backbuffer(index)? {
+                if pass.presents_to_backbuffer {
                     let attachments = self.framebuffer_attachments(index)?;
                     let framebuffer = pass.create_framebuffer(device.clone(), &attachments)?;
                     self.framebuffers
@@ -177,41 +171,48 @@ impl RenderGraph {
         None
     }
 
-    pub fn execute_at_index(
-        &self,
-        device: Arc<Device>,
-        command_buffer: vk::CommandBuffer,
-        backbuffer_index: usize,
-    ) -> Result<()> {
-        let indices = toposort(&self.graph, None).map_err(|_| {
-            anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
-        })?;
+    // FIXME: RENDERGRAPH
+    // pub fn execute_at_index(
+    //     &self,
+    //     device: Arc<Device>,
+    //     command_buffer: vk::CommandBuffer,
+    //     backbuffer_index: usize,
+    // ) -> Result<()> {
+    //     let indices = toposort(&self.graph, None).map_err(|_| {
+    //         anyhow!("A cycle was detected in the rendergraph. Skipping execution...")
+    //     })?;
+    //     for index in indices.into_iter() {
+    //         if let Node::Pass(pass_node) = &self.graph[index] {
+    //             let pass = &self.passes[&pass_node.name];
+    //             let framebuffer = if self.presents_to_backbuffer(index)? {
+    //                 let backbuffer_name = format!("backbuffer {}", backbuffer_index).to_string();
+    //                 &self.framebuffers[&backbuffer_name]
+    //             } else {
+    //                 &self.framebuffers[&pass_node.name]
+    //             };
+    //             device.update_viewport(command_buffer, pass.extent, pass.flip_viewport)?;
+    //             pass.execute(command_buffer, framebuffer.handle)?;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
-        for index in indices.into_iter() {
-            if let Node::Pass(pass_node) = &self.graph[index] {
-                let pass = &self.passes[&pass_node.name];
-                let framebuffer = if self.presents_to_backbuffer(index)? {
-                    let backbuffer_name = format!("backbuffer {}", backbuffer_index).to_string();
-                    &self.framebuffers[&backbuffer_name]
-                } else {
-                    &self.framebuffers[&pass_node.name]
-                };
-                device.update_viewport(command_buffer, pass.extent, pass.flip_viewport)?;
-                pass.execute(command_buffer, framebuffer.handle)?;
-            }
-        }
-
-        Ok(())
+    pub fn lookup_pass(&self, name: &str) -> Result<&Pass> {
+        let error_message = format!(
+            "Attempted to access renderpass named {} that was not found in the rendergraph",
+            name
+        );
+        self.passes.get(name).context(error_message)
     }
 
     pub fn final_pass_node(&self) -> Result<(&PassNode, NodeIndex)> {
         for index in self.graph.node_indices() {
-            if self.presents_to_backbuffer(index)? {
-                if let Node::Pass(node) = &self.graph[index] {
+            if let Node::Pass(node) = &self.graph[index] {
+                if self.lookup_pass(&node.name)?.presents_to_backbuffer {
                     return Ok((node, index));
-                } else {
-                    bail!("The backbuffer rendergraph node was not a pass node!")
                 }
+            } else {
+                bail!("The backbuffer rendergraph node was not a pass node!")
             }
         }
         bail!("No pass in the rendergraph writes to the backbuffer!")
@@ -226,17 +227,7 @@ impl RenderGraph {
         Ok(pass)
     }
 
-    fn presents_to_backbuffer(&self, index: NodeIndex) -> Result<bool> {
-        Ok(self
-            .child_node_indices(index)?
-            .into_iter()
-            .any(|child_index| match &self.graph[child_index] {
-                Node::Image(image_node) => image_node.is_backbuffer(),
-                _ => false,
-            }))
-    }
-
-    fn create_pass<'a>(&self, index: NodeIndex, device: Arc<Device>) -> Result<Pass<'a>> {
+    fn create_pass(&self, index: NodeIndex, device: Arc<Device>) -> Result<Pass> {
         let should_clear = self.parent_node_indices(index)?.is_empty();
         let mut pass_builder = PassBuilder::default();
         for child_index in self.child_node_indices(index)?.into_iter() {
@@ -467,23 +458,20 @@ impl ImageNode {
     }
 }
 
-pub struct Pass<'a> {
+pub struct Pass {
     pub render_pass: Arc<RenderPass>,
+    pub presents_to_backbuffer: bool,
+    pub flip_viewport: bool,
     extent: vk::Extent2D,
     clear_values: Vec<vk::ClearValue>,
-    callback: Box<dyn Fn(vk::CommandBuffer) -> Result<()> + 'a>,
-    pub flip_viewport: bool,
 }
 
-impl<'a> Pass<'a> {
-    pub fn set_callback(&mut self, callback: impl Fn(vk::CommandBuffer) -> Result<()> + 'a) {
-        self.callback = Box::new(callback);
-    }
-
+impl Pass {
     fn execute(
         &self,
         command_buffer: vk::CommandBuffer,
         framebuffer: vk::Framebuffer,
+        action: impl Fn(vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         let render_area = vk::Rect2D::builder().extent(self.extent).build();
         let begin_info = vk::RenderPassBeginInfo::builder()
@@ -492,7 +480,7 @@ impl<'a> Pass<'a> {
             .render_area(render_area)
             .clear_values(&self.clear_values);
         self.render_pass
-            .record(command_buffer, begin_info, &self.callback)?;
+            .record(command_buffer, begin_info, action)?;
         Ok(())
     }
 
@@ -520,6 +508,7 @@ pub struct PassBuilder {
     pub clear_values: Vec<vk::ClearValue>,
     pub extents: Vec<vk::Extent2D>,
     pub bindpoint: vk::PipelineBindPoint,
+    pub presents_to_backbuffer: bool,
 }
 
 impl PassBuilder {
@@ -532,6 +521,9 @@ impl PassBuilder {
         self.add_attachment(image)?;
         self.clear_values.push(image.clear_value);
         self.extents.push(image.extent);
+        if image.is_backbuffer() {
+            self.presents_to_backbuffer = true;
+        }
         Ok(())
     }
 
@@ -562,7 +554,7 @@ impl PassBuilder {
         Ok(())
     }
 
-    pub fn build<'a>(self, device: Arc<Device>) -> Result<Pass<'a>> {
+    pub fn build(self, device: Arc<Device>) -> Result<Pass> {
         let mut subpass_description = vk::SubpassDescription::builder()
             .pipeline_bind_point(self.bindpoint)
             .color_attachments(&self.color_attachments);
@@ -589,9 +581,9 @@ impl PassBuilder {
 
         Ok(Pass {
             render_pass,
+            presents_to_backbuffer: self.presents_to_backbuffer,
             extent,
             clear_values,
-            callback: Box::new(|_| Ok(())),
             flip_viewport: false,
         })
     }

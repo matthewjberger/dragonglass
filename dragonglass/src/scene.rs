@@ -52,14 +52,15 @@ impl Scene {
         )?;
         let pipeline = Rc::new(RefCell::new(pipeline));
 
-        let pipeline_ptr = pipeline.clone();
-        rendergraph
-            .passes
-            .get_mut("postprocessing")
-            .context("Failed to get postprocessing pass to set callback")?
-            .set_callback(move |command_buffer| {
-                pipeline_ptr.borrow().issue_commands(command_buffer)
-            });
+        // FIXME: RENDERGRAPH
+        // let pipeline_ptr = pipeline.clone();
+        // rendergraph
+        //     .passes
+        //     .get_mut("postprocessing")
+        //     .context("Failed to get postprocessing pass to set callback")?
+        //     .set_callback(move |command_buffer| {
+        //         pipeline_ptr.borrow().issue_commands(command_buffer)
+        //     });
 
         let mut skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
         let offscreen_renderpass = rendergraph
@@ -70,17 +71,21 @@ impl Scene {
             .clone();
         skybox_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
         let skybox_rendering = Rc::new(RefCell::new(skybox_rendering));
-        let skybox_rendering_ptr = skybox_rendering.clone();
-        rendergraph
-            .passes
-            .get_mut("offscreen")
-            .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| {
-                skybox_rendering_ptr
-                    .borrow()
-                    .issue_commands(command_buffer)?;
-                Ok(())
-            });
+
+        // FIXME: RENDERGRAPH
+        // let skybox_rendering_ptr = skybox_rendering.clone();
+        // rendergraph
+        //     .passes
+        //     .get_mut("offscreen")
+        //     .context("Failed to get offscreen pass to set scene callback")?
+        //     .set_callback(move |command_buffer| {
+        //         skybox_rendering_ptr
+        //             .borrow()
+        //             .issue_commands(command_buffer)?;
+        //         // If asset is present
+        //         //asset_rendering_ptr.borrow().issue_commands(command_buffer)?;
+        //         Ok(())
+        //     });
 
         let path = Self {
             asset: None,
@@ -177,11 +182,12 @@ impl Scene {
 
         rendergraph.build(device.clone(), allocator)?;
 
-        rendergraph
-            .passes
-            .get_mut(offscreen)
-            .context("Failed to get offscreen pass to flip viewport on!")?
-            .flip_viewport = true;
+        // FIXME: RENDERGRAPH
+        // rendergraph
+        //     .passes
+        //     .get_mut(offscreen)
+        //     .context("Failed to get offscreen pass to flip viewport on!")?
+        //     .flip_viewport = true;
 
         let swapchain_images = swapchain
             .images()?
@@ -209,21 +215,6 @@ impl Scene {
         let asset_rendering = Rc::new(RefCell::new(rendering));
         let asset_rendering_ptr = asset_rendering.clone();
         self.asset = Some(asset_rendering);
-
-        let skybox_rendering_ptr = self.skybox_rendering.clone();
-        self.rendergraph
-            .passes
-            .get_mut("offscreen")
-            .context("Failed to get offscreen pass to set scene callback")?
-            .set_callback(move |command_buffer| {
-                skybox_rendering_ptr
-                    .borrow()
-                    .issue_commands(command_buffer)?;
-                asset_rendering_ptr
-                    .borrow()
-                    .issue_commands(command_buffer)?;
-                Ok(())
-            });
 
         Ok(())
     }
