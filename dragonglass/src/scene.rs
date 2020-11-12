@@ -18,10 +18,10 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
-    pub asset: Option<Rc<RefCell<AssetRendering>>>,
-    pub skybox_rendering: Rc<RefCell<SkyboxRendering>>,
+    pub asset_rendering: Option<AssetRendering>,
+    pub skybox_rendering: SkyboxRendering,
     pub rendergraph: RenderGraph,
-    pub pipeline: Rc<RefCell<PostProcessingPipeline>>,
+    pub post_processing_pipeline: PostProcessingPipeline,
     pub samples: vk::SampleCountFlags,
 }
 
@@ -50,20 +50,18 @@ impl Scene {
             rendergraph.image_view("color_resolve")?.handle,
             rendergraph.sampler("default")?.handle,
         )?;
-        let pipeline = Rc::new(RefCell::new(pipeline));
 
         let mut skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
         let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
         skybox_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
-        let skybox_rendering = Rc::new(RefCell::new(skybox_rendering));
 
         let path = Self {
-            asset: None,
+            asset_rendering: None,
             skybox_rendering,
             transient_command_pool,
             shader_cache,
             rendergraph,
-            pipeline,
+            post_processing_pipeline: pipeline,
             samples,
         };
 
@@ -168,9 +166,8 @@ impl Scene {
         let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
 
-        self.asset = None;
-        let asset_rendering = Rc::new(RefCell::new(rendering));
-        self.asset = Some(asset_rendering);
+        self.asset_rendering = None;
+        self.asset_rendering = Some(rendering);
 
         Ok(())
     }

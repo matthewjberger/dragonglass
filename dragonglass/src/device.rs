@@ -74,21 +74,16 @@ impl RenderingDevice {
         let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
-            if let Some(scene) = scene.as_ref() {
-                if let Some(asset) = scene.asset.as_ref() {
-                    asset.borrow_mut().update_ubo(
-                        aspect_ratio,
-                        view,
-                        camera_position,
-                        delta_time,
-                    )?;
-
-                    // TODO: This is decoupled from scene projection matrix for now
-                    let projection =
-                        glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-                    scene.skybox_rendering.borrow_mut().projection = projection;
-                    scene.skybox_rendering.borrow_mut().view = view;
+            if let Some(scene) = scene.as_mut() {
+                if let Some(asset) = scene.asset.as_mut() {
+                    asset.update_ubo(aspect_ratio, view, camera_position, delta_time)?;
                 }
+
+                // TODO: This is decoupled from scene projection matrix for now
+                let projection =
+                    glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+                scene.skybox_rendering.projection = projection;
+                scene.skybox_rendering.view = view;
 
                 scene.rendergraph.execute_pass(
                     command_buffer,
@@ -96,12 +91,9 @@ impl RenderingDevice {
                     image_index,
                     |pass, command_buffer| {
                         device.update_viewport(command_buffer, pass.extent, true)?;
-                        scene
-                            .skybox_rendering
-                            .borrow()
-                            .issue_commands(command_buffer)?;
+                        scene.skybox_rendering.issue_commands(command_buffer)?;
                         if let Some(asset_rendering) = scene.asset.as_ref() {
-                            asset_rendering.borrow().issue_commands(command_buffer)?;
+                            asset_rendering.issue_commands(command_buffer)?;
                         }
                         Ok(())
                     },
@@ -113,7 +105,9 @@ impl RenderingDevice {
                     image_index,
                     |pass, command_buffer| {
                         device.update_viewport(command_buffer, pass.extent, false)?;
-                        scene.pipeline.borrow().issue_commands(command_buffer)
+                        scene
+                            .post_processing_pipeline
+                            .issue_commands(command_buffer)
                     },
                 )?;
             }
@@ -138,9 +132,8 @@ impl RenderingDevice {
 
     pub fn toggle_wireframe(&mut self) {
         if let Some(scene) = self.scene.as_mut() {
-            if let Some(asset) = scene.asset.as_mut() {
-                let mut asset = asset.borrow_mut();
-                asset.wireframe_enabled = !asset.wireframe_enabled;
+            if let Some(asset_rendering) = scene.asset.as_mut() {
+                asset_rendering.wireframe_enabled = !asset_rendering.wireframe_enabled;
             }
         }
     }
