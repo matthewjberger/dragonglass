@@ -18,7 +18,7 @@ use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
-use std::{cell::RefCell, mem, rc::Rc, sync::Arc};
+use std::{mem, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
     let data_ptr = (data as *const T) as *const u8;
@@ -376,7 +376,7 @@ impl GltfPipelineData {
 
     // TODO: Shorten this after gltf cameras are implemented
     pub fn update(
-        &mut self,
+        &self,
         aspect_ratio: f32,
         view: glm::Mat4,
         camera_position: glm::Vec3,
@@ -558,7 +558,6 @@ impl GltfRenderer {
 }
 
 pub struct AssetRendering {
-    pub asset: Rc<RefCell<Asset>>,
     pub pipeline_data: GltfPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
@@ -569,14 +568,9 @@ pub struct AssetRendering {
 }
 
 impl AssetRendering {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        asset: Rc<RefCell<Asset>>,
-    ) -> Result<Self> {
-        let pipeline_data = GltfPipelineData::new(context, command_pool, &asset.borrow())?;
+    pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
+        let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
         Ok(Self {
-            asset,
             pipeline_data,
             pipeline: None,
             pipeline_blended: None,
@@ -657,7 +651,7 @@ impl AssetRendering {
         Ok(())
     }
 
-    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer, asset: &Asset) -> Result<()> {
         let pipeline = self
             .pipeline
             .as_ref()
@@ -702,26 +696,22 @@ impl AssetRendering {
                     }
                 }
             }
-            renderer.draw_asset(&self.device.handle, &self.asset.borrow(), *alpha_mode)?;
+            renderer.draw_asset(&self.device.handle, asset, *alpha_mode)?;
         }
 
         Ok(())
     }
 
     pub fn update_ubo(
-        &mut self,
+        &self,
         aspect_ratio: f32,
         view: glm::Mat4,
         camera_position: glm::Vec3,
         delta_time: f32,
+        asset: &mut Asset,
     ) -> Result<()> {
-        self.pipeline_data.update(
-            aspect_ratio,
-            view,
-            camera_position,
-            delta_time,
-            &mut self.asset.borrow_mut(),
-        )
+        self.pipeline_data
+            .update(aspect_ratio, view, camera_position, delta_time, asset)
     }
 }
 

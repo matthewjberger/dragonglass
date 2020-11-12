@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 pub struct Scene {
     pub asset_rendering: Option<AssetRendering>,
@@ -174,7 +174,7 @@ impl Scene {
         Ok(rendergraph)
     }
 
-    pub fn load_asset(&mut self, context: &Context, asset: Rc<RefCell<Asset>>) -> Result<()> {
+    pub fn load_asset(&mut self, context: &Context, asset: &Asset) -> Result<()> {
         self.asset_rendering = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;

@@ -4,12 +4,12 @@ use ash::{version::DeviceV1_0, vk};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
-use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
-    asset: Option<Rc<RefCell<Asset>>>,
+    asset: Option<Asset>,
     scene: Scene,
     context: Arc<Context>,
 }
@@ -44,8 +44,8 @@ impl RenderingDevice {
         P: AsRef<Path>,
     {
         self.asset = None;
-        let asset = Rc::new(RefCell::new(Asset::new(path)?));
-        self.scene.load_asset(&self.context, asset.clone())?;
+        let asset = Asset::new(path)?;
+        self.scene.load_asset(&self.context, &asset)?;
         self.asset = Some(asset);
         Ok(())
     }
@@ -57,14 +57,27 @@ impl RenderingDevice {
         camera_position: glm::Vec3,
         delta_time: f32,
     ) -> Result<()> {
-        let Self { frame, scene, .. } = self;
+        let Self {
+            frame,
+            scene,
+            asset,
+            ..
+        } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
-            if let Some(asset) = scene.asset_rendering.as_mut() {
-                asset.update_ubo(aspect_ratio, view, camera_position, delta_time)?;
+            if let Some(asset) = asset.as_mut() {
+                if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
+                    asset_rendering.update_ubo(
+                        aspect_ratio,
+                        view,
+                        camera_position,
+                        delta_time,
+                        asset,
+                    )?;
+                }
             }
 
             // TODO: This is decoupled from scene projection matrix for now
@@ -81,7 +94,9 @@ impl RenderingDevice {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
                     if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
-                        asset_rendering.issue_commands(command_buffer)?;
+                        if let Some(asset) = asset.as_ref() {
+                            asset_rendering.issue_commands(command_buffer, asset)?;
+                        }
                     }
                     Ok(())
                 },
