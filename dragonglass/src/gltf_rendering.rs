@@ -16,6 +16,7 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
+use log::error;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};
@@ -712,6 +713,16 @@ impl AssetRendering {
     ) -> Result<()> {
         self.pipeline_data
             .update(aspect_ratio, view, camera_position, delta_time, asset)
+    }
+}
+
+impl Drop for AssetRendering {
+    fn drop(&mut self) {
+        unsafe {
+            if let Err(error) = self.device.handle.device_wait_idle() {
+                error!("{}", error);
+            }
+        }
     }
 }
 
