@@ -13,11 +13,11 @@ use vk_mem::Allocator;
 #[derive(Default)]
 pub struct RenderGraph {
     graph: Graph<Node, ()>,
-    pub passes: HashMap<String, Pass>,
-    pub images: HashMap<String, Box<dyn Image>>,
-    pub image_views: HashMap<String, ImageView>,
-    pub samplers: HashMap<String, Sampler>,
-    pub framebuffers: HashMap<String, Framebuffer>,
+    passes: HashMap<String, Pass>,
+    images: HashMap<String, Box<dyn Image>>,
+    image_views: HashMap<String, ImageView>,
+    samplers: HashMap<String, Sampler>,
+    framebuffers: HashMap<String, Framebuffer>,
 }
 
 impl RenderGraph {
@@ -148,7 +148,7 @@ impl RenderGraph {
             let (final_pass_node, final_pass_index) = self.final_pass_node()?;
             let mut attachments = vec![view.handle];
             attachments.extend_from_slice(&self.framebuffer_attachments(final_pass_index)?);
-            let final_pass = self.lookup_pass(&final_pass_node.name)?;
+            let final_pass = self.pass(&final_pass_node.name)?;
             let framebuffer = final_pass.create_framebuffer(device.clone(), &attachments)?;
 
             let key = format!("{} {}", Self::BACKBUFFER_PREFIX, index);
@@ -178,18 +178,18 @@ impl RenderGraph {
         backbuffer_image_index: usize,
         action: impl Fn(&Pass, vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
-        let pass = self.lookup_pass(name)?;
+        let pass = self.pass(name)?;
         let framebuffer = if pass.presents_to_backbuffer {
-            self.lookup_framebuffer(&format!("backbuffer {}", backbuffer_image_index))
+            self.framebuffer(&format!("backbuffer {}", backbuffer_image_index))
         } else {
-            self.lookup_framebuffer(name)
+            self.framebuffer(name)
         }?;
         pass.execute(command_buffer, framebuffer.handle, |command_buffer| {
             action(pass, command_buffer)
         })
     }
 
-    pub fn lookup_pass(&self, name: &str) -> Result<&Pass> {
+    pub fn pass(&self, name: &str) -> Result<&Pass> {
         let error_message = format!(
             "Attempted to access renderpass with the key '{}' that was not found in the rendergraph",
             name
@@ -197,7 +197,11 @@ impl RenderGraph {
         self.passes.get(name).context(error_message)
     }
 
-    pub fn lookup_framebuffer(&self, name: &str) -> Result<&Framebuffer> {
+    pub fn pass_handle(&self, name: &str) -> Result<Arc<RenderPass>> {
+        Ok(self.pass(name)?.render_pass.clone())
+    }
+
+    pub fn framebuffer(&self, name: &str) -> Result<&Framebuffer> {
         let error_message = format!(
             "Attempted to access framebuffer with the key '{}' that was not found in the rendergraph",
             name
@@ -205,7 +209,7 @@ impl RenderGraph {
         self.framebuffers.get(name).context(error_message)
     }
 
-    pub fn lookup_image(&self, name: &str) -> Result<&Box<dyn Image>> {
+    pub fn image(&self, name: &str) -> Result<&Box<dyn Image>> {
         let error_message = format!(
             "Attempted to access image with the key '{}' that was not found in the rendergraph",
             name
@@ -213,7 +217,23 @@ impl RenderGraph {
         self.images.get(name).context(error_message)
     }
 
-    pub fn final_pass_node(&self) -> Result<(&PassNode, NodeIndex)> {
+    pub fn image_view(&self, name: &str) -> Result<&ImageView> {
+        let error_message = format!(
+            "Attempted to access image view with the key '{}' that was not found in the rendergraph",
+            name
+        );
+        self.image_views.get(name).context(error_message)
+    }
+
+    pub fn sampler(&self, name: &str) -> Result<&Sampler> {
+        let error_message = format!(
+            "Attempted to access sampler with the key '{}' that was not found in the rendergraph",
+            name
+        );
+        self.samplers.get(name).context(error_message)
+    }
+
+    fn final_pass_node(&self) -> Result<(&PassNode, NodeIndex)> {
         for index in self.graph.node_indices() {
             if let Node::Pass(pass) = &self.graph[index] {
                 let mut outgoing_walker = self.graph.neighbors_directed(index, Outgoing).detach();

@@ -45,23 +45,15 @@ impl Scene {
 
         let pipeline = PostProcessingPipeline::new(
             context,
-            rendergraph
-                .lookup_pass("postprocessing")?
-                .render_pass
-                .clone(),
+            rendergraph.pass_handle("postprocessing")?,
             &mut shader_cache,
-            rendergraph.image_views["color_resolve"].handle,
-            rendergraph.samplers["default"].handle,
+            rendergraph.image_view("color_resolve")?.handle,
+            rendergraph.sampler("default")?.handle,
         )?;
         let pipeline = Rc::new(RefCell::new(pipeline));
 
         let mut skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
-        let offscreen_renderpass = rendergraph
-            .passes
-            .get("offscreen")
-            .context("Failed to get offscreen pass to create scene")?
-            .render_pass
-            .clone();
+        let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
         skybox_rendering.create_pipeline(&mut shader_cache, offscreen_renderpass, samples)?;
         let skybox_rendering = Rc::new(RefCell::new(skybox_rendering));
 
@@ -171,20 +163,13 @@ impl Scene {
     }
 
     pub fn load_asset(&mut self, context: &Context, asset: Rc<RefCell<Asset>>) -> Result<()> {
-        let offscreen_renderpass = self
-            .rendergraph
-            .passes
-            .get("offscreen")
-            .context("Failed to get offscreen pass to create scene")?
-            .render_pass
-            .clone();
+        let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
 
         let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
 
         self.asset = None;
         let asset_rendering = Rc::new(RefCell::new(rendering));
-        let asset_rendering_ptr = asset_rendering.clone();
         self.asset = Some(asset_rendering);
 
         Ok(())
