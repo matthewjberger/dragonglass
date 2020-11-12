@@ -10,7 +10,7 @@ pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
     asset: Option<Rc<RefCell<Asset>>>,
-    scene: Option<Scene>,
+    scene: Scene,
     context: Arc<Context>,
 }
 
@@ -24,11 +24,7 @@ impl RenderingDevice {
             context.physical_device_properties()
         );
         let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
-        let scene = Some(Scene::new(
-            &context,
-            frame.swapchain()?,
-            &frame.swapchain_properties,
-        )?);
+        let scene = Scene::new(&context, frame.swapchain()?, &frame.swapchain_properties)?;
         let create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(context.physical_device.graphics_queue_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
@@ -47,17 +43,10 @@ impl RenderingDevice {
     where
         P: AsRef<Path>,
     {
-        match self.scene.as_mut() {
-            Some(scene) => {
-                self.asset = None;
-                let asset = Rc::new(RefCell::new(Asset::new(path)?));
-                scene.load_asset(&self.context, asset.clone())?;
-                self.asset = Some(asset);
-            }
-            None => {
-                log::warn!("No scene was available to load the asset into!");
-            }
-        }
+        self.asset = None;
+        let asset = Rc::new(RefCell::new(Asset::new(path)?));
+        self.scene.load_asset(&self.context, asset.clone())?;
+        self.asset = Some(asset);
         Ok(())
     }
 
@@ -74,67 +63,64 @@ impl RenderingDevice {
         let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
-            if let Some(scene) = scene.as_mut() {
-                if let Some(asset) = scene.asset.as_mut() {
-                    asset.update_ubo(aspect_ratio, view, camera_position, delta_time)?;
-                }
-
-                // TODO: This is decoupled from scene projection matrix for now
-                let projection =
-                    glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-                scene.skybox_rendering.projection = projection;
-                scene.skybox_rendering.view = view;
-
-                scene.rendergraph.execute_pass(
-                    command_buffer,
-                    "offscreen",
-                    image_index,
-                    |pass, command_buffer| {
-                        device.update_viewport(command_buffer, pass.extent, true)?;
-                        scene.skybox_rendering.issue_commands(command_buffer)?;
-                        if let Some(asset_rendering) = scene.asset.as_ref() {
-                            asset_rendering.issue_commands(command_buffer)?;
-                        }
-                        Ok(())
-                    },
-                )?;
-
-                scene.rendergraph.execute_pass(
-                    command_buffer,
-                    "postprocessing",
-                    image_index,
-                    |pass, command_buffer| {
-                        device.update_viewport(command_buffer, pass.extent, false)?;
-                        scene
-                            .post_processing_pipeline
-                            .issue_commands(command_buffer)
-                    },
-                )?;
+            if let Some(asset) = scene.asset_rendering.as_mut() {
+                asset.update_ubo(aspect_ratio, view, camera_position, delta_time)?;
             }
+
+            // TODO: This is decoupled from scene projection matrix for now
+            let projection =
+                glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+            scene.skybox_rendering.projection = projection;
+            scene.skybox_rendering.view = view;
+
+            scene.rendergraph.execute_pass(
+                command_buffer,
+                "offscreen",
+                image_index,
+                |pass, command_buffer| {
+                    device.update_viewport(command_buffer, pass.extent, true)?;
+                    scene.skybox_rendering.issue_commands(command_buffer)?;
+                    if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
+                        asset_rendering.issue_commands(command_buffer)?;
+                    }
+                    Ok(())
+                },
+            )?;
+
+            scene.rendergraph.execute_pass(
+                command_buffer,
+                "postprocessing",
+                image_index,
+                |pass, command_buffer| {
+                    device.update_viewport(command_buffer, pass.extent, false)?;
+                    if let Some(post_processing_pipeline) = scene.post_processing_pipeline.as_ref()
+                    {
+                        post_processing_pipeline.issue_commands(command_buffer)?;
+                    }
+                    Ok(())
+                },
+            )?;
+
             Ok(())
         })?;
 
         if frame.recreated_swapchain {
-            self.scene = None;
-            let mut scene = Scene::new(
+            let rendergraph = Scene::create_rendergraph(
                 &self.context,
                 frame.swapchain()?,
                 &frame.swapchain_properties,
+                scene.samples,
             )?;
-            if let Some(asset) = self.asset.as_ref() {
-                scene.load_asset(&self.context, asset.clone())?;
-            }
-            self.scene = Some(scene);
+            scene.rendergraph = rendergraph;
+            scene.create_pipelines(&self.context)?;
         }
 
         Ok(())
     }
 
     pub fn toggle_wireframe(&mut self) {
-        if let Some(scene) = self.scene.as_mut() {
-            if let Some(asset_rendering) = scene.asset.as_mut() {
-                asset_rendering.wireframe_enabled = !asset_rendering.wireframe_enabled;
-            }
+        if let Some(asset_rendering) = self.scene.asset_rendering.as_mut() {
+            asset_rendering.wireframe_enabled = !asset_rendering.wireframe_enabled;
         }
     }
 }
