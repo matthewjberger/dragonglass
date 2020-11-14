@@ -1,4 +1,7 @@
 use crate::{
+    adapters::GraphicsPipeline,
+    adapters::PipelineLayout,
+    adapters::RenderPass,
     adapters::{
         CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipelineSettingsBuilder,
         ImageToImageCopyBuilder,
@@ -11,7 +14,7 @@ use crate::{
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Texture,
     },
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
 use std::{mem, path::Path, slice, sync::Arc};
@@ -32,10 +35,27 @@ pub fn hdr_cubemap(
     command_pool: &CommandPool,
     path: impl AsRef<Path>,
     shader_cache: &mut ShaderCache,
-) -> Result<Cubemap> {
+) -> Result<(Cubemap, Sampler)> {
     let hdr_description = ImageDescription::from_hdr(path)?;
     let hdr_texture = Texture::new(context, command_pool, &hdr_description)?;
-    let hdr_sampler = Sampler::default(context.device.clone())?;
+
+    let sampler_info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::LINEAR)
+        .min_filter(vk::Filter::LINEAR)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .anisotropy_enable(true)
+        .max_anisotropy(16.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(0.0);
+    let hdr_sampler = Sampler::new(context.device.clone(), sampler_info)?;
 
     let cubemap_description = ImageDescription::empty(
         hdr_description.width,
@@ -44,10 +64,28 @@ pub fn hdr_cubemap(
     );
     let cubemap = Cubemap::new(context, command_pool, &cubemap_description)?;
 
+    let sampler_info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::LINEAR)
+        .min_filter(vk::Filter::LINEAR)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .anisotropy_enable(true)
+        .max_anisotropy(16.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(cubemap_description.mip_levels as _);
+    let cubemap_sampler = Sampler::new(context.device.clone(), sampler_info)?;
+
     let device = context.device.clone();
     let allocator = context.allocator.clone();
 
-    let mut rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+    let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
 
     let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
     let descriptor_pool = descriptor_pool(device.clone())?;
@@ -60,46 +98,23 @@ pub fn hdr_cubemap(
         hdr_sampler.handle,
     );
 
-    let push_constant_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-        .size(mem::size_of::<PushConstantHdr>() as u32)
-        .build();
-    let shader_paths = shader_paths()?;
-    let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
-    let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
-    let mut settings = GraphicsPipelineSettingsBuilder::default();
-    settings
-        .render_pass(offscreen_renderpass)
-        .vertex_inputs(Cube::vertex_inputs())
-        .vertex_attributes(Cube::vertex_attributes())
-        .descriptor_set_layout(descriptor_set_layout)
-        .shader_set(shader_set)
-        .rasterization_samples(vk::SampleCountFlags::TYPE_1)
-        .push_constant_range(push_constant_range);
-    let (pipeline, pipeline_layout) = settings
-        .build()
-        .map_err(|error| anyhow!("{}", error))?
-        .create_pipeline(device.clone())?;
+    transition_cubemap_to_transfer_dst(
+        context.graphics_queue(),
+        command_pool,
+        cubemap.image.handle,
+        cubemap_description.mip_levels,
+    )?;
 
+    let cube = Arc::new(Cube::new(context, command_pool)?);
     let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
     let matrices = cubemap_matrices();
-
-    // Transition output cubemap image to be a transfer destination
-    let transition = ImageLayoutTransitionBuilder::default()
-        .graphics_queue(context.graphics_queue())
-        .base_mip_level(cubemap_description.mip_levels)
-        .old_layout(vk::ImageLayout::UNDEFINED)
-        .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
-    transition_image(cubemap.image.handle, command_pool, &transition)?;
-
-    // Create a unit cube
-    let cube = Arc::new(Cube::new(context, command_pool)?);
+    let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
+    let (pipeline, pipeline_layout) = pipeline(
+        device.clone(),
+        shader_cache,
+        descriptor_set_layout.clone(),
+        offscreen_renderpass,
+    )?;
 
     for mip_level in 0..cubemap_description.mip_levels {
         for (face_index, matrix) in matrices.iter().enumerate() {
@@ -149,20 +164,12 @@ pub fn hdr_cubemap(
                 Ok(())
             })?;
 
-            // Transition backbuffer image to be a transfer source
             let color_image = rendergraph.image("color")?.handle();
-            let transition = ImageLayoutTransitionBuilder::default()
-                .graphics_queue(context.graphics_queue())
-                .base_mip_level(cubemap_description.mip_levels)
-                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-                .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
-                .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-                .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-                .build()
-                .map_err(|error| anyhow!("{}", error))?;
-            transition_image(color_image, command_pool, &transition)?;
+            transition_backbuffer_to_transfer_src(
+                context.graphics_queue(),
+                command_pool,
+                color_image,
+            )?;
 
             let src_subresource = vk::ImageSubresourceLayers::builder()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -191,6 +198,7 @@ pub fn hdr_cubemap(
                 .build();
 
             let copy_info = ImageToImageCopyBuilder::default()
+                .graphics_queue(context.graphics_queue())
                 .source(color_image)
                 .destination(cubemap.image.handle)
                 .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
@@ -200,37 +208,22 @@ pub fn hdr_cubemap(
                 .map_err(|error| anyhow!("{}", error))?;
             command_pool.copy_image_to_image(&copy_info)?;
 
-            // Transition backbuffer image to be a color attachment again now that transfer is over
-            let transition = ImageLayoutTransitionBuilder::default()
-                .graphics_queue(context.graphics_queue())
-                .base_mip_level(cubemap_description.mip_levels)
-                .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-                .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-                .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-                .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-                .build()
-                .map_err(|error| anyhow!("{}", error))?;
-            transition_image(color_image, command_pool, &transition)?;
+            transition_backbuffer_to_color_attachment(
+                context.graphics_queue(),
+                command_pool,
+                color_image,
+            )?;
         }
     }
 
-    // Transition output cubemap image to be read by the fragment shader
-    let transition = ImageLayoutTransitionBuilder::default()
-        .graphics_queue(context.graphics_queue())
-        .base_mip_level(cubemap_description.mip_levels)
-        .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-        .dst_access_mask(vk::AccessFlags::HOST_WRITE | vk::AccessFlags::TRANSFER_WRITE)
-        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
-    transition_image(cubemap.image.handle, command_pool, &transition)?;
+    transition_cubemap_to_shader_read(
+        context.graphics_queue(),
+        command_pool,
+        cubemap.image.handle,
+        cubemap_description.mip_levels,
+    )?;
 
-    Ok(cubemap)
+    Ok((cubemap, cubemap_sampler))
 }
 
 fn rendergraph(
@@ -244,7 +237,10 @@ fn rendergraph(
         &[offscreen],
         vec![ImageNode {
             name: color.to_string(),
-            extent: hdr_description.as_extent2D(),
+            extent: vk::Extent2D::builder()
+                .width(hdr_description.width)
+                .height(hdr_description.width) // Width instead of height to make it a square
+                .build(),
             format: hdr_description.format,
             clear_value: vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -286,7 +282,7 @@ fn descriptor_pool(device: Arc<Device>) -> Result<DescriptorPool> {
     DescriptorPool::new(device, create_info)
 }
 
-fn update_descriptor_set(
+pub fn update_descriptor_set(
     device: &ash::Device,
     descriptor_set: vk::DescriptorSet,
     image_view: vk::ImageView,
@@ -330,11 +326,124 @@ fn cubemap_matrices() -> [glm::Mat4; 6] {
     let forward = glm::vec3(0.0, 0.0, 1.0);
     let backward = glm::vec3(0.0, 0.0, -1.0);
     [
-        glm::look_at(&origin, &right, &up),
-        glm::look_at(&origin, &left, &up),
+        glm::look_at(&origin, &right, &down),
+        glm::look_at(&origin, &left, &down),
+        glm::look_at(&origin, &down, &backward),
         glm::look_at(&origin, &up, &forward),
-        glm::look_at(&origin, &down, &left),
-        glm::look_at(&origin, &forward, &up),
-        glm::look_at(&origin, &backward, &up),
+        glm::look_at(&origin, &forward, &down),
+        glm::look_at(&origin, &backward, &down),
     ]
+}
+
+fn pipeline(
+    device: Arc<Device>,
+    shader_cache: &mut ShaderCache,
+    descriptor_set_layout: Arc<DescriptorSetLayout>,
+    render_pass: Arc<RenderPass>,
+) -> Result<(GraphicsPipeline, PipelineLayout)> {
+    let push_constant_range = vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+        .size(mem::size_of::<PushConstantHdr>() as u32)
+        .build();
+    let shader_paths = shader_paths()?;
+    let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
+    let mut settings = GraphicsPipelineSettingsBuilder::default();
+    settings
+        .render_pass(render_pass)
+        .vertex_inputs(Cube::vertex_inputs())
+        .vertex_attributes(Cube::vertex_attributes())
+        .descriptor_set_layout(descriptor_set_layout)
+        .shader_set(shader_set)
+        .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+        .push_constant_range(push_constant_range);
+    settings
+        .build()
+        .map_err(|error| anyhow!("{}", error))?
+        .create_pipeline(device)
+}
+
+fn transition_cubemap_to_transfer_dst(
+    graphics_queue: vk::Queue,
+    command_pool: &CommandPool,
+    cubemap_image: vk::Image,
+    mip_levels: u32,
+) -> Result<()> {
+    let transition = ImageLayoutTransitionBuilder::default()
+        .graphics_queue(graphics_queue)
+        .base_mip_level(0)
+        .level_count(mip_levels)
+        .layer_count(6)
+        .old_layout(vk::ImageLayout::UNDEFINED)
+        .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+        .src_access_mask(vk::AccessFlags::empty())
+        .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    transition_image(cubemap_image, command_pool, &transition)?;
+    Ok(())
+}
+
+fn transition_backbuffer_to_transfer_src(
+    graphics_queue: vk::Queue,
+    command_pool: &CommandPool,
+    color_image: vk::Image,
+) -> Result<()> {
+    let transition = ImageLayoutTransitionBuilder::default()
+        .graphics_queue(graphics_queue)
+        .base_mip_level(0)
+        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+        .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    transition_image(color_image, command_pool, &transition)?;
+    Ok(())
+}
+
+fn transition_backbuffer_to_color_attachment(
+    graphics_queue: vk::Queue,
+    command_pool: &CommandPool,
+    color_image: vk::Image,
+) -> Result<()> {
+    let transition = ImageLayoutTransitionBuilder::default()
+        .graphics_queue(graphics_queue)
+        .base_mip_level(0)
+        .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    transition_image(color_image, command_pool, &transition)?;
+    Ok(())
+}
+
+fn transition_cubemap_to_shader_read(
+    graphics_queue: vk::Queue,
+    command_pool: &CommandPool,
+    cubemap_image: vk::Image,
+    mip_levels: u32,
+) -> Result<()> {
+    let transition = ImageLayoutTransitionBuilder::default()
+        .graphics_queue(graphics_queue)
+        .base_mip_level(0)
+        .level_count(mip_levels)
+        .layer_count(6)
+        .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+        .dst_access_mask(vk::AccessFlags::HOST_WRITE | vk::AccessFlags::TRANSFER_WRITE)
+        .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
+        .build()
+        .map_err(|error| anyhow!("{}", error))?;
+    transition_image(cubemap_image, command_pool, &transition)?;
+    Ok(())
 }

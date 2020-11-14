@@ -2,7 +2,7 @@
 
 layout(location = 0) in vec3 vert_texcoord;
 
-// TODO: Add samplerCube
+layout(binding = 0) uniform samplerCube environmentMap;
 
 layout(location = 0) out vec4 outColor;
 
@@ -38,7 +38,6 @@ vec4 srgb_to_linear(vec4 srgbIn)
 
 void main()
 {
-    // vec3 envColor = SRGBtoLINEAR(tonemap(textureLod(environmentMap, vert_texcoord, 1.5))).rgb;
-    // outColor = vec4(envColor, 1.0);
-    outColor = vec4(vert_texcoord, 1.0) + vec4(0.2);
+    vec3 envColor = srgb_to_linear(tonemap(texture(environmentMap, vert_texcoord))).rgb;
+    outColor = vec4(envColor, 1.0);
 }

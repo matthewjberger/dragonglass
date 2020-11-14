@@ -8,13 +8,15 @@ use crate::{
     gltf_rendering::AssetRendering,
     hdr::hdr_cubemap,
     rendergraph::{ImageNode, RenderGraph},
+    resources::Cubemap,
+    resources::Sampler,
     resources::{Image, RawImage, ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
     skybox::SkyboxRendering,
     swapchain::{Swapchain, SwapchainProperties},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 pub struct Scene {
     pub asset_rendering: Option<AssetRendering>,
@@ -24,6 +26,8 @@ pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub samples: vk::SampleCountFlags,
+    pub skybox: Cubemap,
+    pub skybox_sampler: Sampler,
 }
 
 impl Scene {
@@ -40,13 +44,19 @@ impl Scene {
         let rendergraph =
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
         let mut shader_cache = ShaderCache::default();
-        let skybox_rendering = SkyboxRendering::new(context, &transient_command_pool)?;
 
-        let hdr = hdr_cubemap(
+        let (skybox, skybox_sampler) = hdr_cubemap(
             context,
             &transient_command_pool,
             "assets/skyboxes/walk_of_fame.hdr",
             &mut shader_cache,
+        )?;
+
+        let skybox_rendering = SkyboxRendering::new(
+            context,
+            &transient_command_pool,
+            skybox.view.handle,
+            skybox_sampler.handle,
         )?;
 
         let mut scene = Self {
@@ -57,6 +67,8 @@ impl Scene {
             transient_command_pool,
             shader_cache,
             samples,
+            skybox,
+            skybox_sampler,
         };
         scene.create_pipelines(context)?;
         Ok(scene)
@@ -181,6 +193,23 @@ impl Scene {
         rendergraph.insert_backbuffer_images(device, swapchain_images)?;
 
         Ok(rendergraph)
+    }
+
+    pub fn load_skybox(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
+        let (skybox, skybox_sampler) = hdr_cubemap(
+            context,
+            &self.transient_command_pool,
+            path,
+            &mut self.shader_cache,
+        )?;
+        self.skybox_rendering.update_descriptor_set(
+            context.device.clone(),
+            skybox.view.handle,
+            self.skybox_sampler.handle,
+        );
+        self.skybox = skybox;
+        self.skybox_sampler = skybox_sampler;
+        Ok(())
     }
 
     pub fn load_asset(&mut self, context: &Context, asset: &Asset) -> Result<()> {

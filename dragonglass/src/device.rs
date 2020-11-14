@@ -39,10 +39,11 @@ impl RenderingDevice {
         Ok(renderer)
     }
 
-    pub fn load_asset<P>(&mut self, path: P) -> Result<()>
-    where
-        P: AsRef<Path>,
-    {
+    pub fn load_skybox(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        self.scene.load_skybox(&self.context, path)
+    }
+
+    pub fn load_asset(&mut self, path: impl AsRef<Path>) -> Result<()> {
         self.asset = None;
         let asset = Asset::new(path)?;
         self.scene.load_asset(&self.context, &asset)?;

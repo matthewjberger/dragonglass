@@ -42,13 +42,6 @@ pub struct ImageDescription {
 }
 
 impl ImageDescription {
-    pub fn as_extent2D(&self) -> vk::Extent2D {
-        vk::Extent2D::builder()
-            .width(self.width as _)
-            .height(self.height as _)
-            .build()
-    }
-
     pub fn empty(width: u32, height: u32, format: vk::Format) -> Self {
         Self {
             format,
@@ -236,7 +229,7 @@ pub fn transition_image(
         .aspect_mask(vk::ImageAspectFlags::COLOR)
         .base_mip_level(info.base_mip_level)
         .level_count(info.level_count)
-        .layer_count(1)
+        .layer_count(info.layer_count)
         .build();
     let image_barrier = vk::ImageMemoryBarrier::builder()
         .old_layout(info.old_layout)
@@ -544,9 +537,9 @@ impl Sampler {
         let sampler_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::LINEAR)
             .min_filter(vk::Filter::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::REPEAT)
-            .address_mode_v(vk::SamplerAddressMode::REPEAT)
-            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
             .anisotropy_enable(true)
             .max_anisotropy(16.0)
             .border_color(vk::BorderColor::INT_OPAQUE_BLACK)

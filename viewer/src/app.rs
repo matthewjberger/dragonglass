@@ -2,7 +2,7 @@ use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::Sys
 use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
-use log::{error, info};
+use log::{error, info, warn};
 use winit::{
     dpi::PhysicalSize,
     event::ElementState,
@@ -115,14 +115,20 @@ impl App {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
                                     if let Err(error) = rendering_device.load_asset(raw_path) {
-                                        log::error!("Viewer error: {}", error);
-                                        system.exit_requested = true;
+                                        warn!("Failed to load asset: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
-                                    log::info!("Loaded gltf asset: '{}'", raw_path);
+                                    info!("Loaded gltf asset: '{}'", raw_path);
                                 }
-                                _ => log::warn!(
-                                    "File extension {:#?} is not a valid '.glb' or '.gltf' extension",
+                                Some("hdr") => {
+                                    if let Err(error) = rendering_device.load_skybox(raw_path) {
+                                        error!("Viewer error: {}", error);
+                                    }
+                                    camera = OrbitalCamera::default();
+                                    info!("Loaded hdr cubemap: '{}'", raw_path);
+                                }
+                                _ => warn!(
+                                    "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
                                     extension),
                             }
                         }

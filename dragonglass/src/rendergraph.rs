@@ -439,7 +439,7 @@ impl ImageNode {
         let mut usage = vk::ImageUsageFlags::COLOR_ATTACHMENT;
 
         if !self.is_backbuffer() {
-            usage |= vk::ImageUsageFlags::SAMPLED;
+            usage |= vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_SRC;
         }
 
         if self.is_depth_stencil() {
