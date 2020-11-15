@@ -5,7 +5,7 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.33"
+anyhow = "1.0.34"
 config = "0.10.1"
 dragonglass = { path = "../dragonglass" }
 image = "0.23.11"
