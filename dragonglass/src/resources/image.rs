@@ -203,8 +203,7 @@ impl ImageDescription {
             .tiling(vk::ImageTiling::OPTIMAL)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
-                vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_SRC
+                vk::ImageUsageFlags::TRANSFER_SRC
                     | vk::ImageUsageFlags::TRANSFER_DST
                     | vk::ImageUsageFlags::SAMPLED,
             )

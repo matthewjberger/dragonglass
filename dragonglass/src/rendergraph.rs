@@ -256,7 +256,7 @@ impl RenderGraph {
         for child_index in self.child_node_indices(index)?.into_iter() {
             match &self.graph[child_index] {
                 Node::Image(image_node) => {
-                    let has_children = self.child_node_indices(child_index)?.is_empty();
+                    let has_children = !self.child_node_indices(child_index)?.is_empty();
                     let attachment_description =
                         image_node.attachment_description(should_clear, has_children)?;
                     pass_builder.add_output_image(image_node, attachment_description)?;
