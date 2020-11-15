@@ -27,6 +27,7 @@ struct PushConstantHdr {
     mvp: glm::Mat4,
 }
 
+#[allow(clippy::clippy::too_many_lines)]
 pub fn hdr_cubemap(
     context: &Context,
     command_pool: &CommandPool,
@@ -83,23 +84,17 @@ pub fn hdr_cubemap(
     let allocator = context.allocator.clone();
 
     let image_dimension = hdr_description.width;
-    let format = vk::Format::R32G32B32A32_SFLOAT;
-    let mut offscreen_description =
-        ImageDescription::empty(image_dimension, image_dimension, format);
-    offscreen_description.mip_levels = 1;
-    let offscreen_texture = Texture::new(context, command_pool, &offscreen_description)?;
+
+    let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+    let offscreen_texture = rendergraph.image("color")?;
+    let offscreen_texture_view = rendergraph.image_view("color")?;
+    let framebuffer = rendergraph.framebuffer("offscreen")?;
+
     let offscreen_renderpass = Arc::new(create_render_pass(
         device.clone(),
         vk::Format::R32G32B32A32_SFLOAT,
     )?);
-    let attachments = [offscreen_texture.view.handle];
-    let create_info = vk::FramebufferCreateInfo::builder()
-        .render_pass(offscreen_renderpass.handle)
-        .attachments(&attachments)
-        .width(image_dimension)
-        .height(image_dimension)
-        .layers(1);
-    let framebuffer = Framebuffer::new(device.clone(), create_info)?;
+    // let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
 
     let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
     let descriptor_pool = descriptor_pool(device.clone())?;
@@ -204,7 +199,7 @@ pub fn hdr_cubemap(
             transition_backbuffer_to_transfer_src(
                 context.graphics_queue(),
                 command_pool,
-                offscreen_texture.image.handle,
+                offscreen_texture.handle(),
             )?;
 
             let src_subresource = vk::ImageSubresourceLayers::builder()
@@ -235,7 +230,7 @@ pub fn hdr_cubemap(
 
             let copy_info = ImageToImageCopyBuilder::default()
                 .graphics_queue(context.graphics_queue())
-                .source(offscreen_texture.image.handle)
+                .source(offscreen_texture.handle())
                 .destination(cubemap.image.handle)
                 .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
@@ -247,7 +242,7 @@ pub fn hdr_cubemap(
             transition_backbuffer_to_color_attachment(
                 context.graphics_queue(),
                 command_pool,
-                offscreen_texture.image.handle,
+                offscreen_texture.handle(),
             )?;
         }
     }
