@@ -1,4 +1,4 @@
-use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
+use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
@@ -15,9 +15,10 @@ use winit::{
 pub struct App {
     camera: OrbitalCamera,
     _settings: Settings,
-    input: Input,
     system: System,
-    _window: Window,
+    input: Input,
+    gui: Gui,
+    window: Window,
     rendering_device: RenderingDevice,
     event_loop: EventLoop<()>,
 }
@@ -51,6 +52,8 @@ impl App {
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
 
+        let gui = Gui::new(&window);
+
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
@@ -58,9 +61,10 @@ impl App {
         let app = Self {
             camera: OrbitalCamera::default(),
             _settings: settings,
-            input: Input::default(),
             system: System::new(window_dimensions),
-            _window: window,
+            input: Input::default(),
+            gui,
+            window,
             rendering_device,
             event_loop,
         };
@@ -74,6 +78,8 @@ impl App {
             mut input,
             mut system,
             mut rendering_device,
+            mut gui,
+            window,
             event_loop,
             ..
         } = self;
@@ -87,7 +93,10 @@ impl App {
             *control_flow = ControlFlow::Poll;
 
             system.handle_event(&event);
-            input.handle_event(&event, system.window_center());
+            gui.handle_event(&event, &window);
+            if !gui.capturing_input() {
+                input.handle_event(&event, system.window_center());
+            }
 
             if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
                 *control_flow = ControlFlow::Exit;
@@ -104,6 +113,13 @@ impl App {
                         system.delta_time as _,
                     ) {
                         error!("{}", error);
+                    }
+
+                    match gui.render_frame(&window) {
+                        Ok(_draw_data) => {
+                            // TODO: Draw the draw_data
+                        },
+                        Err(error) => error!("{}", error),
                     }
                 }
                 Event::WindowEvent {
