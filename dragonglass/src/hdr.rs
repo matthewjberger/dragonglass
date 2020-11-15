@@ -42,9 +42,9 @@ pub fn hdr_cubemap(
     let sampler_info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)
-        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_u(vk::SamplerAddressMode::REPEAT)
+        .address_mode_v(vk::SamplerAddressMode::REPEAT)
+        .address_mode_w(vk::SamplerAddressMode::REPEAT)
         .anisotropy_enable(true)
         .max_anisotropy(16.0)
         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
@@ -54,7 +54,7 @@ pub fn hdr_cubemap(
         .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
         .mip_lod_bias(0.0)
         .min_lod(0.0)
-        .max_lod(0.0);
+        .max_lod(hdr_description.mip_levels as _);
     let hdr_sampler = Sampler::new(context.device.clone(), sampler_info)?;
 
     let cubemap_description = ImageDescription::empty(
@@ -118,38 +118,34 @@ pub fn hdr_cubemap(
 
     for mip_level in 0..cubemap_description.mip_levels {
         for (face_index, matrix) in matrices.iter().enumerate() {
-            let dimension = cubemap_description.width as f32 * 0.5_f32.powf(mip_level as _);
+            let dimension = hdr_description.width as f32 * 0.5_f32.powf(mip_level as _);
             let extent = vk::Extent2D::builder()
                 .width(dimension as _)
                 .height(dimension as _)
                 .build();
 
-            let device_ptr = device.clone();
             let pipeline_layout_handle = pipeline_layout.handle.clone();
             let push_constants_hdr = PushConstantHdr {
                 mvp: projection * matrix,
             };
 
-            let pipeline_handle = pipeline.handle.clone();
-            let cube_ptr = cube.clone();
-
             command_pool.execute_once(context.graphics_queue(), |command_buffer| {
                 rendergraph.execute_pass(command_buffer, "offscreen", 0, |_, command_buffer| {
                     device.update_viewport(command_buffer, extent, true)?;
                     unsafe {
-                        device_ptr.handle.cmd_push_constants(
+                        device.handle.cmd_push_constants(
                             command_buffer,
-                            pipeline_layout_handle,
+                            pipeline_layout.handle,
                             vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                             0,
                             byte_slice_from(&push_constants_hdr),
                         );
-                        device_ptr.handle.cmd_bind_pipeline(
+                        device.handle.cmd_bind_pipeline(
                             command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
-                            pipeline_handle,
+                            pipeline.handle,
                         );
-                        device_ptr.handle.cmd_bind_descriptor_sets(
+                        device.handle.cmd_bind_descriptor_sets(
                             command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline_layout_handle,
@@ -158,7 +154,7 @@ pub fn hdr_cubemap(
                             &[],
                         );
                     }
-                    cube_ptr.draw(&device_ptr.handle, command_buffer)?;
+                    cube.draw(&device.handle, command_buffer)?;
                     Ok(())
                 })?;
                 Ok(())
@@ -241,7 +237,7 @@ fn rendergraph(
                 .width(hdr_description.width)
                 .height(hdr_description.width) // Width instead of height to make it a square
                 .build(),
-            format: hdr_description.format,
+            format: vk::Format::R32G32B32A32_SFLOAT,
             clear_value: vk::ClearValue {
                 color: vk::ClearColorValue {
                     float32: [1.0, 1.0, 1.0, 1.0],
@@ -303,7 +299,7 @@ pub fn update_descriptor_set(
         .image_info(&image_infos)
         .build();
 
-    let descriptor_writes = vec![sampler_descriptor_write];
+    let descriptor_writes = [sampler_descriptor_write];
 
     unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
 }
