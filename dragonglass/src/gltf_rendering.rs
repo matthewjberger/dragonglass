@@ -16,7 +16,7 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use gltf::material::AlphaMode;
-use log::error;
+
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};

@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use log::error;
+
 use nalgebra_glm as glm;
 use std::sync::Arc;
 
