@@ -491,6 +491,7 @@ dependencies = [
  "derive_builder",
  "gltf",
  "image",
+ "imgui",
  "log",
  "nalgebra-glm",
  "petgraph",

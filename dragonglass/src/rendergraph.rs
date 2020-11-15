@@ -176,7 +176,7 @@ impl RenderGraph {
         command_buffer: vk::CommandBuffer,
         name: &str,
         backbuffer_image_index: usize,
-        action: impl Fn(&Pass, vk::CommandBuffer) -> Result<()>,
+        action: impl FnMut(&Pass, vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         let pass = self.pass(name)?;
         let framebuffer = if pass.presents_to_backbuffer {
@@ -500,7 +500,7 @@ impl Pass {
         &self,
         command_buffer: vk::CommandBuffer,
         framebuffer: vk::Framebuffer,
-        action: impl Fn(vk::CommandBuffer) -> Result<()>,
+        action: impl FnMut(vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         let render_area = vk::Rect2D::builder().extent(self.extent).build();
         let begin_info = vk::RenderPassBeginInfo::builder()

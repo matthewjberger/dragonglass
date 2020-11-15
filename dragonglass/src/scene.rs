@@ -6,6 +6,7 @@ use crate::{
     context::{Context, Device},
     gltf::Asset,
     gltf_rendering::AssetRendering,
+    gui::GuiRendering,
     hdr::hdr_cubemap,
     rendergraph::{ImageNode, RenderGraph},
     resources::Cubemap,
@@ -16,11 +17,13 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use imgui::Context as ImguiContext;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {
     pub asset_rendering: Option<AssetRendering>,
     pub skybox_rendering: SkyboxRendering,
+    pub gui_rendering: GuiRendering,
     pub fullscreen_pipeline: Option<FullscreenPipeline>,
     pub rendergraph: RenderGraph,
     pub transient_command_pool: CommandPool,
@@ -35,6 +38,7 @@ impl Scene {
         context: &Context,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
+        imgui: &mut ImguiContext,
     ) -> Result<Self> {
         let transient_command_pool = Self::transient_command_pool(
             context.device.clone(),
@@ -59,9 +63,12 @@ impl Scene {
             skybox_sampler.handle,
         )?;
 
+        let gui_rendering = GuiRendering::new(context, imgui, &transient_command_pool)?;
+
         let mut scene = Self {
             asset_rendering: None,
             skybox_rendering,
+            gui_rendering,
             fullscreen_pipeline: None,
             rendergraph,
             transient_command_pool,
@@ -75,16 +82,6 @@ impl Scene {
     }
 
     pub fn create_pipelines(&mut self, context: &Context) -> Result<()> {
-        self.fullscreen_pipeline = None;
-        let fullscreen_pipeline = FullscreenPipeline::new(
-            context,
-            self.rendergraph.pass_handle("fullscreen")?,
-            &mut self.shader_cache,
-            self.rendergraph.image_view("color_resolve")?.handle,
-            self.rendergraph.sampler("default")?.handle,
-        )?;
-        self.fullscreen_pipeline = Some(fullscreen_pipeline);
-
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         self.skybox_rendering.create_pipeline(
             &mut self.shader_cache,
@@ -99,6 +96,19 @@ impl Scene {
                 self.samples,
             )?;
         }
+
+        let fullscreen_render_pass = self.rendergraph.pass_handle("fullscreen")?;
+        self.fullscreen_pipeline = None;
+        let fullscreen_pipeline = FullscreenPipeline::new(
+            context,
+            fullscreen_render_pass.clone(),
+            &mut self.shader_cache,
+            self.rendergraph.image_view("color_resolve")?.handle,
+            self.rendergraph.sampler("default")?.handle,
+        )?;
+        self.fullscreen_pipeline = Some(fullscreen_pipeline);
+        self.gui_rendering
+            .create_pipeline(&mut self.shader_cache, fullscreen_render_pass)?;
 
         Ok(())
     }

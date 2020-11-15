@@ -52,11 +52,12 @@ impl App {
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
 
-        let gui = Gui::new(&window);
+        let mut gui = Gui::new(&window);
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
+        let rendering_device =
+            RenderingDevice::new(&window, &window_dimensions, gui.context_mut())?;
 
         let app = Self {
             camera: OrbitalCamera::default(),
@@ -106,18 +107,17 @@ impl App {
 
             match event {
                 Event::MainEventsCleared => {
-                    if let Err(error) = rendering_device.render(
-                        &system.window_dimensions,
-                        camera.view_matrix(),
-                        camera.position(),
-                        system.delta_time as _,
-                    ) {
-                        error!("{}", error);
-                    }
-
                     match gui.render_frame(&window) {
                         Ok(_draw_data) => {
-                            // TODO: Draw the draw_data
+                            if let Err(error) = rendering_device.render(
+                                &system.window_dimensions,
+                                camera.view_matrix(),
+                                camera.position(),
+                                system.delta_time as _,
+                                draw_data,
+                            ) {
+                                error!("{}", error);
+                            }
                         },
                         Err(error) => error!("{}", error),
                     }
