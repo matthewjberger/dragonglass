@@ -1,10 +1,7 @@
 use crate::{
-    adapters::GraphicsPipeline,
-    adapters::PipelineLayout,
-    adapters::RenderPass,
     adapters::{
-        CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipelineSettingsBuilder,
-        ImageToImageCopyBuilder,
+        CommandPool, DescriptorPool, DescriptorSetLayout, Framebuffer, GraphicsPipeline,
+        GraphicsPipelineSettingsBuilder, ImageToImageCopyBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
     cube::Cube,
@@ -85,7 +82,24 @@ pub fn hdr_cubemap(
     let device = context.device.clone();
     let allocator = context.allocator.clone();
 
-    let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+    let image_dimension = hdr_description.width;
+    let format = vk::Format::R32G32B32A32_SFLOAT;
+    let mut offscreen_description =
+        ImageDescription::empty(image_dimension, image_dimension, format);
+    offscreen_description.mip_levels = 1;
+    let offscreen_texture = Texture::new(context, command_pool, &offscreen_description)?;
+    let offscreen_renderpass = Arc::new(create_render_pass(
+        device.clone(),
+        vk::Format::R32G32B32A32_SFLOAT,
+    )?);
+    let attachments = [offscreen_texture.view.handle];
+    let create_info = vk::FramebufferCreateInfo::builder()
+        .render_pass(offscreen_renderpass.handle)
+        .attachments(&attachments)
+        .width(image_dimension)
+        .height(image_dimension)
+        .layers(1);
+    let framebuffer = Framebuffer::new(device.clone(), create_info)?;
 
     let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
     let descriptor_pool = descriptor_pool(device.clone())?;
@@ -108,17 +122,17 @@ pub fn hdr_cubemap(
     let cube = Arc::new(Cube::new(context, command_pool)?);
     let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
     let matrices = cubemap_matrices();
-    let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
     let (pipeline, pipeline_layout) = pipeline(
         device.clone(),
         shader_cache,
         descriptor_set_layout.clone(),
-        offscreen_renderpass,
+        offscreen_renderpass.clone(),
     )?;
 
+    let pass = offscreen_renderpass.handle.clone();
     for mip_level in 0..cubemap_description.mip_levels {
         for (face_index, matrix) in matrices.iter().enumerate() {
-            let dimension = hdr_description.width as f32 * 0.5_f32.powf(mip_level as _);
+            let dimension = image_dimension as f32 * 0.5_f32.powf(mip_level as _);
             let extent = vk::Extent2D::builder()
                 .width(dimension as _)
                 .height(dimension as _)
@@ -130,41 +144,67 @@ pub fn hdr_cubemap(
             };
 
             command_pool.execute_once(context.graphics_queue(), |command_buffer| {
-                rendergraph.execute_pass(command_buffer, "offscreen", 0, |_, command_buffer| {
-                    device.update_viewport(command_buffer, extent, true)?;
-                    unsafe {
-                        device.handle.cmd_push_constants(
-                            command_buffer,
-                            pipeline_layout.handle,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                            0,
-                            byte_slice_from(&push_constants_hdr),
-                        );
-                        device.handle.cmd_bind_pipeline(
-                            command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.handle,
-                        );
-                        device.handle.cmd_bind_descriptor_sets(
-                            command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline_layout_handle,
-                            0,
-                            &[descriptor_set],
-                            &[],
-                        );
-                    }
-                    cube.draw(&device.handle, command_buffer)?;
-                    Ok(())
-                })?;
+                let clear_values = [vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 0.0],
+                    },
+                }];
+                let begin_info = vk::RenderPassBeginInfo::builder()
+                    .render_pass(pass.clone())
+                    .framebuffer(framebuffer.handle)
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: vk::Extent2D::builder()
+                            .width(image_dimension)
+                            .height(image_dimension)
+                            .build(),
+                    })
+                    .clear_values(&clear_values);
+
+                unsafe {
+                    device.handle.cmd_begin_render_pass(
+                        command_buffer,
+                        &begin_info,
+                        vk::SubpassContents::INLINE,
+                    )
+                };
+
+                device.update_viewport(command_buffer, extent, true)?;
+                unsafe {
+                    device.handle.cmd_push_constants(
+                        command_buffer,
+                        pipeline_layout.handle,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        0,
+                        byte_slice_from(&push_constants_hdr),
+                    );
+                    device.handle.cmd_bind_pipeline(
+                        command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline.handle,
+                    );
+                    device.handle.cmd_bind_descriptor_sets(
+                        command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline_layout_handle,
+                        0,
+                        &[descriptor_set],
+                        &[],
+                    );
+                }
+                cube.draw(&device.handle, command_buffer)?;
+
+                unsafe {
+                    device.handle.cmd_end_render_pass(command_buffer);
+                }
+
                 Ok(())
             })?;
 
-            let color_image = rendergraph.image("color")?.handle();
             transition_backbuffer_to_transfer_src(
                 context.graphics_queue(),
                 command_pool,
-                color_image,
+                offscreen_texture.image.handle,
             )?;
 
             let src_subresource = vk::ImageSubresourceLayers::builder()
@@ -195,7 +235,7 @@ pub fn hdr_cubemap(
 
             let copy_info = ImageToImageCopyBuilder::default()
                 .graphics_queue(context.graphics_queue())
-                .source(color_image)
+                .source(offscreen_texture.image.handle)
                 .destination(cubemap.image.handle)
                 .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
@@ -207,7 +247,7 @@ pub fn hdr_cubemap(
             transition_backbuffer_to_color_attachment(
                 context.graphics_queue(),
                 command_pool,
-                color_image,
+                offscreen_texture.image.handle,
             )?;
         }
     }
@@ -442,4 +482,36 @@ fn transition_cubemap_to_shader_read(
         .map_err(|error| anyhow!("{}", error))?;
     transition_image(cubemap_image, command_pool, &transition)?;
     Ok(())
+}
+
+fn create_render_pass(device: Arc<Device>, format: vk::Format) -> Result<RenderPass> {
+    let color_attachment_description = vk::AttachmentDescription::builder()
+        .format(format)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build();
+    let attachment_descriptions = [color_attachment_description];
+
+    let color_attachment_reference = vk::AttachmentReference::builder()
+        .attachment(0)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build();
+    let color_attachment_references = [color_attachment_reference];
+
+    let subpass_description = vk::SubpassDescription::builder()
+        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+        .color_attachments(&color_attachment_references)
+        .build();
+    let subpass_descriptions = [subpass_description];
+
+    let create_info = vk::RenderPassCreateInfo::builder()
+        .attachments(&attachment_descriptions)
+        .subpasses(&subpass_descriptions);
+
+    RenderPass::new(device, &create_info)
 }
