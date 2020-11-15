@@ -244,6 +244,7 @@ fn rendergraph(
                 },
             },
             samples: vk::SampleCountFlags::TYPE_1,
+            force_store: true,
         }],
         &[(offscreen, color)],
     )?;

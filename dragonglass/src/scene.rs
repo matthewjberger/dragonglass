@@ -138,6 +138,7 @@ impl Scene {
                         },
                     },
                     samples,
+                    force_store: false,
                 },
                 ImageNode {
                     name: RenderGraph::DEPTH_STENCIL.to_owned(),
@@ -150,6 +151,7 @@ impl Scene {
                         },
                     },
                     samples,
+                    force_store: false,
                 },
                 ImageNode {
                     name: color_resolve.to_string(),
@@ -161,6 +163,7 @@ impl Scene {
                         },
                     },
                     samples: vk::SampleCountFlags::TYPE_1,
+                    force_store: false,
                 },
                 ImageNode {
                     name: RenderGraph::backbuffer_name(0),
@@ -172,6 +175,7 @@ impl Scene {
                         },
                     },
                     samples: vk::SampleCountFlags::TYPE_1,
+                    force_store: false,
                 },
             ],
             &[

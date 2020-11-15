@@ -716,16 +716,6 @@ impl AssetRendering {
     }
 }
 
-impl Drop for AssetRendering {
-    fn drop(&mut self) {
-        unsafe {
-            if let Err(error) = self.device.handle.device_wait_idle() {
-                error!("{}", error);
-            }
-        }
-    }
-}
-
 fn vertex_attributes() -> [vk::VertexInputAttributeDescription; 7] {
     let float_size = std::mem::size_of::<f32>();
 

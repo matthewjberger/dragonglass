@@ -257,8 +257,11 @@ impl RenderGraph {
             match &self.graph[child_index] {
                 Node::Image(image_node) => {
                     let has_children = !self.child_node_indices(child_index)?.is_empty();
-                    let attachment_description =
-                        image_node.attachment_description(should_clear, has_children)?;
+                    let attachment_description = image_node.attachment_description(
+                        should_clear,
+                        has_children,
+                        image_node.force_store,
+                    )?;
                     pass_builder.add_output_image(image_node, attachment_description)?;
                 }
                 _ => bail!("A pass cannot have another pass as an output!"),
@@ -336,6 +339,7 @@ pub struct ImageNode {
     pub format: vk::Format,
     pub clear_value: vk::ClearValue,
     pub samples: vk::SampleCountFlags,
+    pub force_store: bool,
 }
 
 impl ImageNode {
@@ -363,6 +367,7 @@ impl ImageNode {
         &self,
         should_clear: bool,
         has_children: bool,
+        force_store: bool,
     ) -> Result<vk::AttachmentDescription> {
         let load_op = if should_clear {
             vk::AttachmentLoadOp::CLEAR
@@ -372,13 +377,15 @@ impl ImageNode {
         let mut store_op = vk::AttachmentStoreOp::DONT_CARE;
         let mut final_layout = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
 
-        if !has_children {
+        if force_store || has_children || self.is_backbuffer() {
             store_op = vk::AttachmentStoreOp::STORE;
+        }
+
+        if has_children {
             final_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
         }
 
         if self.is_backbuffer() {
-            store_op = vk::AttachmentStoreOp::STORE;
             final_layout = vk::ImageLayout::PRESENT_SRC_KHR;
         }
 
