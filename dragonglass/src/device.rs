@@ -1,4 +1,11 @@
-use crate::{adapters::CommandPool, context::Context, frame::Frame, gltf::Asset, scene::Scene};
+use crate::{
+    adapters::CommandPool,
+    context::Context,
+    frame::Frame,
+    gltf::Asset,
+    gltf_rendering::{AssetUniformBuffer, GltfPipelineData},
+    scene::Scene,
+};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use log::error;
@@ -67,13 +74,33 @@ impl RenderingDevice {
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(asset) = asset.as_mut() {
                 if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
-                    asset_rendering.update_ubo(
-                        aspect_ratio,
+                    if !asset.animations.is_empty() {
+                        asset.animate(0, 0.75 * delta_time);
+                    }
+                    asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
+                    let projection =
+                        glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
+                    let mut camera_position = glm::vec3_to_vec4(&camera_position);
+                    camera_position.w = 1.0;
+
+                    let mut joint_matrices =
+                        [glm::Mat4::identity(); GltfPipelineData::MAX_NUMBER_OF_JOINTS];
+                    joint_matrices
+                        .iter_mut()
+                        .zip(asset.joint_matrices()?.into_iter())
+                        .for_each(|(a, b)| *a = b);
+
+                    let ubo = AssetUniformBuffer {
                         view,
+                        projection,
                         camera_position,
-                        delta_time,
-                        asset,
-                    )?;
+                        joint_matrices,
+                    };
+                    asset_rendering
+                        .pipeline_data
+                        .uniform_buffer
+                        .upload_data(&[ubo], 0)?;
                 }
             }
 

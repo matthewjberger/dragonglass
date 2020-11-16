@@ -375,41 +375,7 @@ impl GltfPipelineData {
         }
     }
 
-    // TODO: Shorten this after gltf cameras are implemented
-    pub fn update(
-        &self,
-        aspect_ratio: f32,
-        view: glm::Mat4,
-        camera_position: glm::Vec3,
-        delta_time: f32,
-        asset: &mut Asset,
-    ) -> Result<()> {
-        if !asset.animations.is_empty() {
-            asset.animate(0, 0.75 * delta_time);
-        }
-        self.update_dynamic_ubo(asset)?;
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-
-        let mut camera_position = glm::vec3_to_vec4(&camera_position);
-        camera_position.w = 1.0;
-
-        let mut joint_matrices = [glm::Mat4::identity(); Self::MAX_NUMBER_OF_JOINTS];
-        joint_matrices
-            .iter_mut()
-            .zip(asset.joint_matrices()?.into_iter())
-            .for_each(|(a, b)| *a = b);
-
-        let ubo = AssetUniformBuffer {
-            view,
-            projection,
-            camera_position,
-            joint_matrices,
-        };
-        self.uniform_buffer.upload_data(&[ubo], 0)?;
-        Ok(())
-    }
-
-    fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
+    pub fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
         let asset_joint_matrices = asset.joint_matrices()?;
         let number_of_joints = asset_joint_matrices.len();
         ensure!(
@@ -701,18 +667,6 @@ impl AssetRendering {
         }
 
         Ok(())
-    }
-
-    pub fn update_ubo(
-        &self,
-        aspect_ratio: f32,
-        view: glm::Mat4,
-        camera_position: glm::Vec3,
-        delta_time: f32,
-        asset: &mut Asset,
-    ) -> Result<()> {
-        self.pipeline_data
-            .update(aspect_ratio, view, camera_position, delta_time, asset)
     }
 }
 
