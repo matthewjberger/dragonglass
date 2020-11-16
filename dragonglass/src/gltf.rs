@@ -23,6 +23,7 @@ pub fn walk_scenegraph(
 pub struct Node {
     pub name: String,
     pub transform: Transform,
+    pub camera: Option<Camera>,
     pub mesh: Option<Mesh>,
     pub skin: Option<Skin>,
     pub light: Option<Light>,
@@ -67,6 +68,85 @@ pub struct Light {
     pub intensity: f32,
     pub range: f32,
     pub kind: gltf::khr_lights_punctual::Kind,
+}
+
+pub struct Camera {
+    pub name: String,
+    pub projection: Projection,
+}
+
+impl Camera {
+    fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
+        match &self.projection {
+            Projection::Perspective(camera) => camera.matrix(viewport_aspect_ratio),
+            Projection::Orthographic(camera) => camera.matrix(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Projection {
+    Perspective(PerspectiveCamera),
+    Orthographic(OrthographicCamera),
+}
+
+#[derive(Default, Debug)]
+pub struct PerspectiveCamera {
+    pub aspect_ratio: Option<f32>,
+    pub y_fov_deg: f32,
+    pub z_far: Option<f32>,
+    pub z_near: f32,
+}
+
+impl PerspectiveCamera {
+    fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
+        let aspect_ratio = if let Some(aspect_ratio) = self.aspect_ratio {
+            aspect_ratio
+        } else {
+            viewport_aspect_ratio
+        };
+
+        if let Some(z_far) = self.z_far {
+            let fov = self.y_fov_deg.to_radians();
+            glm::perspective_zo(aspect_ratio, fov, z_far, self.z_near)
+        } else {
+            glm::infinite_perspective_rh_zo(aspect_ratio, self.y_fov_deg.to_radians(), self.z_near)
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct OrthographicCamera {
+    pub x_mag: f32,
+    pub y_mag: f32,
+    pub z_far: f32,
+    pub z_near: f32,
+}
+
+impl OrthographicCamera {
+    /// https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#cameras
+    pub fn matrix(&self) -> glm::Mat4 {
+        let z_sum = self.z_near + self.z_far;
+        let z_diff = self.z_near - self.z_far;
+        glm::Mat4::new(
+            1.0 / self.x_mag,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0 / self.y_mag,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            2.0 / z_diff,
+            0.0,
+            0.0,
+            0.0,
+            z_sum / z_diff,
+            1.0,
+        )
+    }
 }
 
 pub struct Skin {
@@ -233,6 +313,7 @@ impl Asset {
                 Ok(Node {
                     name: node.name().unwrap_or(DEFAULT_NAME).to_string(),
                     transform: node_transform(&node),
+                    camera: Self::load_camera(&node)?,
                     mesh: Self::load_mesh(&node, buffers, &mut geometry)?,
                     skin: Self::load_skin(&node, buffers),
                     light: Self::load_light(&node),
@@ -240,6 +321,37 @@ impl Asset {
             })
             .collect::<Result<_>>()?;
         Ok((nodes, geometry))
+    }
+
+    fn load_camera(node: &gltf::Node) -> Result<Option<Camera>> {
+        match node.camera() {
+            Some(camera) => {
+                let projection = match camera.projection() {
+                    gltf::camera::Projection::Perspective(camera) => {
+                        Projection::Perspective(PerspectiveCamera {
+                            aspect_ratio: camera.aspect_ratio(),
+                            y_fov_deg: camera.yfov(),
+                            z_far: camera.zfar(),
+                            z_near: camera.znear(),
+                        })
+                    }
+                    gltf::camera::Projection::Orthographic(camera) => {
+                        Projection::Orthographic(OrthographicCamera {
+                            x_mag: camera.xmag(),
+                            y_mag: camera.ymag(),
+                            z_far: camera.zfar(),
+                            z_near: camera.znear(),
+                        })
+                    }
+                };
+                log::info!("Loaded camera with projection: {:#?}", projection);
+                Ok(Some(Camera {
+                    name: camera.name().unwrap_or(DEFAULT_NAME).to_string(),
+                    projection,
+                }))
+            }
+            None => Ok(None),
+        }
     }
 
     fn load_mesh(
