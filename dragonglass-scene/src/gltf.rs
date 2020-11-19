@@ -1,6 +1,10 @@
-use crate::asset::*;
+use crate::asset::{
+    AlphaMode, Animation, Asset, Camera, Channel, Format, Geometry, Interpolation, Joint, Light,
+    LightKind, Material, Mesh, Node, OrthographicCamera, PerspectiveCamera, Primitive, Projection,
+    Scene, SceneGraph, Skin, Texture, Transform, TransformationSet, Vertex,
+};
 use anyhow::{Context, Result};
-use gltf::animation::{util::ReadOutputs, Interpolation};
+use gltf::animation::util::ReadOutputs;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use std::path::Path;
@@ -36,23 +40,95 @@ const DEFAULT_NAME: &str = "<Unnamed>";
 pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
     let (gltf, buffers, textures) = gltf::import(path)?;
 
+    let textures = load_textures(&textures);
     let (nodes, geometry) = load_nodes(&gltf, &buffers)?;
     let scenes = load_scenes(&gltf);
     let animations = load_animations(&gltf, &buffers)?;
+    let materials = load_materials(&gltf, &buffers)?;
 
     Ok(Asset {
-        gltf,
-        textures,
         nodes,
         scenes,
         animations,
+        materials,
+        textures,
         geometry,
     })
 }
 
-pub fn material_at_index(gltf: &gltf::Document, index: usize) -> Result<gltf::Material> {
-    let error_message = format!("Failed to lookup gltf asset material at index: {}", index);
-    gltf.materials().nth(index).context(error_message)
+fn load_textures(textures: &[gltf::image::Data]) -> Vec<Texture> {
+    textures
+        .iter()
+        .map(|texture| Texture {
+            pixels: texture.pixels.to_vec(),
+            format: map_gltf_format(texture.format),
+            width: texture.width,
+            height: texture.height,
+        })
+        .collect()
+}
+
+fn map_gltf_format(format: gltf::image::Format) -> Format {
+    match format {
+        gltf::image::Format::R8 => Format::R8,
+        gltf::image::Format::R8G8 => Format::R8G8,
+        gltf::image::Format::R8G8B8 => Format::R8G8B8,
+        gltf::image::Format::R8G8B8A8 => Format::R8G8B8A8,
+        gltf::image::Format::B8G8R8 => Format::B8G8R8,
+        gltf::image::Format::B8G8R8A8 => Format::B8G8R8A8,
+        gltf::image::Format::R16 => Format::R16,
+        gltf::image::Format::R16G16 => Format::R16G16,
+        gltf::image::Format::R16G16B16 => Format::R16G16B16,
+        gltf::image::Format::R16G16B16A16 => Format::R16G16B16A16,
+    }
+}
+
+fn load_material(primitive_material: &gltf::Material) -> Result<Material> {
+    let mut material = Material::default();
+    material.name = primitive_material
+        .name()
+        .unwrap_or(DEFAULT_NAME)
+        .to_string();
+    let pbr = primitive_material.pbr_metallic_roughness();
+    material.base_color_factor = glm::Vec4::from(pbr.base_color_factor());
+    material.metallic_factor = pbr.metallic_factor();
+    material.roughness_factor = pbr.roughness_factor();
+    material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
+    material.alpha_mode = map_gltf_alpha_mode(&primitive_material.alpha_mode());
+    material.alpha_cutoff = primitive_material.alpha_cutoff();
+    material.is_unlit = if primitive_material.unlit() { 1 } else { 0 };
+    if let Some(base_color_texture) = pbr.base_color_texture() {
+        material.color_texture_index = base_color_texture.texture().source().index() as i32;
+        material.color_texture_set = base_color_texture.tex_coord() as i32;
+    }
+    if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
+        material.metallic_roughness_texture_index =
+            metallic_roughness_texture.texture().source().index() as i32;
+        material.metallic_roughness_texture_set = metallic_roughness_texture.tex_coord() as i32;
+    }
+    if let Some(normal_texture) = primitive_material.normal_texture() {
+        material.normal_texture_index = normal_texture.texture().source().index() as i32;
+        material.normal_texture_set = normal_texture.tex_coord() as i32;
+        material.normal_texture_scale = normal_texture.scale();
+    }
+    if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
+        material.occlusion_texture_index = occlusion_texture.texture().source().index() as i32;
+        material.occlusion_texture_set = occlusion_texture.tex_coord() as i32;
+        material.occlusion_strength = occlusion_texture.strength();
+    }
+    if let Some(emissive_texture) = primitive_material.emissive_texture() {
+        material.emissive_texture_index = emissive_texture.texture().source().index() as i32;
+        material.emissive_texture_set = emissive_texture.tex_coord() as i32;
+    }
+    Ok(material)
+}
+
+fn map_gltf_alpha_mode(alpha_mode: &gltf::material::AlphaMode) -> AlphaMode {
+    match alpha_mode {
+        gltf::material::AlphaMode::Opaque => AlphaMode::Opaque,
+        gltf::material::AlphaMode::Mask => AlphaMode::Mask,
+        gltf::material::AlphaMode::Blend => AlphaMode::Blend,
+    }
 }
 
 fn load_scenes(gltf: &gltf::Document) -> Vec<Scene> {
@@ -274,7 +350,7 @@ fn load_animations(
         let mut channels = Vec::new();
         for channel in animation.channels() {
             let sampler = channel.sampler();
-            let _interpolation = sampler.interpolation();
+            let _interpolation = map_gltf_interpolation(sampler.interpolation());
             let target_node = channel.target().node().index();
             let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
 
@@ -332,6 +408,22 @@ fn load_animations(
     Ok(animations)
 }
 
+fn map_gltf_interpolation(interpolation: gltf::animation::Interpolation) -> Interpolation {
+    match interpolation {
+        gltf::animation::Interpolation::Linear => Interpolation::Linear,
+        gltf::animation::Interpolation::Step => Interpolation::Step,
+        gltf::animation::Interpolation::CubicSpline => Interpolation::CubicSpline,
+    }
+}
+
+fn load_materials(gltf: &gltf::Document, buffers: &[gltf::buffer::Data]) -> Result<Vec<Material>> {
+    let mut materials = Vec::new();
+    for material in gltf.materials() {
+        materials.push(load_material(&material)?);
+    }
+    Ok(materials)
+}
+
 fn load_skin(node: &gltf::Node, buffers: &[gltf::buffer::Data]) -> Option<Skin> {
     match node.skin() {
         Some(skin) => {
@@ -375,8 +467,22 @@ fn load_light(node: &gltf::Node) -> Option<Light> {
             color: glm::make_vec3(&light.color()),
             intensity: light.intensity(),
             range: light.range().unwrap_or(-1.0), // if no range is present, range is assumed to be infinite
-            kind: light.kind(),
+            kind: map_gltf_light_kind(light.kind()),
         }),
         None => None,
+    }
+}
+
+fn map_gltf_light_kind(light: gltf::khr_lights_punctual::Kind) -> LightKind {
+    match light {
+        gltf::khr_lights_punctual::Kind::Directional => LightKind::Directional,
+        gltf::khr_lights_punctual::Kind::Point => LightKind::Point,
+        gltf::khr_lights_punctual::Kind::Spot {
+            inner_cone_angle,
+            outer_cone_angle,
+        } => LightKind::Spot {
+            inner_cone_angle,
+            outer_cone_angle,
+        },
     }
 }

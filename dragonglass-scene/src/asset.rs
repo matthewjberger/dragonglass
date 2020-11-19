@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
-use std::path::Path;
 
 pub struct Scene {
     pub name: String,
@@ -66,7 +65,16 @@ pub struct Light {
     pub color: glm::Vec3,
     pub intensity: f32,
     pub range: f32,
-    pub kind: gltf::khr_lights_punctual::Kind,
+    pub kind: LightKind,
+}
+
+pub enum LightKind {
+    Directional,
+    Point,
+    Spot {
+        inner_cone_angle: f32,
+        outer_cone_angle: f32,
+    },
 }
 
 pub struct Camera {
@@ -123,7 +131,6 @@ pub struct OrthographicCamera {
 }
 
 impl OrthographicCamera {
-    /// https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#cameras
     pub fn matrix(&self) -> glm::Mat4 {
         let z_sum = self.z_near + self.z_far;
         let z_diff = self.z_near - self.z_far;
@@ -204,7 +211,14 @@ pub struct Channel {
     pub target_node: usize,
     pub inputs: Vec<f32>,
     pub transformations: TransformationSet,
-    pub _interpolation: gltf::animation::Interpolation,
+    pub _interpolation: Interpolation,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Interpolation {
+    Linear,
+    Step,
+    CubicSpline,
 }
 
 #[derive(Debug)]
@@ -213,6 +227,65 @@ pub enum TransformationSet {
     Rotations(Vec<glm::Vec4>),
     Scales(Vec<glm::Vec3>),
     MorphTargetWeights(Vec<f32>),
+}
+
+#[derive(Default, Debug)]
+pub struct Material {
+    pub name: String,
+    pub base_color_factor: glm::Vec4,
+    pub emissive_factor: glm::Vec3,
+    pub color_texture_index: i32,
+    pub color_texture_set: i32,
+    pub metallic_roughness_texture_index: i32,
+    pub metallic_roughness_texture_set: i32, // B channel - metalness values. G channel - roughness values
+    pub normal_texture_index: i32,
+    pub normal_texture_set: i32,
+    pub normal_texture_scale: f32,
+    pub occlusion_texture_index: i32,
+    pub occlusion_texture_set: i32, // R channel - occlusion values
+    pub occlusion_strength: f32,
+    pub emissive_texture_index: i32,
+    pub emissive_texture_set: i32,
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub alpha_mode: AlphaMode,
+    pub alpha_cutoff: f32,
+    pub is_unlit: i32,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum AlphaMode {
+    Opaque = 1,
+    Mask,
+    Blend,
+}
+
+impl Default for AlphaMode {
+    fn default() -> Self {
+        Self::Opaque
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Texture {
+    pub pixels: Vec<u8>,
+    pub format: Format,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Format {
+    R8,
+    R8G8,
+    R8G8B8,
+    R8G8B8A8,
+    B8G8R8,
+    B8G8R8A8,
+    R16,
+    R16G16,
+    R16G16B16,
+    R16G16B16A16,
 }
 
 pub type SceneGraph = Graph<usize, ()>;
@@ -227,15 +300,20 @@ pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) ->
 }
 
 pub struct Asset {
-    pub gltf: gltf::Document,
-    pub textures: Vec<gltf::image::Data>,
     pub nodes: Vec<Node>,
     pub scenes: Vec<Scene>,
     pub animations: Vec<Animation>,
+    pub materials: Vec<Material>,
+    pub textures: Vec<Texture>,
     pub geometry: Geometry,
 }
 
 impl Asset {
+    pub fn material_at_index(&self, index: usize) -> Result<&Material> {
+        let error_message = format!("Failed to lookup gltf asset material at index: {}", index);
+        self.materials.get(index).context(error_message)
+    }
+
     pub fn animate(&mut self, index: usize, step: f32) {
         if self.animations.get(index).is_none() {
             log::warn!("No animation at index: {}. Skipping...", index);
@@ -306,11 +384,17 @@ impl Asset {
     pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
         let mut offset = 0;
         let first_scene = self.scenes.first().context("Failed to find a scene")?;
-        let number_of_joints = self
-            .gltf
-            .skins()
-            .map(|skin| skin.joints().collect::<Vec<_>>().iter().len())
-            .sum();
+
+        let mut number_of_joints = 0;
+        for graph in first_scene.graphs.iter() {
+            walk_scenegraph(graph, |node_index| {
+                let node_offset = graph[node_index];
+                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
+                    number_of_joints += skin.joints.len();
+                }
+                Ok(())
+            })?;
+        }
 
         let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
         for graph in first_scene.graphs.iter() {

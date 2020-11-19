@@ -12,9 +12,8 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    global_transform, material_at_index, walk_scenegraph, Asset, Geometry, Node, Scene, Vertex,
+    global_transform, walk_scenegraph, AlphaMode, Asset, Geometry, Material, Node, Scene, Vertex,
 };
-use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};
@@ -66,7 +65,7 @@ impl Default for PushConstantMaterial {
             emissive_texture_set: -1,
             metallic_factor: 1.0,
             roughness_factor: 0.0,
-            alpha_mode: gltf::material::AlphaMode::Opaque as i32,
+            alpha_mode: AlphaMode::Opaque as i32,
             alpha_cutoff: 0.0,
             is_unlit: 0,
         }
@@ -74,41 +73,28 @@ impl Default for PushConstantMaterial {
 }
 
 impl PushConstantMaterial {
-    fn from_gltf(primitive_material: &gltf::Material) -> Result<Self> {
-        let mut material = Self::default();
-        let pbr = primitive_material.pbr_metallic_roughness();
-        material.base_color_factor = glm::Vec4::from(pbr.base_color_factor());
-        material.metallic_factor = pbr.metallic_factor();
-        material.roughness_factor = pbr.roughness_factor();
-        material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
-        material.alpha_mode = primitive_material.alpha_mode() as i32;
-        material.alpha_cutoff = primitive_material.alpha_cutoff();
-        material.is_unlit = if primitive_material.unlit() { 1 } else { 0 };
-        if let Some(base_color_texture) = pbr.base_color_texture() {
-            material.color_texture_index = base_color_texture.texture().source().index() as i32;
-            material.color_texture_set = base_color_texture.tex_coord() as i32;
-        }
-        if let Some(metallic_roughness_texture) = pbr.metallic_roughness_texture() {
-            material.metallic_roughness_texture_index =
-                metallic_roughness_texture.texture().source().index() as i32;
-            material.metallic_roughness_texture_set = metallic_roughness_texture.tex_coord() as i32;
-        }
-        if let Some(normal_texture) = primitive_material.normal_texture() {
-            material.normal_texture_index = normal_texture.texture().source().index() as i32;
-            material.normal_texture_set = normal_texture.tex_coord() as i32;
-            material.normal_texture_scale = normal_texture.scale();
-        }
-        if let Some(occlusion_texture) = primitive_material.occlusion_texture() {
-            material.occlusion_texture_index = occlusion_texture.texture().source().index() as i32;
-            material.occlusion_texture_set = occlusion_texture.tex_coord() as i32;
-            material.occlusion_strength = occlusion_texture.strength();
-        }
-        if let Some(emissive_texture) = primitive_material.emissive_texture() {
-            material.emissive_texture_index = emissive_texture.texture().source().index() as i32;
-            material.emissive_texture_set = emissive_texture.tex_coord() as i32;
-        }
-
-        Ok(material)
+    fn from_material(material: &Material) -> Result<Self> {
+        Ok(Self {
+            base_color_factor: material.base_color_factor,
+            metallic_factor: material.metallic_factor,
+            roughness_factor: material.roughness_factor,
+            emissive_factor: material.emissive_factor,
+            alpha_mode: material.alpha_mode as i32,
+            alpha_cutoff: material.alpha_cutoff,
+            is_unlit: material.is_unlit,
+            color_texture_index: material.color_texture_index,
+            color_texture_set: material.color_texture_set,
+            metallic_roughness_texture_index: material.metallic_roughness_texture_index,
+            metallic_roughness_texture_set: material.metallic_roughness_texture_set,
+            normal_texture_index: material.normal_texture_index,
+            normal_texture_set: material.normal_texture_set,
+            normal_texture_scale: material.normal_texture_scale,
+            occlusion_texture_index: material.occlusion_texture_index,
+            occlusion_texture_set: material.occlusion_texture_set,
+            occlusion_strength: material.occlusion_strength,
+            emissive_texture_index: material.emissive_texture_index,
+            emissive_texture_set: material.emissive_texture_set,
+        })
     }
 }
 
@@ -154,17 +140,19 @@ impl GltfPipelineData {
 
         let mut textures = Vec::new();
         let mut samplers = Vec::new();
-        for (texture, gltf_texture) in asset.textures.iter().zip(asset.gltf.textures()) {
-            let description = ImageDescription::from_gltf(texture)?;
+        for (texture, gltf_texture) in asset.textures.iter().zip(asset.textures.iter()) {
+            let description = ImageDescription::from_texture(texture)?;
             let texture = Texture::new(context, command_pool, &description)?;
             textures.push(texture);
 
-            let sampler = sampler_from_gltf(
-                device.clone(),
-                description.mip_levels,
-                &gltf_texture.sampler(),
-            )?;
-            samplers.push(sampler);
+            // FIXME: Map samplers, need to gather samplers directly from asset
+            // let sampler = sampler_from_gltf(
+            //     device.clone(),
+            //     description.mip_levels,
+            //     &gltf_texture.sampler(),
+            // )?;
+            // samplers.push(sampler);
+            samplers.push(Sampler::default(device.clone())?);
         }
 
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
@@ -477,13 +465,12 @@ impl GltfRenderer {
                 for primitive in mesh.primitives.iter() {
                     let material = match primitive.material_index {
                         Some(material_index) => {
-                            let primitive_material =
-                                material_at_index(&asset.gltf, material_index)?;
-                            if primitive_material.alpha_mode() != alpha_mode {
+                            let primitive_material = asset.material_at_index(material_index)?;
+                            if primitive_material.alpha_mode != alpha_mode {
                                 continue;
                             }
 
-                            PushConstantMaterial::from_gltf(&primitive_material)?
+                            PushConstantMaterial::from_material(&primitive_material)?
                         }
                         None => PushConstantMaterial::default(),
                     };
@@ -733,69 +720,69 @@ fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
     [vertex_input_binding_description]
 }
 
-fn sampler_from_gltf(
-    device: Arc<Device>,
-    mip_levels: u32,
-    sampler: &gltf::texture::Sampler,
-) -> Result<Sampler> {
-    let mut min_filter = vk::Filter::LINEAR;
-    let mut mipmap_mode = vk::SamplerMipmapMode::LINEAR;
-    if let Some(min) = sampler.min_filter() {
-        min_filter = match min {
-            gltf::texture::MinFilter::Linear
-            | gltf::texture::MinFilter::LinearMipmapLinear
-            | gltf::texture::MinFilter::LinearMipmapNearest => vk::Filter::LINEAR,
-            gltf::texture::MinFilter::Nearest
-            | gltf::texture::MinFilter::NearestMipmapLinear
-            | gltf::texture::MinFilter::NearestMipmapNearest => vk::Filter::NEAREST,
-        };
-        mipmap_mode = match min {
-            gltf::texture::MinFilter::Linear
-            | gltf::texture::MinFilter::LinearMipmapLinear
-            | gltf::texture::MinFilter::LinearMipmapNearest => vk::SamplerMipmapMode::LINEAR,
-            gltf::texture::MinFilter::Nearest
-            | gltf::texture::MinFilter::NearestMipmapLinear
-            | gltf::texture::MinFilter::NearestMipmapNearest => vk::SamplerMipmapMode::NEAREST,
-        };
-    }
+// fn sampler_from_gltf(
+//     device: Arc<Device>,
+//     mip_levels: u32,
+//     sampler: &gltf::texture::Sampler,
+// ) -> Result<Sampler> {
+//     let mut min_filter = vk::Filter::LINEAR;
+//     let mut mipmap_mode = vk::SamplerMipmapMode::LINEAR;
+//     if let Some(min) = sampler.min_filter() {
+//         min_filter = match min {
+//             gltf::texture::MinFilter::Linear
+//             | gltf::texture::MinFilter::LinearMipmapLinear
+//             | gltf::texture::MinFilter::LinearMipmapNearest => vk::Filter::LINEAR,
+//             gltf::texture::MinFilter::Nearest
+//             | gltf::texture::MinFilter::NearestMipmapLinear
+//             | gltf::texture::MinFilter::NearestMipmapNearest => vk::Filter::NEAREST,
+//         };
+//         mipmap_mode = match min {
+//             gltf::texture::MinFilter::Linear
+//             | gltf::texture::MinFilter::LinearMipmapLinear
+//             | gltf::texture::MinFilter::LinearMipmapNearest => vk::SamplerMipmapMode::LINEAR,
+//             gltf::texture::MinFilter::Nearest
+//             | gltf::texture::MinFilter::NearestMipmapLinear
+//             | gltf::texture::MinFilter::NearestMipmapNearest => vk::SamplerMipmapMode::NEAREST,
+//         };
+//     }
 
-    let mut mag_filter = vk::Filter::LINEAR;
-    if let Some(mag) = sampler.mag_filter() {
-        mag_filter = match mag {
-            gltf::texture::MagFilter::Nearest => vk::Filter::NEAREST,
-            gltf::texture::MagFilter::Linear => vk::Filter::LINEAR,
-        };
-    }
+//     let mut mag_filter = vk::Filter::LINEAR;
+//     if let Some(mag) = sampler.mag_filter() {
+//         mag_filter = match mag {
+//             gltf::texture::MagFilter::Nearest => vk::Filter::NEAREST,
+//             gltf::texture::MagFilter::Linear => vk::Filter::LINEAR,
+//         };
+//     }
 
-    let address_mode_u = match sampler.wrap_s() {
-        gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-        gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-        gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
-    };
+//     let address_mode_u = match sampler.wrap_s() {
+//         gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+//         gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+//         gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+//     };
 
-    let address_mode_v = match sampler.wrap_t() {
-        gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-        gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-        gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
-    };
+//     let address_mode_v = match sampler.wrap_t() {
+//         gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+//         gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+//         gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+//     };
 
-    let address_mode_w = vk::SamplerAddressMode::REPEAT;
+//     let address_mode_w = vk::SamplerAddressMode::REPEAT;
 
-    let sampler_info = vk::SamplerCreateInfo::builder()
-        .min_filter(min_filter)
-        .mag_filter(mag_filter)
-        .address_mode_u(address_mode_u)
-        .address_mode_v(address_mode_v)
-        .address_mode_w(address_mode_w)
-        .anisotropy_enable(true)
-        .max_anisotropy(16.0)
-        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-        .unnormalized_coordinates(false)
-        .compare_enable(false)
-        .compare_op(vk::CompareOp::ALWAYS)
-        .mipmap_mode(mipmap_mode)
-        .mip_lod_bias(0.0)
-        .min_lod(0.0)
-        .max_lod(mip_levels as _);
-    Sampler::new(device, sampler_info)
-}
+//     let sampler_info = vk::SamplerCreateInfo::builder()
+//         .min_filter(min_filter)
+//         .mag_filter(mag_filter)
+//         .address_mode_u(address_mode_u)
+//         .address_mode_v(address_mode_v)
+//         .address_mode_w(address_mode_w)
+//         .anisotropy_enable(true)
+//         .max_anisotropy(16.0)
+//         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+//         .unnormalized_coordinates(false)
+//         .compare_enable(false)
+//         .compare_op(vk::CompareOp::ALWAYS)
+//         .mipmap_mode(mipmap_mode)
+//         .mip_lod_bias(0.0)
+//         .min_lod(0.0)
+//         .max_lod(mip_levels as _);
+//     Sampler::new(device, sampler_info)
+// }

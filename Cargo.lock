@@ -490,7 +490,6 @@ dependencies = [
  "ash-window",
  "derive_builder",
  "dragonglass-scene",
- "gltf",
  "image",
  "log",
  "nalgebra-glm",
