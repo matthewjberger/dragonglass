@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::Asset;
+use dragonglass_scene::{load_gltf_asset, Asset};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -48,7 +48,7 @@ impl RenderingDevice {
 
     pub fn load_asset(&mut self, path: impl AsRef<Path>) -> Result<()> {
         self.asset = None;
-        let asset = Asset::new(path)?;
+        let asset = load_gltf_asset(path)?;
         self.scene.load_asset(&self.context, &asset)?;
         self.asset = Some(asset);
         Ok(())

@@ -11,7 +11,9 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::{global_transform, walk_scenegraph, Asset, Geometry, Node, Scene, Vertex};
+use dragonglass_scene::{
+    global_transform, material_at_index, walk_scenegraph, Asset, Geometry, Node, Scene, Vertex,
+};
 use gltf::material::AlphaMode;
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
@@ -475,7 +477,8 @@ impl GltfRenderer {
                 for primitive in mesh.primitives.iter() {
                     let material = match primitive.material_index {
                         Some(material_index) => {
-                            let primitive_material = asset.material_at_index(material_index)?;
+                            let primitive_material =
+                                material_at_index(&asset.gltf, material_index)?;
                             if primitive_material.alpha_mode() != alpha_mode {
                                 continue;
                             }

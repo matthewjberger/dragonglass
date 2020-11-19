@@ -15,6 +15,7 @@
     clippy::wildcard_imports
 )]
 
-pub use self::asset::*;
+pub use self::{asset::*, gltf::*};
 
 mod asset;
+mod gltf;
