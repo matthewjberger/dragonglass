@@ -1,8 +1,8 @@
 use crate::{
     adapters::CommandPool,
+    asset::{AssetUniformBuffer, GltfPipelineData},
     context::Context,
     frame::Frame,
-    gltf_rendering::{AssetUniformBuffer, GltfPipelineData},
     scene::Scene,
 };
 use anyhow::Result;
