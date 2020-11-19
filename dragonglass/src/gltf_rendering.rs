@@ -4,19 +4,15 @@ use crate::{
         GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::Node,
-    gltf::Scene,
-    gltf::{global_transform, walk_scenegraph, Asset, Geometry, Vertex},
-    resources::Texture,
     resources::{
         CpuToGpuBuffer, GeometryBuffer, ImageDescription, Sampler, ShaderCache, ShaderPathSet,
-        ShaderPathSetBuilder,
+        ShaderPathSetBuilder, Texture,
     },
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_scene::{global_transform, walk_scenegraph, Asset, Geometry, Node, Scene, Vertex};
 use gltf::material::AlphaMode;
-
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};

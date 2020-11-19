@@ -1,24 +1,14 @@
 [package]
-name = "dragonglass"
+name = "dragonglass-scene"
 version = "0.1.0"
 authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-ash = "0.31.0"
-ash-window = "0.5.0"
 anyhow = "1.0.34"
 derive_builder = "0.9.0"
-dragonglass-scene = { path = "../dragonglass-scene" }
 gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual", "KHR_materials_unlit"] }
 log = "0.4.11"
 image = "0.23.11"
 nalgebra-glm = "0.9.0"
 petgraph = "0.5.1"
-raw-window-handle = "0.3.3"
-vk-mem = "0.2.2"
-
-[build-dependencies]
-log = "0.4.11"
-shader-compilation = { path = "../shader-compilation" }
-simplelog = { version = "0.8.0", features = ["termcolor"] }

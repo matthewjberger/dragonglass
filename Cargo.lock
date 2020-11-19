@@ -489,6 +489,7 @@ dependencies = [
  "ash",
  "ash-window",
  "derive_builder",
+ "dragonglass-scene",
  "gltf",
  "image",
  "log",
@@ -498,6 +499,19 @@ dependencies = [
  "shader-compilation",
  "simplelog",
  "vk-mem",
+]
+
+[[package]]
+name = "dragonglass-scene"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "derive_builder",
+ "gltf",
+ "image",
+ "log",
+ "nalgebra-glm",
+ "petgraph",
 ]
 
 [[package]]
@@ -1666,6 +1680,7 @@ dependencies = [
  "anyhow",
  "config",
  "dragonglass",
+ "dragonglass-scene",
  "image",
  "log",
  "nalgebra-glm",

@@ -2,12 +2,12 @@ use crate::{
     adapters::CommandPool,
     context::Context,
     frame::Frame,
-    gltf::Asset,
     gltf_rendering::{AssetUniformBuffer, GltfPipelineData},
     scene::Scene,
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_scene::Asset;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;

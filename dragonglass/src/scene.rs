@@ -4,7 +4,6 @@ use crate::{
         GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     },
     context::{Context, Device},
-    gltf::Asset,
     gltf_rendering::AssetRendering,
     hdr::hdr_cubemap,
     rendergraph::{ImageNode, RenderGraph},
@@ -16,6 +15,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_scene::Asset;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {
