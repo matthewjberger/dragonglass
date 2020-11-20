@@ -7,17 +7,6 @@ pub struct Scene {
     pub graphs: Vec<SceneGraph>,
 }
 
-pub fn walk_scenegraph(
-    graph: &SceneGraph,
-    mut action: impl FnMut(NodeIndex) -> Result<()>,
-) -> Result<()> {
-    let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-    while let Some(node_index) = dfs.next(&graph) {
-        action(node_index)?;
-    }
-    Ok(())
-}
-
 pub struct Node {
     pub name: String,
     pub transform: Transform,
@@ -272,6 +261,7 @@ pub struct Texture {
     pub format: Format,
     pub width: u32,
     pub height: u32,
+    pub sampler: Sampler,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -288,7 +278,52 @@ pub enum Format {
     R16G16B16A16,
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct Sampler {
+    pub name: String,
+    pub min_filter: Filter,
+    pub mag_filter: Filter,
+    pub wrap_s: WrappingMode,
+    pub wrap_t: WrappingMode,
+}
+
+#[derive(Clone, Debug)]
+pub enum WrappingMode {
+    ClampToEdge,
+    MirroredRepeat,
+    Repeat,
+}
+
+impl Default for WrappingMode {
+    fn default() -> Self {
+        Self::ClampToEdge
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Filter {
+    Nearest,
+    Linear,
+}
+
+impl Default for Filter {
+    fn default() -> Self {
+        Self::Nearest
+    }
+}
+
 pub type SceneGraph = Graph<usize, ()>;
+
+pub fn walk_scenegraph(
+    graph: &SceneGraph,
+    mut action: impl FnMut(NodeIndex) -> Result<()>,
+) -> Result<()> {
+    let mut dfs = Dfs::new(graph, NodeIndex::new(0));
+    while let Some(node_index) = dfs.next(&graph) {
+        action(node_index)?;
+    }
+    Ok(())
+}
 
 pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) -> glm::Mat4 {
     let transform = nodes[graph[index]].transform.matrix();
@@ -310,7 +345,7 @@ pub struct Asset {
 
 impl Asset {
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
-        let error_message = format!("Failed to lookup gltf asset material at index: {}", index);
+        let error_message = format!("Failed to lookup asset material at index: {}", index);
         self.materials.get(index).context(error_message)
     }
 

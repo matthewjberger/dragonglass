@@ -12,7 +12,8 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    global_transform, walk_scenegraph, AlphaMode, Asset, Geometry, Material, Node, Scene, Vertex,
+    global_transform, walk_scenegraph, AlphaMode, Asset, Filter, Geometry, Material, Node,
+    Sampler as AssetSampler, Scene, Vertex, WrappingMode,
 };
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
@@ -140,19 +141,10 @@ impl GltfPipelineData {
 
         let mut textures = Vec::new();
         let mut samplers = Vec::new();
-        for (texture, gltf_texture) in asset.textures.iter().zip(asset.textures.iter()) {
+        for texture in asset.textures.iter() {
             let description = ImageDescription::from_texture(texture)?;
-            let texture = Texture::new(context, command_pool, &description)?;
-            textures.push(texture);
-
-            // FIXME: Map samplers, need to gather samplers directly from asset
-            // let sampler = sampler_from_gltf(
-            //     device.clone(),
-            //     description.mip_levels,
-            //     &gltf_texture.sampler(),
-            // )?;
-            // samplers.push(sampler);
-            samplers.push(Sampler::default(device.clone())?);
+            textures.push(Texture::new(context, command_pool, &description)?);
+            samplers.push(map_sampler(device.clone(), 1, &texture.sampler)?);
         }
 
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
@@ -720,69 +712,55 @@ fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
     [vertex_input_binding_description]
 }
 
-// fn sampler_from_gltf(
-//     device: Arc<Device>,
-//     mip_levels: u32,
-//     sampler: &gltf::texture::Sampler,
-// ) -> Result<Sampler> {
-//     let mut min_filter = vk::Filter::LINEAR;
-//     let mut mipmap_mode = vk::SamplerMipmapMode::LINEAR;
-//     if let Some(min) = sampler.min_filter() {
-//         min_filter = match min {
-//             gltf::texture::MinFilter::Linear
-//             | gltf::texture::MinFilter::LinearMipmapLinear
-//             | gltf::texture::MinFilter::LinearMipmapNearest => vk::Filter::LINEAR,
-//             gltf::texture::MinFilter::Nearest
-//             | gltf::texture::MinFilter::NearestMipmapLinear
-//             | gltf::texture::MinFilter::NearestMipmapNearest => vk::Filter::NEAREST,
-//         };
-//         mipmap_mode = match min {
-//             gltf::texture::MinFilter::Linear
-//             | gltf::texture::MinFilter::LinearMipmapLinear
-//             | gltf::texture::MinFilter::LinearMipmapNearest => vk::SamplerMipmapMode::LINEAR,
-//             gltf::texture::MinFilter::Nearest
-//             | gltf::texture::MinFilter::NearestMipmapLinear
-//             | gltf::texture::MinFilter::NearestMipmapNearest => vk::SamplerMipmapMode::NEAREST,
-//         };
-//     }
+fn map_sampler(
+    device: Arc<Device>,
+    mip_levels: u32,
+    asset_sampler: &AssetSampler,
+) -> Result<Sampler> {
+    let min_filter = match asset_sampler.min_filter {
+        Filter::Linear => vk::Filter::LINEAR,
+        Filter::Nearest => vk::Filter::NEAREST,
+    };
 
-//     let mut mag_filter = vk::Filter::LINEAR;
-//     if let Some(mag) = sampler.mag_filter() {
-//         mag_filter = match mag {
-//             gltf::texture::MagFilter::Nearest => vk::Filter::NEAREST,
-//             gltf::texture::MagFilter::Linear => vk::Filter::LINEAR,
-//         };
-//     }
+    let mipmap_mode = match asset_sampler.min_filter {
+        Filter::Linear => vk::SamplerMipmapMode::LINEAR,
+        Filter::Nearest => vk::SamplerMipmapMode::NEAREST,
+    };
 
-//     let address_mode_u = match sampler.wrap_s() {
-//         gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-//         gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-//         gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
-//     };
+    let mag_filter = match asset_sampler.mag_filter {
+        Filter::Nearest => vk::Filter::NEAREST,
+        Filter::Linear => vk::Filter::LINEAR,
+    };
 
-//     let address_mode_v = match sampler.wrap_t() {
-//         gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
-//         gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
-//         gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
-//     };
+    let address_mode_u = match asset_sampler.wrap_s {
+        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
 
-//     let address_mode_w = vk::SamplerAddressMode::REPEAT;
+    let address_mode_v = match asset_sampler.wrap_t {
+        WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+    };
 
-//     let sampler_info = vk::SamplerCreateInfo::builder()
-//         .min_filter(min_filter)
-//         .mag_filter(mag_filter)
-//         .address_mode_u(address_mode_u)
-//         .address_mode_v(address_mode_v)
-//         .address_mode_w(address_mode_w)
-//         .anisotropy_enable(true)
-//         .max_anisotropy(16.0)
-//         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-//         .unnormalized_coordinates(false)
-//         .compare_enable(false)
-//         .compare_op(vk::CompareOp::ALWAYS)
-//         .mipmap_mode(mipmap_mode)
-//         .mip_lod_bias(0.0)
-//         .min_lod(0.0)
-//         .max_lod(mip_levels as _);
-//     Sampler::new(device, sampler_info)
-// }
+    let address_mode_w = vk::SamplerAddressMode::REPEAT;
+
+    let sampler_info = vk::SamplerCreateInfo::builder()
+        .min_filter(min_filter)
+        .mag_filter(mag_filter)
+        .address_mode_u(address_mode_u)
+        .address_mode_v(address_mode_v)
+        .address_mode_w(address_mode_w)
+        .anisotropy_enable(true)
+        .max_anisotropy(16.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(mipmap_mode)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(mip_levels as _);
+    Sampler::new(device, sampler_info)
+}

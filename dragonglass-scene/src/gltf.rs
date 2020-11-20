@@ -1,7 +1,8 @@
 use crate::asset::{
-    AlphaMode, Animation, Asset, Camera, Channel, Format, Geometry, Interpolation, Joint, Light,
-    LightKind, Material, Mesh, Node, OrthographicCamera, PerspectiveCamera, Primitive, Projection,
-    Scene, SceneGraph, Skin, Texture, Transform, TransformationSet, Vertex,
+    AlphaMode, Animation, Asset, Camera, Channel, Filter, Format, Geometry, Interpolation, Joint,
+    Light, LightKind, Material, Mesh, Node, OrthographicCamera, PerspectiveCamera, Primitive,
+    Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet, Vertex,
+    WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -40,11 +41,16 @@ const DEFAULT_NAME: &str = "<Unnamed>";
 pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
     let (gltf, buffers, textures) = gltf::import(path)?;
 
-    let textures = load_textures(&textures);
+    let samplers = load_samplers(&gltf);
+    let textures = load_textures(&textures, &samplers);
     let (nodes, geometry) = load_nodes(&gltf, &buffers)?;
     let scenes = load_scenes(&gltf);
     let animations = load_animations(&gltf, &buffers)?;
     let materials = load_materials(&gltf, &buffers)?;
+
+    // Fixme: deal with this
+    log::info!("textures: {}", textures.len());
+    log::info!("gltf textures: {}", gltf.textures().len());
 
     Ok(Asset {
         nodes,
@@ -56,7 +62,53 @@ pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
     })
 }
 
-fn load_textures(textures: &[gltf::image::Data]) -> Vec<Texture> {
+fn load_samplers(document: &gltf::Document) -> Vec<Sampler> {
+    document.samplers().map(map_gltf_sampler).collect()
+}
+
+fn map_gltf_sampler(sampler: gltf::texture::Sampler) -> Sampler {
+    let mut min_filter = Filter::Linear;
+    if let Some(min) = sampler.min_filter() {
+        min_filter = match min {
+            gltf::texture::MinFilter::Linear
+            | gltf::texture::MinFilter::LinearMipmapLinear
+            | gltf::texture::MinFilter::LinearMipmapNearest => Filter::Linear,
+            gltf::texture::MinFilter::Nearest
+            | gltf::texture::MinFilter::NearestMipmapLinear
+            | gltf::texture::MinFilter::NearestMipmapNearest => Filter::Nearest,
+        };
+    }
+
+    let mut mag_filter = Filter::Linear;
+    if let Some(mag) = sampler.mag_filter() {
+        mag_filter = match mag {
+            gltf::texture::MagFilter::Nearest => Filter::Nearest,
+            gltf::texture::MagFilter::Linear => Filter::Linear,
+        };
+    }
+
+    let wrap_s = match sampler.wrap_s() {
+        gltf::texture::WrappingMode::ClampToEdge => WrappingMode::ClampToEdge,
+        gltf::texture::WrappingMode::MirroredRepeat => WrappingMode::MirroredRepeat,
+        gltf::texture::WrappingMode::Repeat => WrappingMode::Repeat,
+    };
+
+    let wrap_t = match sampler.wrap_t() {
+        gltf::texture::WrappingMode::ClampToEdge => WrappingMode::ClampToEdge,
+        gltf::texture::WrappingMode::MirroredRepeat => WrappingMode::MirroredRepeat,
+        gltf::texture::WrappingMode::Repeat => WrappingMode::Repeat,
+    };
+
+    Sampler {
+        name: sampler.name().unwrap_or(DEFAULT_NAME).to_string(),
+        min_filter,
+        mag_filter,
+        wrap_s,
+        wrap_t,
+    }
+}
+
+fn load_textures(textures: &[gltf::image::Data], samplers: &[Sampler]) -> Vec<Texture> {
     textures
         .iter()
         .map(|texture| Texture {
@@ -64,6 +116,7 @@ fn load_textures(textures: &[gltf::image::Data]) -> Vec<Texture> {
             format: map_gltf_format(texture.format),
             width: texture.width,
             height: texture.height,
+            sampler: Sampler::default(),
         })
         .collect()
 }
