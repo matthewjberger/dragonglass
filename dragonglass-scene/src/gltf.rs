@@ -39,18 +39,13 @@ fn node_transform(node: &gltf::Node) -> Transform {
 const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
-    let (gltf, buffers, textures) = gltf::import(path)?;
+    let (gltf, buffers, images) = gltf::import(path)?;
 
-    let samplers = load_samplers(&gltf);
-    let textures = load_textures(&textures, &samplers);
+    let textures = load_textures(&gltf, &images)?;
     let (nodes, geometry) = load_nodes(&gltf, &buffers)?;
     let scenes = load_scenes(&gltf);
     let animations = load_animations(&gltf, &buffers)?;
     let materials = load_materials(&gltf, &buffers)?;
-
-    // Fixme: deal with this
-    log::info!("textures: {}", textures.len());
-    log::info!("gltf textures: {}", gltf.textures().len());
 
     Ok(Asset {
         nodes,
@@ -108,17 +103,33 @@ fn map_gltf_sampler(sampler: gltf::texture::Sampler) -> Sampler {
     }
 }
 
-fn load_textures(textures: &[gltf::image::Data], samplers: &[Sampler]) -> Vec<Texture> {
-    textures
-        .iter()
-        .map(|texture| Texture {
-            pixels: texture.pixels.to_vec(),
-            format: map_gltf_format(texture.format),
-            width: texture.width,
-            height: texture.height,
-            sampler: Sampler::default(),
-        })
-        .collect()
+fn load_textures(gltf: &gltf::Document, images: &[gltf::image::Data]) -> Result<Vec<Texture>> {
+    let samplers = load_samplers(gltf);
+    let mut textures = Vec::new();
+    for texture in gltf.textures() {
+        let sampler_error_message = "Failed to lookup sampler specified by texture!";
+        let sampler = match texture.sampler().index() {
+            Some(sampler_index) => samplers
+                .get(sampler_index)
+                .context(sampler_error_message)?
+                .clone(),
+            None => Sampler::default(),
+        };
+
+        let image_error_message = "Failed to lookup sampler specified by texture!";
+        let image_index = texture.source().index();
+        let image = images.get(image_index).context(image_error_message)?;
+
+        let texture = Texture {
+            pixels: image.pixels.to_vec(),
+            format: map_gltf_format(image.format),
+            width: image.width,
+            height: image.height,
+            sampler,
+        };
+        textures.push(texture);
+    }
+    Ok(textures)
 }
 
 fn map_gltf_format(format: gltf::image::Format) -> Format {
