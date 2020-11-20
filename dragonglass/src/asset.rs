@@ -118,7 +118,11 @@ impl GltfPipelineData {
         for texture in asset.textures.iter() {
             let description = ImageDescription::from_texture(texture)?;
             textures.push(Texture::new(context, command_pool, &description)?);
-            samplers.push(map_sampler(device.clone(), 1, &texture.sampler)?);
+            samplers.push(map_sampler(
+                device.clone(),
+                description.mip_levels,
+                &texture.sampler,
+            )?);
         }
 
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
