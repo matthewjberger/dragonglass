@@ -24,6 +24,7 @@ mod cube;
 mod device;
 mod frame;
 mod hdr;
+mod pipelines;
 mod rendergraph;
 mod resources;
 mod scene;
