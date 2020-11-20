@@ -47,32 +47,6 @@ pub struct PushConstantMaterial {
     pub is_unlit: i32,
 }
 
-impl Default for PushConstantMaterial {
-    fn default() -> Self {
-        Self {
-            base_color_factor: glm::vec4(1.0, 1.0, 1.0, 1.0),
-            emissive_factor: glm::Vec3::identity(),
-            color_texture_index: -1,
-            color_texture_set: -1,
-            metallic_roughness_texture_index: -1,
-            metallic_roughness_texture_set: -1,
-            normal_texture_index: -1,
-            normal_texture_set: -1,
-            normal_texture_scale: 1.0,
-            occlusion_texture_index: -1,
-            occlusion_texture_set: -1,
-            occlusion_strength: 1.0,
-            emissive_texture_index: -1,
-            emissive_texture_set: -1,
-            metallic_factor: 1.0,
-            roughness_factor: 0.0,
-            alpha_mode: AlphaMode::Opaque as i32,
-            alpha_cutoff: 0.0,
-            is_unlit: 0,
-        }
-    }
-}
-
 impl PushConstantMaterial {
     fn from_material(material: &Material) -> Result<Self> {
         Ok(Self {
@@ -464,7 +438,7 @@ impl GltfRenderer {
 
                             PushConstantMaterial::from_material(&primitive_material)?
                         }
-                        None => PushConstantMaterial::default(),
+                        None => PushConstantMaterial::from_material(&Material::default())?,
                     };
 
                     unsafe {

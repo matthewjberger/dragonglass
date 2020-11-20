@@ -218,7 +218,7 @@ pub enum TransformationSet {
     MorphTargetWeights(Vec<f32>),
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Material {
     pub name: String,
     pub base_color_factor: glm::Vec4,
@@ -240,6 +240,33 @@ pub struct Material {
     pub alpha_mode: AlphaMode,
     pub alpha_cutoff: f32,
     pub is_unlit: i32,
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Self {
+            name: "<Unnamed>".to_string(),
+            base_color_factor: glm::vec4(1.0, 1.0, 1.0, 1.0),
+            emissive_factor: glm::Vec3::identity(),
+            color_texture_index: -1,
+            color_texture_set: -1,
+            metallic_roughness_texture_index: -1,
+            metallic_roughness_texture_set: -1,
+            normal_texture_index: -1,
+            normal_texture_set: -1,
+            normal_texture_scale: 1.0,
+            occlusion_texture_index: -1,
+            occlusion_texture_set: -1,
+            occlusion_strength: 1.0,
+            emissive_texture_index: -1,
+            emissive_texture_set: -1,
+            metallic_factor: 1.0,
+            roughness_factor: 0.0,
+            alpha_mode: AlphaMode::Opaque,
+            alpha_cutoff: 0.0,
+            is_unlit: 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
