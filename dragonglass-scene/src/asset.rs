@@ -1,12 +1,34 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
-use ncollide3d::bounding_volume::AABB;
+use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::ops::Index;
 
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+}
+
+impl Scene {
+    // TODO: Add a unit test for this
+    pub fn scene_aabb(&self, nodes: &[Node]) -> Result<AABB<f32>> {
+        let mut aabb: AABB<f32> = AABB::new(Point3::origin(), Point3::origin());
+        for graph in self.graphs.iter() {
+            graph.walk(|node_index| {
+                let index = graph[node_index];
+                let node = &nodes[index];
+                if let Some(mesh) = node.mesh.as_ref() {
+                    for primitive in mesh.primitives.iter() {
+                        let bounding_box = &primitive.aabb;
+                        aabb.take_point(bounding_box.mins);
+                        aabb.take_point(bounding_box.maxs);
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(aabb)
+    }
 }
 
 pub struct Node {
