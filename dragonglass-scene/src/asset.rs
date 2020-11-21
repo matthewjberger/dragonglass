@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use nalgebra_glm as glm;
 use ncollide3d::bounding_volume::AABB;
 use petgraph::prelude::*;
+use std::ops::Index;
 
 pub struct Scene {
     pub name: String,
@@ -341,25 +342,57 @@ impl Default for Filter {
     }
 }
 
-pub type SceneGraph = Graph<usize, ()>;
+pub struct SceneGraph(Graph<usize, ()>);
 
-pub fn walk_scenegraph(
-    graph: &SceneGraph,
-    mut action: impl FnMut(NodeIndex) -> Result<()>,
-) -> Result<()> {
-    let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-    while let Some(node_index) = dfs.next(&graph) {
-        action(node_index)?;
+impl Default for SceneGraph {
+    fn default() -> Self {
+        Self::new()
     }
-    Ok(())
 }
 
-pub fn global_transform(graph: &SceneGraph, index: NodeIndex, nodes: &[Node]) -> glm::Mat4 {
-    let transform = nodes[graph[index]].transform.matrix();
-    let mut incoming_walker = graph.neighbors_directed(index, Incoming).detach();
-    match incoming_walker.next_node(graph) {
-        Some(parent_index) => global_transform(graph, parent_index, nodes) * transform,
-        None => transform,
+impl SceneGraph {
+    pub fn new() -> Self {
+        Self(Graph::<usize, ()>::new())
+    }
+
+    pub fn add_node(&mut self, node: usize) -> NodeIndex {
+        self.0.add_node(node)
+    }
+
+    pub fn add_edge(&mut self, parent_node: NodeIndex, node: NodeIndex) {
+        let _edge_index = self.0.add_edge(parent_node, node, ());
+    }
+
+    pub fn walk(&self, mut action: impl FnMut(NodeIndex) -> Result<()>) -> Result<()> {
+        let mut dfs = Dfs::new(&self.0, NodeIndex::new(0));
+        while let Some(node_index) = dfs.next(&self.0) {
+            action(node_index)?;
+        }
+        Ok(())
+    }
+
+    pub fn global_transform(&self, index: NodeIndex, nodes: &[Node]) -> glm::Mat4 {
+        let transform = nodes[self[index]].transform.matrix();
+        let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
+        match incoming_walker.next_node(&self.0) {
+            Some(parent_index) => self.global_transform(parent_index, nodes) * transform,
+            None => transform,
+        }
+    }
+
+    pub fn find_node(&self, weight: usize) -> Option<NodeIndex> {
+        match self.0.node_indices().find(|i| self[*i] == weight) {
+            Some(index) => Some(index),
+            None => None,
+        }
+    }
+}
+
+impl Index<NodeIndex> for SceneGraph {
+    type Output = usize;
+
+    fn index(&self, index: NodeIndex) -> &Self::Output {
+        &self.0[index]
     }
 }
 
@@ -451,7 +484,7 @@ impl Asset {
 
         let mut number_of_joints = 0;
         for graph in first_scene.graphs.iter() {
-            walk_scenegraph(graph, |node_index| {
+            graph.walk(|node_index| {
                 let node_offset = graph[node_index];
                 if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
                     number_of_joints += skin.joints.len();
@@ -462,20 +495,16 @@ impl Asset {
 
         let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
         for graph in first_scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
+            graph.walk(|node_index| {
                 let node_offset = graph[node_index];
-                let node_transform = global_transform(graph, node_index, &self.nodes);
+                let node_transform = graph.global_transform(node_index, &self.nodes);
                 if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in first_scene.graphs.iter() {
-                                if let Some(index) = graph
-                                    .node_indices()
-                                    .find(|i| graph[*i] == joint.target_node)
-                                {
-                                    transform = global_transform(graph, index, &self.nodes);
+                                if let Some(index) = graph.find_node(joint.target_node) {
+                                    transform = graph.global_transform(index, &self.nodes);
                                 }
                             }
                             transform
@@ -488,7 +517,8 @@ impl Asset {
                         offset += 1;
                     }
                 }
-            }
+                Ok(())
+            })?;
         }
         Ok(joint_matrices)
     }

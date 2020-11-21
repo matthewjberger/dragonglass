@@ -13,17 +13,17 @@ use std::path::Path;
 
 pub fn create_scene_graph(node: &gltf::Node) -> SceneGraph {
     let mut node_graph = SceneGraph::new();
-    graph_node(node, &mut node_graph, NodeIndex::new(0));
+    graph_node(&mut node_graph, node, NodeIndex::new(0));
     node_graph
 }
 
-pub fn graph_node(gltf_node: &gltf::Node, graph: &mut SceneGraph, parent_index: NodeIndex) {
+pub fn graph_node(graph: &mut SceneGraph, gltf_node: &gltf::Node, parent_index: NodeIndex) {
     let index = graph.add_node(gltf_node.index());
     if parent_index != index {
-        graph.add_edge(parent_index, index, ());
+        graph.add_edge(parent_index, index);
     }
     for child in gltf_node.children() {
-        graph_node(&child, graph, index);
+        graph_node(graph, &child, index);
     }
 }
 

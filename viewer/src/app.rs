@@ -1,8 +1,8 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use image::ImageFormat;
 use dragonglass_scene::{load_gltf_asset, Asset};
+use image::ImageFormat;
 use log::{error, info, warn};
 use winit::{
     dpi::PhysicalSize,
@@ -91,20 +91,20 @@ impl App {
             system.handle_event(&event);
             input.handle_event(&event, system.window_center());
 
-            if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
-                *control_flow = ControlFlow::Exit;
-            }
-
-            Self::update_camera(&mut camera, &input, &system);
-
-            if let Some(gltf_asset) = asset.as_mut() {
-                if !gltf_asset.animations.is_empty() {
-                    gltf_asset.animate(0, 0.14 * system.delta_time as f32);
-                }
-            }
-
             match event {
                 Event::MainEventsCleared => {
+                    if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
+                        *control_flow = ControlFlow::Exit;
+                    }
+
+                    Self::update_camera(&mut camera, &input, &system);
+
+                    if let Some(gltf_asset) = asset.as_mut() {
+                        if !gltf_asset.animations.is_empty() {
+                            gltf_asset.animate(0, 0.75 * system.delta_time as f32);
+                        }
+                    }
+
                     if let Err(error) = rendering_device.render(
                         &system.window_dimensions,
                         camera.view_matrix(),

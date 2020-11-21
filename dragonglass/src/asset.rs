@@ -12,11 +12,10 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    global_transform, walk_scenegraph, AlphaMode, Asset, Filter, Geometry, Material, Node,
-    Sampler as AssetSampler, Scene, Vertex, WrappingMode,
+    AlphaMode, Asset, Filter, Geometry, Material, Node, Sampler as AssetSampler, Scene, Vertex,
+    WrappingMode,
 };
 use nalgebra_glm as glm;
-use petgraph::{graph::NodeIndex, visit::Dfs};
 use std::{mem, sync::Arc};
 
 pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
@@ -354,9 +353,9 @@ impl GltfPipelineData {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); nodes.len()];
         let mut joint_offset = 0;
         for graph in scene.graphs.iter() {
-            walk_scenegraph(graph, |node_index| {
+            graph.walk(|node_index| {
                 let offset = graph[node_index];
-                let model = global_transform(graph, node_index, nodes);
+                let model = graph.global_transform(node_index, nodes);
 
                 let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
                 if let Some(skin) = nodes[offset].skin.as_ref() {
@@ -412,13 +411,12 @@ impl GltfRenderer {
             .first()
             .context("Failed to get first scene to render!")?;
         for graph in scene.graphs.iter() {
-            let mut dfs = Dfs::new(graph, NodeIndex::new(0));
-            while let Some(node_index) = dfs.next(&graph) {
+            graph.walk(|node_index| {
                 let node_offset = graph[node_index];
                 let node = &asset.nodes[node_offset];
                 let mesh = match node.mesh.as_ref() {
                     Some(mesh) => mesh,
-                    _ => continue,
+                    _ => return Ok(()),
                 };
 
                 unsafe {
@@ -474,7 +472,8 @@ impl GltfRenderer {
                         }
                     }
                 }
-            }
+                Ok(())
+            })?;
         }
         Ok(())
     }
