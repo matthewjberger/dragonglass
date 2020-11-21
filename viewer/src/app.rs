@@ -2,6 +2,7 @@ use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::Sys
 use anyhow::Result;
 use dragonglass::RenderingDevice;
 use image::ImageFormat;
+use dragonglass_scene::{load_gltf_asset, Asset};
 use log::{error, info, warn};
 use winit::{
     dpi::PhysicalSize,
@@ -13,6 +14,7 @@ use winit::{
 };
 
 pub struct App {
+    asset: Option<Asset>,
     camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
@@ -56,6 +58,7 @@ impl App {
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
 
         let app = Self {
+            asset: None,
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
@@ -74,13 +77,12 @@ impl App {
             mut input,
             mut system,
             mut rendering_device,
+            mut asset,
             event_loop,
             ..
         } = self;
 
         input.allowed = true;
-
-        rendering_device.load_asset("assets/models/DamagedHelmet.glb")?;
 
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
@@ -102,6 +104,7 @@ impl App {
                         camera.view_matrix(),
                         camera.position(),
                         system.delta_time as _,
+                        &mut asset,
                     ) {
                         error!("{}", error);
                     }
@@ -114,11 +117,14 @@ impl App {
                         if let Some(extension) = path.extension() {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
-                                    if let Err(error) = rendering_device.load_asset(raw_path) {
+                                    let gltf_asset = load_gltf_asset(path.clone()).unwrap();
+                                    if let Err(error) = rendering_device.load_asset(&gltf_asset) {
                                         warn!("Failed to load asset: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
                                     info!("Loaded gltf asset: '{}'", raw_path);
+                                    asset = Some(gltf_asset);
+                                    
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {

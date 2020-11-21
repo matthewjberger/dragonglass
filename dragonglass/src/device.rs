@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::{load_gltf_asset, Asset};
+use dragonglass_scene::Asset;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -16,7 +16,6 @@ use std::{path::Path, sync::Arc};
 pub struct RenderingDevice {
     _command_pool: CommandPool,
     frame: Frame,
-    asset: Option<Asset>,
     scene: Scene,
     context: Arc<Context>,
 }
@@ -35,7 +34,6 @@ impl RenderingDevice {
         let renderer = Self {
             _command_pool: command_pool,
             frame,
-            asset: None,
             scene,
             context,
         };
@@ -46,11 +44,8 @@ impl RenderingDevice {
         self.scene.load_skybox(&self.context, path)
     }
 
-    pub fn load_asset(&mut self, path: impl AsRef<Path>) -> Result<()> {
-        self.asset = None;
-        let asset = load_gltf_asset(path)?;
-        self.scene.load_asset(&self.context, &asset)?;
-        self.asset = Some(asset);
+    pub fn load_asset(&mut self, asset: &Asset) -> Result<()> {
+        self.scene.load_asset(&self.context, asset)?;
         Ok(())
     }
 
@@ -60,13 +55,9 @@ impl RenderingDevice {
         view: glm::Mat4,
         camera_position: glm::Vec3,
         delta_time: f32,
+        asset: &mut Option<Asset>,
     ) -> Result<()> {
-        let Self {
-            frame,
-            scene,
-            asset,
-            ..
-        } = self;
+        let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.device.clone();
