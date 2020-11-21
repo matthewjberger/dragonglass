@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
+use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 
 pub struct Scene {
@@ -168,6 +169,7 @@ pub struct Primitive {
     pub number_of_vertices: usize,
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
+    pub aabb: AABB<f32>,
 }
 
 #[derive(Default)]

@@ -99,7 +99,6 @@ impl App {
 
             if let Some(gltf_asset) = asset.as_mut() {
                 if !gltf_asset.animations.is_empty() {
-                    log::info!("delta time: {}", system.delta_time);
                     gltf_asset.animate(0, 0.14 * system.delta_time as f32);
                 }
             }

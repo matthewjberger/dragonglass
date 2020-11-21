@@ -7,6 +7,7 @@ use crate::{
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
 use nalgebra_glm as glm;
+use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
@@ -304,12 +305,18 @@ fn load_primitive(
     let first_vertex = geometry.vertices.len();
     let number_of_indices = load_primitive_indices(primitive, buffers, geometry)?;
     let number_of_vertices = load_primitive_vertices(primitive, buffers, geometry)?;
+    let bounding_box = primitive.bounding_box();
+    let aabb: AABB<f32> = AABB::new(
+        Point3::from_slice(&bounding_box.min),
+        Point3::from_slice(&bounding_box.max),
+    );
     Ok(Primitive {
         first_index,
         first_vertex,
         number_of_indices,
         number_of_vertices,
         material_index: primitive.material().index(),
+        aabb,
     })
 }
 
