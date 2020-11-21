@@ -1,8 +1,8 @@
 use crate::{
     AlphaMode, Animation, Asset, Camera, Channel, Filter, Format, Geometry, Interpolation, Joint,
-    Light, LightKind, Material, Mesh, Node, NodeKind, OrthographicCamera, PerspectiveCamera,
-    Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet,
-    Vertex, WrappingMode,
+    Light, LightKind, Material, Mesh, Node, OrthographicCamera, PerspectiveCamera, Primitive,
+    Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet, Vertex,
+    WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -215,27 +215,33 @@ fn load_nodes(
     let nodes = gltf
         .nodes()
         .map(|node| {
-            let mut kind = NodeKind::Empty;
-            if let Some(camera) = node.camera() {
-                kind = NodeKind::Camera(load_camera(&camera)?);
-            }
+            let camera = match node.camera() {
+                Some(camera) => Some(load_camera(&camera)?),
+                None => None,
+            };
 
-            if let Some(mesh) = node.mesh() {
-                kind = NodeKind::Mesh(load_mesh(&mesh, buffers, &mut geometry)?);
-            }
+            let mesh = match node.mesh() {
+                Some(mesh) => Some(load_mesh(&mesh, buffers, &mut geometry)?),
+                None => None,
+            };
 
-            if let Some(skin) = node.skin() {
-                kind = NodeKind::Skin(load_skin(&skin, buffers));
-            }
+            let skin = match node.skin() {
+                Some(skin) => Some(load_skin(&skin, buffers)),
+                None => None,
+            };
 
-            if let Some(light) = node.light() {
-                kind = NodeKind::Light(load_light(&light));
-            }
+            let light = match node.light() {
+                Some(light) => Some(load_light(&light)),
+                None => None,
+            };
 
             Ok(Node {
                 name: node.name().unwrap_or(DEFAULT_NAME).to_string(),
                 transform: node_transform(&node),
-                kind,
+                camera,
+                mesh,
+                skin,
+                light,
             })
         })
         .collect::<Result<_>>()?;

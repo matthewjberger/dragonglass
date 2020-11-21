@@ -13,7 +13,7 @@ use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
     global_transform, walk_scenegraph, AlphaMode, Asset, Filter, Geometry, Material, Node,
-    NodeKind, Sampler as AssetSampler, Scene, Vertex, WrappingMode,
+    Sampler as AssetSampler, Scene, Vertex, WrappingMode,
 };
 use nalgebra_glm as glm;
 use petgraph::{graph::NodeIndex, visit::Dfs};
@@ -359,7 +359,7 @@ impl GltfPipelineData {
                 let model = global_transform(graph, node_index, nodes);
 
                 let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
-                if let NodeKind::Skin(skin) = &nodes[offset].kind {
+                if let Some(skin) = nodes[offset].skin.as_ref() {
                     let joint_count = skin.joints.len();
                     joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
                     joint_offset += joint_count;
@@ -416,8 +416,8 @@ impl GltfRenderer {
             while let Some(node_index) = dfs.next(&graph) {
                 let node_offset = graph[node_index];
                 let node = &asset.nodes[node_offset];
-                let mesh = match &node.kind {
-                    NodeKind::Mesh(mesh) => mesh,
+                let mesh = match node.mesh.as_ref() {
+                    Some(mesh) => mesh,
                     _ => continue,
                 };
 
