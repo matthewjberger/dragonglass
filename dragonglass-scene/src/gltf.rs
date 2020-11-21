@@ -1,8 +1,8 @@
-use crate::asset::{
+use crate::{
     AlphaMode, Animation, Asset, Camera, Channel, Filter, Format, Geometry, Interpolation, Joint,
-    Light, LightKind, Material, Mesh, Node, OrthographicCamera, PerspectiveCamera, Primitive,
-    Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet, Vertex,
-    WrappingMode,
+    Light, LightKind, Material, Mesh, Node, NodeKind, OrthographicCamera, PerspectiveCamera,
+    Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet,
+    Vertex, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -215,73 +215,76 @@ fn load_nodes(
     let nodes = gltf
         .nodes()
         .map(|node| {
+            let mut kind = NodeKind::Node;
+            if let Some(camera) = node.camera() {
+                kind = NodeKind::Camera(load_camera(&camera)?);
+            }
+
+            if let Some(mesh) = node.mesh() {
+                kind = NodeKind::Mesh(load_mesh(&mesh, buffers, &mut geometry)?);
+            }
+
+            if let Some(skin) = node.skin() {
+                kind = NodeKind::Skin(load_skin(&skin, buffers));
+            }
+
+            if let Some(light) = node.light() {
+                kind = NodeKind::Light(load_light(&light));
+            }
+
             Ok(Node {
                 name: node.name().unwrap_or(DEFAULT_NAME).to_string(),
                 transform: node_transform(&node),
-                camera: load_camera(&node)?,
-                mesh: load_mesh(&node, buffers, &mut geometry)?,
-                skin: load_skin(&node, buffers),
-                light: load_light(&node),
+                kind,
             })
         })
         .collect::<Result<_>>()?;
     Ok((nodes, geometry))
 }
 
-fn load_camera(node: &gltf::Node) -> Result<Option<Camera>> {
-    match node.camera() {
-        Some(camera) => {
-            let projection = match camera.projection() {
-                gltf::camera::Projection::Perspective(camera) => {
-                    Projection::Perspective(PerspectiveCamera {
-                        aspect_ratio: camera.aspect_ratio(),
-                        y_fov_deg: camera.yfov(),
-                        z_far: camera.zfar(),
-                        z_near: camera.znear(),
-                    })
-                }
-                gltf::camera::Projection::Orthographic(camera) => {
-                    Projection::Orthographic(OrthographicCamera {
-                        x_mag: camera.xmag(),
-                        y_mag: camera.ymag(),
-                        z_far: camera.zfar(),
-                        z_near: camera.znear(),
-                    })
-                }
-            };
-            log::info!("Loaded camera with projection: {:#?}", projection);
-            Ok(Some(Camera {
-                name: camera.name().unwrap_or(DEFAULT_NAME).to_string(),
-                projection,
-            }))
+fn load_camera(camera: &gltf::Camera) -> Result<Camera> {
+    let projection = match camera.projection() {
+        gltf::camera::Projection::Perspective(camera) => {
+            Projection::Perspective(PerspectiveCamera {
+                aspect_ratio: camera.aspect_ratio(),
+                y_fov_deg: camera.yfov(),
+                z_far: camera.zfar(),
+                z_near: camera.znear(),
+            })
         }
-        None => Ok(None),
-    }
+        gltf::camera::Projection::Orthographic(camera) => {
+            Projection::Orthographic(OrthographicCamera {
+                x_mag: camera.xmag(),
+                y_mag: camera.ymag(),
+                z_far: camera.zfar(),
+                z_near: camera.znear(),
+            })
+        }
+    };
+    Ok(Camera {
+        name: camera.name().unwrap_or(DEFAULT_NAME).to_string(),
+        projection,
+    })
 }
 
 fn load_mesh(
-    node: &gltf::Node,
+    mesh: &gltf::Mesh,
     buffers: &[gltf::buffer::Data],
     geometry: &mut Geometry,
-) -> Result<Option<Mesh>> {
-    match node.mesh() {
-        Some(mesh) => {
-            let primitives = mesh
-                .primitives()
-                .map(|primitive| load_primitive(&primitive, buffers, geometry))
-                .collect::<Result<Vec<_>>>()?;
-            let weights = match mesh.weights() {
-                Some(weights) => Some(weights.to_vec()),
-                None => None,
-            };
-            Ok(Some(Mesh {
-                name: mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
-                primitives,
-                weights,
-            }))
-        }
-        None => Ok(None),
-    }
+) -> Result<Mesh> {
+    let primitives = mesh
+        .primitives()
+        .map(|primitive| load_primitive(&primitive, buffers, geometry))
+        .collect::<Result<Vec<_>>>()?;
+    let weights = match mesh.weights() {
+        Some(weights) => Some(weights.to_vec()),
+        None => None,
+    };
+    Ok(Mesh {
+        name: mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
+        primitives,
+        weights,
+    })
 }
 
 fn load_primitive(
@@ -488,25 +491,16 @@ fn load_materials(gltf: &gltf::Document, buffers: &[gltf::buffer::Data]) -> Resu
     Ok(materials)
 }
 
-fn load_skin(node: &gltf::Node, buffers: &[gltf::buffer::Data]) -> Option<Skin> {
-    match node.skin() {
-        Some(skin) => {
-            let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
-
-            let inverse_bind_matrices = reader
-                .read_inverse_bind_matrices()
-                .map_or(Vec::new(), |matrices| {
-                    matrices.map(glm::Mat4::from).collect::<Vec<_>>()
-                });
-
-            let joints = load_joints(&skin, &inverse_bind_matrices);
-
-            let name = skin.name().unwrap_or(DEFAULT_NAME).to_string();
-
-            Some(Skin { joints, name })
-        }
-        None => None,
-    }
+fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data]) -> Skin {
+    let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
+    let inverse_bind_matrices = reader
+        .read_inverse_bind_matrices()
+        .map_or(Vec::new(), |matrices| {
+            matrices.map(glm::Mat4::from).collect::<Vec<_>>()
+        });
+    let joints = load_joints(&skin, &inverse_bind_matrices);
+    let name = skin.name().unwrap_or(DEFAULT_NAME).to_string();
+    Skin { joints, name }
 }
 
 fn load_joints(skin: &gltf::Skin, inverse_bind_matrices: &[glm::Mat4]) -> Vec<Joint> {
@@ -524,16 +518,13 @@ fn load_joints(skin: &gltf::Skin, inverse_bind_matrices: &[glm::Mat4]) -> Vec<Jo
         .collect()
 }
 
-fn load_light(node: &gltf::Node) -> Option<Light> {
-    match node.light() {
-        Some(light) => Some(Light {
-            name: light.name().unwrap_or(DEFAULT_NAME).to_string(),
-            color: glm::make_vec3(&light.color()),
-            intensity: light.intensity(),
-            range: light.range().unwrap_or(-1.0), // if no range is present, range is assumed to be infinite
-            kind: map_gltf_light_kind(light.kind()),
-        }),
-        None => None,
+fn load_light(light: &gltf::khr_lights_punctual::Light) -> Light {
+    Light {
+        name: light.name().unwrap_or(DEFAULT_NAME).to_string(),
+        color: glm::make_vec3(&light.color()),
+        intensity: light.intensity(),
+        range: light.range().unwrap_or(-1.0), // if no range is present, range is assumed to be infinite
+        kind: map_gltf_light_kind(light.kind()),
     }
 }
 

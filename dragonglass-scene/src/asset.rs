@@ -10,10 +10,15 @@ pub struct Scene {
 pub struct Node {
     pub name: String,
     pub transform: Transform,
-    pub camera: Option<Camera>,
-    pub mesh: Option<Mesh>,
-    pub skin: Option<Skin>,
-    pub light: Option<Light>,
+    pub kind: NodeKind,
+}
+
+pub enum NodeKind {
+    Node,
+    Camera(Camera),
+    Mesh(Mesh),
+    Skin(Skin),
+    Light(Light),
 }
 
 #[derive(Debug)]
@@ -451,7 +456,7 @@ impl Asset {
         for graph in first_scene.graphs.iter() {
             walk_scenegraph(graph, |node_index| {
                 let node_offset = graph[node_index];
-                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
+                if let NodeKind::Skin(skin) = &self.nodes[node_offset].kind {
                     number_of_joints += skin.joints.len();
                 }
                 Ok(())
@@ -464,7 +469,7 @@ impl Asset {
             while let Some(node_index) = dfs.next(&graph) {
                 let node_offset = graph[node_index];
                 let node_transform = global_transform(graph, node_index, &self.nodes);
-                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
+                if let NodeKind::Skin(skin) = &self.nodes[node_offset].kind {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
