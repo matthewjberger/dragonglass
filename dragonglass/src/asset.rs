@@ -536,7 +536,7 @@ impl AssetRendering {
             .shader_set(shader_set)
             .rasterization_samples(samples)
             .sample_shading_enabled(true)
-            .cull_mode(vk::CullModeFlags::NONE)
+            .cull_mode(vk::CullModeFlags::BACK)
             .push_constant_range(push_constant_range);
 
         let mut blend_settings = settings.clone();
