@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
-use ncollide3d::{bounding_volume::AABB, na::Point3};
+use ncollide3d::bounding_volume::AABB;
 use petgraph::prelude::*;
 
 pub struct Scene {
