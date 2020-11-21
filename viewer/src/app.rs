@@ -97,14 +97,20 @@ impl App {
 
             Self::update_camera(&mut camera, &input, &system);
 
+            if let Some(gltf_asset) = asset.as_mut() {
+                if !gltf_asset.animations.is_empty() {
+                    log::info!("delta time: {}", system.delta_time);
+                    gltf_asset.animate(0, 0.14 * system.delta_time as f32);
+                }
+            }
+
             match event {
                 Event::MainEventsCleared => {
                     if let Err(error) = rendering_device.render(
                         &system.window_dimensions,
                         camera.view_matrix(),
                         camera.position(),
-                        system.delta_time as _,
-                        &mut asset,
+                        &asset,
                     ) {
                         error!("{}", error);
                     }

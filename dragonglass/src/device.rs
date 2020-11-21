@@ -54,8 +54,7 @@ impl RenderingDevice {
         dimensions: &[u32; 2],
         view: glm::Mat4,
         camera_position: glm::Vec3,
-        delta_time: f32,
-        asset: &mut Option<Asset>,
+        asset: &Option<Asset>,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -63,11 +62,8 @@ impl RenderingDevice {
         let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
-            if let Some(asset) = asset.as_mut() {
+            if let Some(asset) = asset.as_ref() {
                 if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
-                    if !asset.animations.is_empty() {
-                        asset.animate(0, 0.75 * delta_time);
-                    }
                     asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
                     let projection =
                         glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
