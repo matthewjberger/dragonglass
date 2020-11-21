@@ -14,7 +14,7 @@ pub struct Node {
 }
 
 pub enum NodeKind {
-    Node,
+    Empty,
     Camera(Camera),
     Mesh(Mesh),
     Skin(Skin),

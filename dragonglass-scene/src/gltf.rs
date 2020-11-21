@@ -215,7 +215,7 @@ fn load_nodes(
     let nodes = gltf
         .nodes()
         .map(|node| {
-            let mut kind = NodeKind::Node;
+            let mut kind = NodeKind::Empty;
             if let Some(camera) = node.camera() {
                 kind = NodeKind::Camera(load_camera(&camera)?);
             }
