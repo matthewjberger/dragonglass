@@ -502,11 +502,37 @@ impl Asset {
                             let scale_vec = glm::mix(&start, &end, interpolation);
                             self.nodes[channel.target_node].transform.scale = scale_vec;
                         }
-                        TransformationSet::MorphTargetWeights(weights) => {
-                            let start = weights[previous_key];
-                            let end = weights[next_key];
-                            let _weight = glm::lerp_scalar(start, end, interpolation);
-                            // TODO: Assign this weight somewhere...
+                        TransformationSet::MorphTargetWeights(animation_weights) => {
+                            match self.nodes[channel.target_node].mesh.as_mut() {
+                                Some(mesh) => {
+                                    let number_of_mesh_weights = mesh.weights.len();
+                                    if animation_weights.len() % number_of_mesh_weights != 0 {
+                                        log::warn!("Animation channel's weights are not a multiple of the mesh's weights: (channel) {} % (mesh) {} != 0", number_of_mesh_weights, animation_weights.len());
+                                        continue;
+                                    }
+                                    let weights = animation_weights
+                                        .as_slice()
+                                        .chunks(number_of_mesh_weights)
+                                        .collect::<Vec<_>>();
+                                    let start = weights[previous_key];
+                                    let end = weights[next_key];
+                                    for index in 0..number_of_mesh_weights {
+                                        mesh.weights[index] = glm::lerp_scalar(
+                                            start[index],
+                                            end[index],
+                                            interpolation,
+                                        );
+                                    }
+                                    log::info!(
+                                        "mesh weights at {}: {:?}",
+                                        animation.time,
+                                        mesh.weights
+                                    );
+                                }
+                                None => {
+                                    log::warn!("Animation channel's target node animates morph target weights, but node has no mesh!");
+                                }
+                            }
                         }
                     }
                 }
