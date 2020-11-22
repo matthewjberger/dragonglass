@@ -523,11 +523,6 @@ impl Asset {
                                             interpolation,
                                         );
                                     }
-                                    log::info!(
-                                        "mesh weights at {}: {:?}",
-                                        animation.time,
-                                        mesh.weights
-                                    );
                                 }
                                 None => {
                                     log::warn!("Animation channel's target node animates morph target weights, but node has no mesh!");
