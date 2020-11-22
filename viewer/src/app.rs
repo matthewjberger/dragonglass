@@ -129,7 +129,6 @@ impl App {
                                     camera = OrbitalCamera::default();
                                     info!("Loaded gltf asset: '{}'", raw_path);
                                     asset = Some(gltf_asset);
-                                    
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {

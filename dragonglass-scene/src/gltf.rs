@@ -46,7 +46,7 @@ pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
     let (nodes, geometry) = load_nodes(&gltf, &buffers)?;
     let scenes = load_scenes(&gltf);
     let animations = load_animations(&gltf, &buffers)?;
-    let materials = load_materials(&gltf, &buffers)?;
+    let materials = load_materials(&gltf)?;
 
     Ok(Asset {
         nodes,
@@ -496,7 +496,7 @@ fn map_gltf_interpolation(interpolation: gltf::animation::Interpolation) -> Inte
     }
 }
 
-fn load_materials(gltf: &gltf::Document, buffers: &[gltf::buffer::Data]) -> Result<Vec<Material>> {
+fn load_materials(gltf: &gltf::Document) -> Result<Vec<Material>> {
     let mut materials = Vec::new();
     for material in gltf.materials() {
         materials.push(load_material(&material)?);
