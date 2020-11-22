@@ -558,7 +558,7 @@ fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data]) -> Skin {
         .map_or(Vec::new(), |matrices| {
             matrices.map(glm::Mat4::from).collect::<Vec<_>>()
         });
-    let joints = load_joints(&skin, &inverse_bind_matrices);
+    let joints = load_joints(skin, &inverse_bind_matrices);
     let name = skin.name().unwrap_or(DEFAULT_NAME).to_string();
     Skin { joints, name }
 }

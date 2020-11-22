@@ -78,6 +78,8 @@ pub struct AssetUniformBuffer {
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,
     pub joint_matrices: [glm::Mat4; GltfPipelineData::MAX_NUMBER_OF_JOINTS],
+    pub morph_targets: [glm::Vec4; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGETS],
+    pub morph_target_weights: [f32; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -87,6 +89,10 @@ pub struct NodeDynamicUniformBuffer {
     // Y value is the joint matrix offset.
     // A vec4 is necessary for proper alignment
     pub joint_info: glm::Vec4,
+    // X value is the morph target weight count.
+    // Y value is the morph target weight offset.
+    // A vec4 is necessary for proper alignment
+    pub morph_target_info: glm::Vec4,
 }
 
 pub struct GltfPipelineData {
@@ -107,6 +113,8 @@ impl GltfPipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
     pub const MAX_NUMBER_OF_JOINTS: usize = 128;
+    pub const MAX_NUMBER_OF_MORPH_TARGETS: usize = 128;
+    pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
         let device = context.device.clone();
@@ -364,7 +372,14 @@ impl GltfPipelineData {
                     joint_offset += joint_count;
                 }
 
-                buffers[offset] = NodeDynamicUniformBuffer { model, joint_info };
+                let mut morph_target_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+                // FIXME: Update morph target info
+
+                buffers[offset] = NodeDynamicUniformBuffer {
+                    model,
+                    joint_info,
+                    morph_target_info,
+                };
 
                 Ok(())
             })?;

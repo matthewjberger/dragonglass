@@ -78,11 +78,27 @@ impl RenderingDevice {
                         .zip(asset.joint_matrices()?.into_iter())
                         .for_each(|(a, b)| *a = b);
 
+                    let mut morph_targets =
+                        [glm::Vec4::identity(); GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
+                    morph_targets
+                        .iter_mut()
+                        .zip(asset.morph_targets()?.into_iter())
+                        .for_each(|(a, b)| *a = b);
+
+                    let mut morph_target_weights =
+                        [0.0; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
+                    morph_target_weights
+                        .iter_mut()
+                        .zip(asset.morph_target_weights()?.into_iter())
+                        .for_each(|(a, b)| *a = b);
+
                     let ubo = AssetUniformBuffer {
                         view,
                         projection,
                         camera_position,
                         joint_matrices,
+                        morph_targets,
+                        morph_target_weights,
                     };
                     asset_rendering
                         .pipeline_data
