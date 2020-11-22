@@ -10,18 +10,24 @@ pub struct Scene {
 }
 
 impl Scene {
-    // TODO: Add a unit test for this
     pub fn scene_aabb(&self, nodes: &[Node]) -> Result<AABB<f32>> {
         let mut aabb: AABB<f32> = AABB::new(Point3::origin(), Point3::origin());
         for graph in self.graphs.iter() {
             graph.walk(|node_index| {
                 let index = graph[node_index];
                 let node = &nodes[index];
+                let transform = graph.global_transform(node_index, nodes);
                 if let Some(mesh) = node.mesh.as_ref() {
                     for primitive in mesh.primitives.iter() {
                         let bounding_box = &primitive.aabb;
-                        aabb.take_point(bounding_box.mins);
-                        aabb.take_point(bounding_box.maxs);
+                        let mut min = glm::vec3_to_vec4(&bounding_box.mins.coords);
+                        min.w = 1.0;
+                        min = transform * min;
+                        let mut max = glm::vec3_to_vec4(&bounding_box.maxs.coords);
+                        max.w = 1.0;
+                        max = transform * max;
+                        aabb.take_point(Point3::from_slice(min.xyz().as_slice()));
+                        aabb.take_point(Point3::from_slice(max.xyz().as_slice()));
                     }
                 }
                 Ok(())

@@ -54,6 +54,7 @@ impl RenderingDevice {
         dimensions: &[u32; 2],
         view: glm::Mat4,
         camera_position: glm::Vec3,
+        transform: glm::Mat4,
         asset: &Option<Asset>,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
@@ -62,11 +63,12 @@ impl RenderingDevice {
         let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
+            let projection =
+                glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
             if let Some(asset) = asset.as_ref() {
                 if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
                     asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
-                    let projection =
-                        glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
                     let mut camera_position = glm::vec3_to_vec4(&camera_position);
                     camera_position.w = 1.0;
@@ -79,6 +81,7 @@ impl RenderingDevice {
                         .for_each(|(a, b)| *a = b);
 
                     let ubo = AssetUniformBuffer {
+                        model: transform,
                         view,
                         projection,
                         camera_position,
@@ -91,9 +94,6 @@ impl RenderingDevice {
                 }
             }
 
-            // TODO: This is decoupled from scene projection matrix for now
-            let projection =
-                glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
             scene.skybox_rendering.projection = projection;
             scene.skybox_rendering.view = view;
 

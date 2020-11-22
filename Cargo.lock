@@ -1709,6 +1709,7 @@ dependencies = [
  "image",
  "log",
  "nalgebra-glm",
+ "ncollide3d",
  "serde 1.0.117",
  "simplelog",
  "toml",

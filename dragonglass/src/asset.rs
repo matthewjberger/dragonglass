@@ -74,6 +74,7 @@ impl PushConstantMaterial {
 
 #[derive(Debug, Clone, Copy)]
 pub struct AssetUniformBuffer {
+    pub model: glm::Mat4,
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,

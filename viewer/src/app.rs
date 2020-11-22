@@ -4,6 +4,8 @@ use dragonglass::RenderingDevice;
 use dragonglass_scene::{load_gltf_asset, Asset};
 use image::ImageFormat;
 use log::{error, info, warn};
+use nalgebra_glm as glm;
+use ncollide3d::{bounding_volume::AABB, na::Point3};
 use winit::{
     dpi::PhysicalSize,
     event::ElementState,
@@ -84,6 +86,8 @@ impl App {
 
         input.allowed = true;
 
+        let mut aabb: AABB<f32> = AABB::new(Point3::origin(), Point3::origin());
+
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -105,10 +109,14 @@ impl App {
                         }
                     }
 
+                    let scale = 1.0 / aabb.half_extents().max();
+                    let scale = glm::vec3(scale, scale, scale);
+                    let translation = -aabb.center().coords;
                     if let Err(error) = rendering_device.render(
                         &system.window_dimensions,
                         camera.view_matrix(),
                         camera.position(),
+               glm::translation(&translation) * glm::scaling(&scale) ,
                         &asset,
                     ) {
                         error!("{}", error);
@@ -126,10 +134,13 @@ impl App {
                                     if let Err(error) = rendering_device.load_asset(&gltf_asset) {
                                         warn!("Failed to load asset: {}", error);
                                     }
+                                    match gltf_asset.scenes[0].scene_aabb(&gltf_asset.nodes) {
+                                        Ok(scene_aabb) => aabb = scene_aabb,
+                                        Err(error) => warn!("Failed to calculate first scene's aabb: {}", error),
+                                    }
                                     camera = OrbitalCamera::default();
                                     info!("Loaded gltf asset: '{}'", raw_path);
                                     asset = Some(gltf_asset);
-                                    
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {
@@ -170,9 +181,9 @@ impl App {
         if !input.allowed {
             return;
         }
-        let scroll_multiplier = 0.01;
-        let rotation_multiplier = 0.05;
-        let drag_multiplier = 0.001;
+        let scroll_multiplier = 0.05;
+        let rotation_multiplier = 0.1;
+        let drag_multiplier = 0.01;
 
         camera.forward(input.mouse.wheel_delta.y * scroll_multiplier);
 

@@ -12,6 +12,7 @@ layout(location=6) in vec3 inColor0;
 #define MAX_NUMBER_OF_JOINTS 128
 
 layout(binding=0) uniform UboView{
+  mat4 model;
   mat4 view;
   mat4 projection;
   vec4 cameraPosition;
@@ -43,7 +44,7 @@ void main()
   }
   mat4 skinnedModel = uboInstance.model * skinMatrix;
 
-  gl_Position = uboView.projection * uboView.view * skinnedModel * vec4(inPosition, 1.0);
+  gl_Position = uboView.projection * uboView.view * uboView.model * skinnedModel * vec4(inPosition, 1.0);
 
   outPosition = inPosition; 
   outNormal = normalize(transpose(inverse(mat3(skinnedModel))) * inNormal);
