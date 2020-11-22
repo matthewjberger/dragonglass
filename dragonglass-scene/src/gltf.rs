@@ -1,8 +1,8 @@
 use crate::{
     AlphaMode, Animation, Asset, Camera, Channel, Filter, Format, Geometry, Interpolation, Joint,
-    Light, LightKind, Material, Mesh, Node, OrthographicCamera, PerspectiveCamera, Primitive,
-    Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet, Vertex,
-    WrappingMode,
+    Light, LightKind, Material, Mesh, MorphTarget, Node, OrthographicCamera, PerspectiveCamera,
+    Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet,
+    Vertex, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -284,8 +284,8 @@ fn load_mesh(
         .map(|primitive| load_primitive(&primitive, buffers, geometry))
         .collect::<Result<Vec<_>>>()?;
     let weights = match mesh.weights() {
-        Some(weights) => Some(weights.to_vec()),
-        None => None,
+        Some(weights) => weights.to_vec(),
+        None => Vec::new(),
     };
     Ok(Mesh {
         name: mesh.name().unwrap_or(DEFAULT_NAME).to_string(),
@@ -306,6 +306,7 @@ fn load_primitive(
     let number_of_indices = load_primitive_indices(primitive, buffers, geometry)?;
     let number_of_vertices = load_primitive_vertices(primitive, buffers, geometry)?;
     let bounding_box = primitive.bounding_box();
+    let morph_targets = load_morph_targets(primitive, buffers)?;
     let aabb: AABB<f32> = AABB::new(
         Point3::from_slice(&bounding_box.min),
         Point3::from_slice(&bounding_box.max),
@@ -315,6 +316,7 @@ fn load_primitive(
         first_vertex,
         number_of_indices,
         number_of_vertices,
+        morph_targets,
         material_index: primitive.material().index(),
         aabb,
     })
@@ -418,6 +420,51 @@ fn load_primitive_indices(
     } else {
         Ok(0)
     }
+}
+
+fn load_morph_targets(
+    primitive: &gltf::Primitive,
+    buffers: &[gltf::buffer::Data],
+) -> Result<Vec<MorphTarget>> {
+    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+    let mut morph_targets = Vec::new();
+    for (mut position_displacements, mut normal_displacements, mut tangent_displacements) in
+        reader.read_morph_targets()
+    {
+        let positions = match position_displacements.as_mut() {
+            Some(position_displacements) => position_displacements
+                .map(glm::Vec3::from)
+                .map(|v| glm::vec3_to_vec4(&v))
+                .collect::<Vec<_>>(),
+            None => Vec::new(),
+        };
+
+        let normals = match normal_displacements.as_mut() {
+            Some(normal_displacements) => normal_displacements
+                .map(glm::Vec3::from)
+                .map(|v| glm::vec3_to_vec4(&v))
+                .collect::<Vec<_>>(),
+            None => Vec::new(),
+        };
+
+        let tangents = match tangent_displacements.as_mut() {
+            Some(tangent_displacements) => tangent_displacements
+                .map(glm::Vec3::from)
+                .map(|v| glm::vec3_to_vec4(&v))
+                .collect::<Vec<_>>(),
+            None => Vec::new(),
+        };
+
+        let morph_target = MorphTarget {
+            positions,
+            normals,
+            tangents,
+        };
+        morph_targets.push(morph_target);
+    }
+
+    Ok(morph_targets)
 }
 
 fn load_animations(

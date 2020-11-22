@@ -182,7 +182,7 @@ pub struct Joint {
 pub struct Mesh {
     pub name: String,
     pub primitives: Vec<Primitive>,
-    pub weights: Option<Vec<f32>>,
+    pub weights: Vec<f32>,
 }
 
 #[derive(Debug)]
@@ -192,7 +192,21 @@ pub struct Primitive {
     pub number_of_vertices: usize,
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
+    pub morph_targets: Vec<MorphTarget>,
     pub aabb: AABB<f32>,
+}
+
+#[derive(Debug)]
+pub struct MorphTarget {
+    pub positions: Vec<glm::Vec4>,
+    pub normals: Vec<glm::Vec4>,
+    pub tangents: Vec<glm::Vec4>,
+}
+
+impl MorphTarget {
+    pub fn total_length(&self) -> usize {
+        self.positions.len() + self.normals.len() + self.tangents.len()
+    }
 }
 
 #[derive(Default)]
