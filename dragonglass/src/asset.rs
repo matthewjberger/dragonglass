@@ -92,7 +92,7 @@ pub struct NodeDynamicUniformBuffer {
     // X value is the morph target weight count.
     // Y value is the morph target weight offset.
     // A vec4 is necessary for proper alignment
-    pub morph_target_info: glm::Vec4,
+    pub morph_target_weight_info: glm::Vec4,
 }
 
 pub struct GltfPipelineData {
@@ -360,6 +360,7 @@ impl GltfPipelineData {
     fn update_node_ubos(&self, scene: &Scene, nodes: &[Node]) -> Result<()> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); nodes.len()];
         let mut joint_offset = 0;
+        let mut weight_offset = 0;
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let offset = graph[node_index];
@@ -373,12 +374,17 @@ impl GltfPipelineData {
                 }
 
                 let mut morph_target_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
-                // FIXME: Update morph target info
+                if let Some(mesh) = nodes[offset].mesh.as_ref() {
+                    let weight_count = mesh.weights.len();
+                    morph_target_info =
+                        glm::vec4(weight_count as f32, weight_offset as f32, 0.0, 0.0);
+                    weight_offset += weight_count;
+                }
 
                 buffers[offset] = NodeDynamicUniformBuffer {
                     model,
                     joint_info,
-                    morph_target_info,
+                    morph_target_weight_info: morph_target_info,
                 };
 
                 Ok(())

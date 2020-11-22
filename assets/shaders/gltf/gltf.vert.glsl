@@ -25,6 +25,7 @@ layout(binding=0) uniform UboView{
 layout(binding=1) uniform UboInstance{
   mat4 model;
   vec4 joint_info;
+  vec4 morph_target_weight_info;
 } uboInstance;
 
 layout(location=0) out vec3 outPosition;
