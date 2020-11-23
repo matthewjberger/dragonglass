@@ -4,4 +4,5 @@ members = [
   "dragonglass-scene",
   "shader-compilation",
   "viewer",
+  "viewer-vr",
 ]

@@ -1,19 +1,16 @@
 [package]
-name = "viewer"
+name = "viewer-vr"
 version = "0.1.0"
 authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
-default-run = "viewer"
 
 [dependencies]
+ash = "0.31"
 anyhow = "1.0.34"
-config = "0.10.1"
+ctrlc = "3.1.5"
 dragonglass = { path = "../dragonglass" }
 dragonglass-scene = { path = "../dragonglass-scene" }
-image = "0.23.11"
 log = "0.4.11"
 nalgebra-glm = "0.9.0"
-serde = { version = "1.0.117", features = ["derive"] }
+openxr = { version = "0.13.1", features = ["static"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
-toml = "0.5.7"
-winit = "0.23.0"
