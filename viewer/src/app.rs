@@ -287,6 +287,71 @@ impl App {
             );
         }
 
+        // TODO: Create physical device from raw ptr like this
+        // let vk_physical_device = vk::PhysicalDevice::from_raw(
+        //     xr_instance.vulkan_graphics_device(xr_system, vk_instance.handle().as_raw() as _)? as _,
+        // );
+
+        /********* Vulkan Multiview ******/
+        // TODO: Get physical device properties and make sure it supports Vulkan version 1.1
+
+        // TODO: Add multiview PhysicalDeviceVulkan11Feature
+        // in the create_info for the logical device,
+        // push_next(&mut vk::PhysicalDeviceVulkan11Features {
+        //     multiview: vk::TRUE,
+        //     ..Default::default()
+        // })
+
+        let view_count = 2;
+        let view_mask = !(!0 << view_count);
+        // TODO: When specifying scene renderpass, add this to the end
+        // .push_next(
+        //     &mut vk::RenderPassMultiviewCreateInfo::builder()
+        //         .view_masks(&[view_mask])
+        //         .correlation_masks(&[view_mask]),
+        // ),
+        /*********************************/
+
+        // Create session, using instance, physical device, and logical device from Vulkan context in renderer
+        // Note: This doesn't start the session
+        //
+        // let (session, mut frame_wait, mut frame_stream) = xr_instance
+        //     .create_session::<xr::Vulkan>(
+        //         system,
+        //         &xr::vulkan::SessionCreateInfo {
+        //             instance: vk_instance.handle().as_raw() as _,
+        //             physical_device: vk_physical_device.as_raw() as _,
+        //             device: vk_device.handle().as_raw() as _,
+        //             queue_family_index,
+        //             queue_index: 0,
+        //         },
+        //     )?;
+
+        // OpenXR uses a couple different types of reference frames for positioning content; we need
+        // to choose one for displaying our content! STAGE would be relative to the center of your
+        // guardian system's bounds, and LOCAL would be relative to your device's starting location.
+        //
+        // let stage = session.create_reference_space(xr::ReferenceSpaceType::STAGE, xr::Posef::IDENTITY)?;
+
+        let mut event_storage = xr::EventDataBuffer::new();
+        let mut session_running = false;
+        /********* Main Loop **************/
+
+        // The OpenXR runtime may want to perform a smooth transition between scenes, so we
+        // can't necessarily exit instantly. Instead, we must notify the runtime of our
+        // intent and wait for it to tell us when we're actually done.
+        //
+        // if exit_requested {
+        //     match session.request_exit() {
+        //         Ok(()) => {}
+        //         Err(xr::sys::Result::ERROR_SESSION_NOT_RUNNING) => break,
+        //         Err(e) => bail!("{}", e),
+        //     }
+        // }
+
+        // TODO: See main loop from openxrs rust example
+
+        /**********************************/
         Ok(())
     }
 }
