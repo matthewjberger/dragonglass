@@ -1,10 +1,3 @@
-//! Illustrates rendering using Vulkan with multiview. Supports any Vulkan 1.1 capable environment.
-//!
-//! Renders a smooth gradient across the entire view, with different colors per eye.
-//!
-//! This example uses minimal abstraction for clarity. Real-world code should encapsulate and
-//! largely decouple its Vulkan and OpenXR components and handle errors gracefully.
-
 use std::{
     ffi::{CStr, CString},
     io::Cursor,
@@ -22,76 +15,93 @@ use ash::{
 };
 use openxr as xr;
 
-fn main() {
-    // Handle interrupts gracefully
+use anyhow::{ensure, Context, Result};
+use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+use std::fs::File;
+pub const LOG_FILE: &str = "dragonglass-vr.log";
+pub fn create_logger() -> Result<()> {
+    CombinedLogger::init(vec![
+        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed),
+        WriteLogger::new(
+            LevelFilter::max(),
+            Config::default(),
+            File::create(LOG_FILE).context(format!(
+                "Failed to create log file named: {}",
+                LOG_FILE.to_string()
+            ))?,
+        ),
+    ])?;
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    create_logger()?;
+
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
         r.store(false, Ordering::Relaxed);
-    })
-    .expect("setting Ctrl-C handler");
+    })?;
 
     let entry = xr::Entry::linked();
 
-    // OpenXR will fail to initialize if we ask for an extension that OpenXR can't provide! So we
-    // need to check all our extensions before initializing OpenXR with them. Note that even if the
-    // extension is present, it's still possible you may not be able to use it. For example: the
-    // hand tracking extension may be present, but the hand sensor might not be plugged in or turned
-    // on. There are often additional checks that should be made before using certain features!
-    let available_extensions = entry.enumerate_extensions().unwrap();
-
-    // If a required extension isn't present, you want to ditch out here! It's possible something
-    // like your rendering API might not be provided by the active runtime. APIs like OpenGL don't
-    // have universal support.
-    assert!(available_extensions.khr_vulkan_enable);
-
-    // Initialize OpenXR with the extensions we've found!
-    let mut enabled_extensions = xr::ExtensionSet::default();
-    enabled_extensions.khr_vulkan_enable = true;
-    let xr_instance = entry
-        .create_instance(
-            &xr::ApplicationInfo {
-                application_name: "openxrs example",
-                application_version: 0,
-                engine_name: "openxrs example",
-                engine_version: 0,
-            },
-            &enabled_extensions,
-            &[],
-        )
-        .unwrap();
-    let instance_props = xr_instance.properties().unwrap();
-    println!(
-        "loaded OpenXR runtime: {} {}",
-        instance_props.runtime_name, instance_props.runtime_version
+    let available_extensions = entry.enumerate_extensions()?;
+    log::info!("OpenXR supported extensions: {:#?}", available_extensions);
+    ensure!(
+        available_extensions.khr_vulkan_enable,
+        "The 'khr_vulkan_enable' OpenXR extension is not available."
     );
 
-    // Request a form factor from the device (HMD, Handheld, etc.)
-    let system = xr_instance
-        .system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)
-        .unwrap();
+    let app_info = xr::ApplicationInfo {
+        application_name: "Dragonglass",
+        application_version: 0,
+        engine_name: "Dragonglass",
+        engine_version: 0,
+    };
 
-    // Check what blend mode is valid for this device (opaque vs transparent displays). We'll just
-    // take the first one available!
-    let environment_blend_mode = xr_instance
-        .enumerate_environment_blend_modes(system, VIEW_TYPE)
-        .unwrap()[0];
+    let mut required_extensions = xr::ExtensionSet::default();
+    required_extensions.khr_vulkan_enable = true;
+
+    let xr_instance = entry.create_instance(&app_info, &required_extensions, &[])?;
+
+    let instance_props = xr_instance.properties()?;
+    log::info!(
+        "Loaded OpenXR runtime: {} {}",
+        instance_props.runtime_name,
+        instance_props.runtime_version
+    );
+
+    let system = xr_instance.system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)?;
+    let view_type: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
+
+    let environment_blend_mode =
+        xr_instance.enumerate_environment_blend_modes(system, VIEW_TYPE)?[0];
 
     // OpenXR wants to ensure apps are using the correct graphics card, so the renderer MUST be set
     // up before Instance::create_session. This is crucial on devices that have multiple graphics
     // cards, like laptops with integrated graphics chips in addition to dedicated graphics cards.
 
     let vk_instance_exts = xr_instance
-        .vulkan_instance_extensions(system)
-        .unwrap()
+        .vulkan_instance_extensions(system)?
         .split(' ')
-        .map(|x| CString::new(x).unwrap())
-        .collect::<Vec<_>>();
-    println!(
-        "required Vulkan instance extensions: {:?}",
+        .map(|x| Ok(std::ffi::CString::new(x)?))
+        .collect::<Result<Vec<_>>>()?;
+    log::info!(
+        "Required Vulkan instance extensions: {:#?}",
         vk_instance_exts
     );
     let vk_instance_ext_ptrs = vk_instance_exts
+        .iter()
+        .map(|x| x.as_ptr())
+        .collect::<Vec<_>>();
+
+    let vk_device_exts = xr_instance
+        .vulkan_device_extensions(system)?
+        .split(' ')
+        .map(|x| Ok(std::ffi::CString::new(x)?))
+        .collect::<Result<Vec<_>>>()?;
+    log::info!("Required Vulkan device extensions: {:#?}", vk_device_exts);
+    let vk_device_ext_ptrs = vk_device_exts
         .iter()
         .map(|x| x.as_ptr())
         .collect::<Vec<_>>();
@@ -138,18 +148,6 @@ fn main() {
             reqs.min_api_version_supported
         );
     }
-
-    let vk_device_exts = xr_instance
-        .vulkan_device_extensions(system)
-        .unwrap()
-        .split(' ')
-        .map(|x| CString::new(x).unwrap())
-        .collect::<Vec<_>>();
-    println!("required Vulkan device extensions: {:?}", vk_device_exts);
-    let vk_device_ext_ptrs = vk_device_exts
-        .iter()
-        .map(|x| x.as_ptr())
-        .collect::<Vec<_>>();
 
     unsafe {
         let vk_instance = vk_entry
@@ -718,6 +716,7 @@ fn main() {
     }
 
     println!("exiting cleanly");
+    Ok(())
 }
 
 pub const COLOR_FORMAT: vk::Format = vk::Format::B8G8R8A8_SRGB;
@@ -737,161 +736,3 @@ struct Framebuffer {
 
 /// Maximum number of frames in flight
 const PIPELINE_DEPTH: u32 = 2;
-
-//     #[cfg(feature = "vr")]
-//     fn setup_vr() -> Result<()> {
-//         // Create entry
-//         let entry = xr::Entry::linked();
-
-//         // Ensure required extensions are available
-//         let available_extensions = entry.enumerate_extensions()?;
-//         log::info!("OpenXR supported extensions: {:#?}", available_extensions);
-//         assert!(available_extensions.khr_vulkan_enable);
-
-//         // Create application info
-//         let app_info = xr::ApplicationInfo {
-//             application_name: "Dragonglass",
-//             application_version: 0,
-//             engine_name: "Dragonglass",
-//             engine_version: 0,
-//         };
-
-//         // List required extensions
-//         let mut required_extensions = xr::ExtensionSet::default();
-//         required_extensions.khr_vulkan_enable = true;
-
-//         // Create the OpenXR instance
-//         let xr_instance = entry.create_instance(&app_info, &required_extensions, &[])?;
-
-//         // List instance properties to show it was created successfully
-//         let instance_props = xr_instance.properties()?;
-//         log::info!(
-//             "Loaded OpenXR runtime: {} {}",
-//             instance_props.runtime_name,
-//             instance_props.runtime_version
-//         );
-
-//         // Request a form factor from the device (HMD, Handheld, etc.)
-//         let xr_system = xr_instance.system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)?;
-
-//         // Declare view type
-//         let view_type: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
-
-//         // Check what blend mode is valid for this device (opaque vs transparent displays). We'll just
-//         // take the first one available!
-//         let environment_blend_mode =
-//             xr_instance.enumerate_environment_blend_modes(xr_system, view_type)?[0];
-
-//         // Next steps need to be done in renderer
-
-//         // Get required vulkan instance extensions
-//         let vk_instance_exts = xr_instance
-//             .vulkan_instance_extensions(xr_system)?
-//             .split(' ')
-//             .map(|x| Ok(std::ffi::CString::new(x)?))
-//             .collect::<Result<Vec<_>>>()?;
-//         log::info!(
-//             "Required Vulkan instance extensions: {:#?}",
-//             vk_instance_exts
-//         );
-
-//         // Get pointers to required vulkan instance extension names
-//         let vk_instance_ext_ptrs = vk_instance_exts
-//             .iter()
-//             .map(|x| x.as_ptr())
-//             .collect::<Vec<_>>();
-
-//         // Get required vulkan device extensions
-//         let vk_device_exts = xr_instance
-//             .vulkan_device_extensions(xr_system)?
-//             .split(' ')
-//             .map(|x| Ok(std::ffi::CString::new(x)?))
-//             .collect::<Result<Vec<_>>>()?;
-//         log::info!("Required Vulkan device extensions: {:#?}", vk_device_exts);
-
-//         // Get pointers to required vulkan device extension names
-//         let vk_device_ext_ptrs = vk_device_exts
-//             .iter()
-//             .map(|x| x.as_ptr())
-//             .collect::<Vec<_>>();
-
-//         // Create OpenXR Version type from vulkan version
-//         // use: vk::version_major(vk_version) as u16, etc in real code
-//         // TODO: Use Vulkan app info api version 1.1 because it guarantees multiview support
-//         let vk_version = xr::Version::new(1, 1, 0);
-
-//         // Gather graphics requirements
-//         let graphics_requirements = xr_instance.graphics_requirements::<xr::Vulkan>(xr_system)?;
-//         if graphics_requirements.min_api_version_supported > vk_version {
-//             anyhow::bail!(
-//                 "OpenXR runtime requires Vulkan version > {}",
-//                 graphics_requirements.min_api_version_supported
-//             );
-//         }
-
-//         // TODO: Create physical device from raw ptr like this
-//         // let vk_physical_device = vk::PhysicalDevice::from_raw(
-//         //     xr_instance.vulkan_graphics_device(xr_system, vk_instance.handle().as_raw() as _)? as _,
-//         // );
-
-//         /********* Vulkan Multiview ******/
-//         // TODO: Get physical device properties and make sure it supports Vulkan version 1.1
-
-//         // TODO: Add multiview PhysicalDeviceVulkan11Feature
-//         // in the create_info for the logical device,
-//         // push_next(&mut vk::PhysicalDeviceVulkan11Features {
-//         //     multiview: vk::TRUE,
-//         //     ..Default::default()
-//         // })
-
-//         let view_count = 2;
-//         let view_mask = !(!0 << view_count);
-//         // TODO: When specifying scene renderpass, add this to the end
-//         // .push_next(
-//         //     &mut vk::RenderPassMultiviewCreateInfo::builder()
-//         //         .view_masks(&[view_mask])
-//         //         .correlation_masks(&[view_mask]),
-//         // ),
-//         /*********************************/
-//         // Create session, using instance, physical device, and logical device from Vulkan context in renderer
-//         // Note: This doesn't start the session
-//         //
-//         // let (session, mut frame_wait, mut frame_stream) = xr_instance
-//         //     .create_session::<xr::Vulkan>(
-//         //         system,
-//         //         &xr::vulkan::SessionCreateInfo {
-//         //             instance: vk_instance.handle().as_raw() as _,
-//         //             physical_device: vk_physical_device.as_raw() as _,
-//         //             device: vk_device.handle().as_raw() as _,
-//         //             queue_family_index,
-//         //             queue_index: 0,
-//         //         },
-//         //     )?;
-
-//         // OpenXR uses a couple different types of reference frames for positioning content; we need
-//         // to choose one for displaying our content! STAGE would be relative to the center of your
-//         // guardian system's bounds, and LOCAL would be relative to your device's starting location.
-//         //
-//         // let stage = session.create_reference_space(xr::ReferenceSpaceType::STAGE, xr::Posef::IDENTITY)?;
-
-//         let mut event_storage = xr::EventDataBuffer::new();
-//         let mut session_running = false;
-//         /********* Main Loop **************/
-//         // The OpenXR runtime may want to perform a smooth transition between scenes, so we
-//         // can't necessarily exit instantly. Instead, we must notify the runtime of our
-//         // intent and wait for it to tell us when we're actually done.
-//         //
-//         // if exit_requested {
-//         //     match session.request_exit() {
-//         //         Ok(()) => {}
-//         //         Err(xr::sys::Result::ERROR_SESSION_NOT_RUNNING) => break,
-//         //         Err(e) => bail!("{}", e),
-//         //     }
-//         // }
-
-//         // TODO: See main loop from openxrs rust example
-
-//         /**********************************/
-//         Ok(())
-//     }
-// }
