@@ -24,8 +24,7 @@ layout(binding=0) uniform UboView{
 
 layout(binding=1) uniform UboInstance{
   mat4 model;
-  vec4 joint_info;
-  vec4 morph_target_weight_info;
+  vec4 node_info;
 } uboInstance;
 
 layout(location=0) out vec3 outPosition;
@@ -36,8 +35,11 @@ layout(location=4) out vec3 outColor0;
 
 void main()
 {
-  float jointCount = uboInstance.joint_info.x;
-  float jointOffset = uboInstance.joint_info.y;
+  float jointCount = uboInstance.node_info.x;
+  float jointOffset = uboInstance.node_info.y;
+  float morphWeightCount = uboInstance.node_info.z;
+  float morphWeightOffset = uboInstance.node_info.w;
+
   mat4 skinMatrix = mat4(1.0);
   if (jointCount > 0.0) {
     skinMatrix =

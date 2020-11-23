@@ -85,14 +85,11 @@ pub struct AssetUniformBuffer {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct NodeDynamicUniformBuffer {
     pub model: glm::Mat4,
-    // X value is the joint count.
-    // Y value is the joint matrix offset.
-    // A vec4 is necessary for proper alignment
-    pub joint_info: glm::Vec4,
-    // X value is the morph target weight count.
-    // Y value is the morph target weight offset.
-    // A vec4 is necessary for proper alignment
-    pub morph_target_weight_info: glm::Vec4,
+    // X is the joint count.
+    // Y is the joint matrix offset.
+    // Z is the morph target weight count.
+    // W is the morph target weight offset.
+    pub node_info: glm::Vec4,
 }
 
 pub struct GltfPipelineData {
@@ -366,26 +363,23 @@ impl GltfPipelineData {
                 let offset = graph[node_index];
                 let model = graph.global_transform(node_index, nodes);
 
-                let mut joint_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+                let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
+
                 if let Some(skin) = nodes[offset].skin.as_ref() {
                     let joint_count = skin.joints.len();
-                    joint_info = glm::vec4(joint_count as f32, joint_offset as f32, 0.0, 0.0);
+                    node_info.x = joint_count as f32;
+                    node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                let mut morph_target_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
                 if let Some(mesh) = nodes[offset].mesh.as_ref() {
                     let weight_count = mesh.weights.len();
-                    morph_target_info =
-                        glm::vec4(weight_count as f32, weight_offset as f32, 0.0, 0.0);
+                    node_info.z = weight_count as f32;
+                    node_info.w = weight_offset as f32;
                     weight_offset += weight_count;
                 }
 
-                buffers[offset] = NodeDynamicUniformBuffer {
-                    model,
-                    joint_info,
-                    morph_target_weight_info: morph_target_info,
-                };
+                buffers[offset] = NodeDynamicUniformBuffer { model, node_info };
 
                 Ok(())
             })?;
