@@ -13,6 +13,9 @@ use winit::{
     window::{Icon, Window, WindowBuilder},
 };
 
+#[cfg(feature = "vr")]
+use openxr as xr;
+
 pub struct App {
     asset: Option<Asset>,
     camera: OrbitalCamera,
@@ -56,6 +59,9 @@ impl App {
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
+
+        #[cfg(feature = "vr")]
+        Self::setup_vr()?;
 
         let app = Self {
             asset: None,
@@ -188,5 +194,52 @@ impl App {
             let pan = delta * drag_multiplier;
             camera.pan(&pan);
         }
+    }
+
+    #[cfg(feature = "vr")]
+    fn setup_vr() -> Result<()> {
+        // Create entry
+        let entry = xr::Entry::linked();
+
+        // Ensure required extensions are available
+        let available_extensions = entry.enumerate_extensions()?;
+        log::info!("OpenXR supported extensions: {:#?}", available_extensions);
+        assert!(available_extensions.khr_vulkan_enable);
+
+        // Create application info
+        let app_info = xr::ApplicationInfo {
+            application_name: "Dragonglass",
+            application_version: 0,
+            engine_name: "Dragonglass",
+            engine_version: 0,
+        };
+
+        // List required extensions
+        let mut required_extensions = xr::ExtensionSet::default();
+        required_extensions.khr_vulkan_enable = true;
+
+        // Create the OpenXR instance
+        let xr_instance = entry.create_instance(&app_info, &required_extensions, &[])?;
+
+        // List instance properties to show it was created successfully
+        let instance_props = xr_instance.properties()?;
+        log::info!(
+            "Loaded OpenXR runtime: {} {}",
+            instance_props.runtime_name,
+            instance_props.runtime_version
+        );
+
+        // Request a form factor from the device (HMD, Handheld, etc.)
+        let xr_system = xr_instance.system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)?;
+
+        // Declare view type
+        let view_type: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
+
+        // Check what blend mode is valid for this device (opaque vs transparent displays). We'll just
+        // take the first one available!
+        let environment_blend_mode =
+            xr_instance.enumerate_environment_blend_modes(xr_system, view_type)?[0];
+
+        Ok(())
     }
 }
