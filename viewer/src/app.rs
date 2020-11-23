@@ -240,6 +240,53 @@ impl App {
         let environment_blend_mode =
             xr_instance.enumerate_environment_blend_modes(xr_system, view_type)?[0];
 
+        // Next steps need to be done in renderer
+
+        // Get required vulkan instance extensions
+        let vk_instance_exts = xr_instance
+            .vulkan_instance_extensions(xr_system)?
+            .split(' ')
+            .map(|x| Ok(std::ffi::CString::new(x)?))
+            .collect::<Result<Vec<_>>>()?;
+        log::info!(
+            "Required Vulkan instance extensions: {:#?}",
+            vk_instance_exts
+        );
+
+        // Get pointers to required vulkan instance extension names
+        let vk_instance_ext_ptrs = vk_instance_exts
+            .iter()
+            .map(|x| x.as_ptr())
+            .collect::<Vec<_>>();
+
+        // Get required vulkan device extensions
+        let vk_device_exts = xr_instance
+            .vulkan_device_extensions(xr_system)?
+            .split(' ')
+            .map(|x| Ok(std::ffi::CString::new(x)?))
+            .collect::<Result<Vec<_>>>()?;
+        log::info!("Required Vulkan device extensions: {:#?}", vk_device_exts);
+
+        // Get pointers to required vulkan device extension names
+        let vk_device_ext_ptrs = vk_device_exts
+            .iter()
+            .map(|x| x.as_ptr())
+            .collect::<Vec<_>>();
+
+        // Create OpenXR Version type from vulkan version
+        // use: vk::version_major(vk_version) as u16, etc in real code
+        // TODO: Use Vulkan app info api version 1.1 because it guarantees multiview support
+        let vk_version = xr::Version::new(1, 1, 0);
+
+        // Gather graphics requirements
+        let graphics_requirements = xr_instance.graphics_requirements::<xr::Vulkan>(xr_system)?;
+        if graphics_requirements.min_api_version_supported > vk_version {
+            anyhow::bail!(
+                "OpenXR runtime requires Vulkan version > {}",
+                graphics_requirements.min_api_version_supported
+            );
+        }
+
         Ok(())
     }
 }
