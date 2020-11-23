@@ -4,7 +4,7 @@ mod device;
 mod instance;
 mod physical_device;
 
-use anyhow::{ensure, Context as AnyhowContext, Result};
+use anyhow::{bail, ensure, Context as AnyhowContext, Result};
 use ash::{
     extensions::khr::Surface as AshSurface,
     version::{DeviceV1_0, InstanceV1_0},
@@ -22,7 +22,7 @@ pub struct Context {
     pub allocator: Arc<vk_mem::Allocator>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
-    pub surface: Surface,
+    pub surface: Option<Surface>,
     pub instance: Instance,
     pub entry: ash::Entry,
 }
@@ -49,20 +49,22 @@ impl Context {
             allocator,
             device,
             physical_device,
-            surface,
+            surface: Some(surface),
             instance,
             entry,
         })
     }
 
     pub fn physical_device_surface_capabilities(&self) -> Result<vk::SurfaceCapabilitiesKHR> {
+        let surface = match self.surface.as_ref() {
+            Some(surface) => surface,
+            None => bail!("The Vulkan context was not created with a surface!"),
+        };
         let capabilities = unsafe {
-            self.surface
-                .handle_ash
-                .get_physical_device_surface_capabilities(
-                    self.physical_device.handle,
-                    self.surface.handle_khr,
-                )
+            surface.handle_ash.get_physical_device_surface_capabilities(
+                self.physical_device.handle,
+                surface.handle_khr,
+            )
         }?;
         Ok(capabilities)
     }

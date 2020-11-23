@@ -56,7 +56,7 @@ pub struct SwapchainProperties {
 }
 
 impl SwapchainProperties {
-    pub fn new(
+    pub fn from_surface(
         dimensions: &[u32; 2],
         device: vk::PhysicalDevice,
         surface: &Surface,
@@ -154,8 +154,12 @@ pub fn create_swapchain(
     context: &Context,
     dimensions: &[u32; 2],
 ) -> Result<(Swapchain, SwapchainProperties)> {
-    let properties =
-        SwapchainProperties::new(dimensions, context.physical_device.handle, &context.surface)?;
+    let properties = match context.surface.as_ref() {
+        Some(surface) => {
+            SwapchainProperties::from_surface(dimensions, context.physical_device.handle, surface)?
+        }
+        None => unimplemented!("Swapchain creation without a surface is not implemented yet"),
+    };
 
     let queue_indices = context.physical_device.queue_indices();
     let create_info = swapchain_create_info(context, &queue_indices, properties)?;
@@ -179,8 +183,7 @@ fn swapchain_create_info<'a>(
         capabilities.max_image_count,
         capabilities.min_image_count + 1,
     );
-    let builder = vk::SwapchainCreateInfoKHR::builder()
-        .surface(context.surface.handle_khr)
+    let mut builder = vk::SwapchainCreateInfoKHR::builder()
         .min_image_count(image_count)
         .image_format(properties.surface_format.format)
         .image_color_space(properties.surface_format.color_space)
@@ -191,6 +194,10 @@ fn swapchain_create_info<'a>(
         .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
         .present_mode(properties.present_mode)
         .clipped(true);
+
+    if let Some(surface) = context.surface.as_ref() {
+        builder = builder.surface(surface.handle_khr)
+    }
 
     let builder = if queue_indices.len() == 1 {
         // Only one queue family is being used for graphics and presentation
