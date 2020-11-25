@@ -3,7 +3,7 @@ use nalgebra_glm as glm;
 use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Scene {
@@ -414,8 +414,8 @@ impl Default for Filter {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SceneGraph(Graph<usize, ()>);
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneGraph(pub Graph<usize, ()>);
 
 impl Default for SceneGraph {
     fn default() -> Self {
@@ -428,12 +428,21 @@ impl SceneGraph {
         Self(Graph::<usize, ()>::new())
     }
 
+    pub fn number_of_nodes(&self) -> usize {
+        self.0.raw_nodes().len()
+    }
+
     pub fn add_node(&mut self, node: usize) -> NodeIndex {
         self.0.add_node(node)
     }
 
     pub fn add_edge(&mut self, parent_node: NodeIndex, node: NodeIndex) {
         let _edge_index = self.0.add_edge(parent_node, node, ());
+    }
+
+    pub fn parent_of(&self, index: NodeIndex) -> Option<NodeIndex> {
+        let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
+        incoming_walker.next_node(&self.0)
     }
 
     pub fn walk(&self, mut action: impl FnMut(NodeIndex) -> Result<()>) -> Result<()> {
@@ -459,6 +468,12 @@ impl SceneGraph {
             None => None,
         }
     }
+
+    pub fn offset_by(&mut self, offset: usize) {
+        for index in self.0.node_indices() {
+            self[index] += offset;
+        }
+    }
 }
 
 impl Index<NodeIndex> for SceneGraph {
@@ -466,6 +481,12 @@ impl Index<NodeIndex> for SceneGraph {
 
     fn index(&self, index: NodeIndex) -> &Self::Output {
         &self.0[index]
+    }
+}
+
+impl IndexMut<NodeIndex> for SceneGraph {
+    fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
+        &mut self.0[index]
     }
 }
 
@@ -684,5 +705,89 @@ impl Asset {
             })?;
         }
         Ok(morph_target_weights)
+    }
+
+    pub fn merge_with(&mut self, asset: Self) -> Result<()> {
+        let Self {
+            mut nodes,
+            mut scenes,
+            mut animations,
+            mut materials,
+            textures,
+            mut geometry,
+        } = asset;
+
+        let number_of_textures = self.textures.len();
+        self.textures.extend_from_slice(&textures);
+
+        let number_of_materials = self.materials.len();
+        materials.iter_mut().for_each(|material| {
+            let increment = |value: &mut i32| {
+                if *value != -1_i32 {
+                    *value += number_of_textures as i32;
+                }
+            };
+            increment(&mut material.color_texture_index);
+            increment(&mut material.metallic_roughness_texture_index);
+            increment(&mut material.normal_texture_index);
+            increment(&mut material.occlusion_texture_index);
+            increment(&mut material.emissive_texture_index);
+        });
+        materials
+            .into_iter()
+            .for_each(|material| self.materials.push(material));
+
+        let number_of_vertices = self.geometry.vertices.len();
+        let number_of_indices = self.geometry.indices.len();
+        geometry
+            .indices
+            .iter_mut()
+            .for_each(|index| *index += number_of_vertices as u32);
+
+        let Geometry { vertices, indices } = geometry;
+        vertices
+            .into_iter()
+            .for_each(|vertex| self.geometry.vertices.push(vertex));
+        indices
+            .into_iter()
+            .for_each(|index| self.geometry.indices.push(index));
+
+        let number_of_nodes = self.nodes.len();
+        nodes.iter_mut().for_each(|node| {
+            if let Some(mesh) = node.mesh.as_mut() {
+                for primitive in mesh.primitives.iter_mut() {
+                    primitive.first_index += number_of_indices;
+                    primitive.first_vertex += number_of_vertices;
+                    if let Some(material_index) = primitive.material_index.as_mut() {
+                        *material_index += number_of_materials;
+                    }
+                }
+            }
+
+            if let Some(skin) = node.skin.as_mut() {
+                for joint in skin.joints.iter_mut() {
+                    joint.target_node += number_of_nodes;
+                }
+            }
+        });
+        nodes.into_iter().for_each(|node| self.nodes.push(node));
+
+        scenes[0].graphs.iter_mut().for_each(|graph| {
+            let mut scenegraph = graph.clone();
+            scenegraph.offset_by(number_of_nodes);
+            self.scenes[0].graphs.push(scenegraph);
+        });
+
+        animations.iter_mut().for_each(|animation| {
+            for channel in animation.channels.iter_mut() {
+                channel.target_node += number_of_nodes;
+            }
+        });
+
+        animations
+            .into_iter()
+            .for_each(|node| self.animations.push(node));
+
+        Ok(())
     }
 }
