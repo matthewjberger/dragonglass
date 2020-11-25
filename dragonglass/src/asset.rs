@@ -55,7 +55,7 @@ impl PushConstantMaterial {
             emissive_factor: material.emissive_factor,
             alpha_mode: material.alpha_mode as i32,
             alpha_cutoff: material.alpha_cutoff,
-            is_unlit: material.is_unlit,
+            is_unlit: if material.is_unlit { 1 } else { 0 },
             color_texture_index: material.color_texture_index,
             color_texture_set: material.color_texture_set,
             metallic_roughness_texture_index: material.metallic_roughness_texture_index,
@@ -77,9 +77,9 @@ pub struct AssetUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,
-    pub joint_matrices: [glm::Mat4; GltfPipelineData::MAX_NUMBER_OF_JOINTS],
-    pub morph_targets: [glm::Vec4; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGETS],
-    pub morph_target_weights: [f32; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS],
+    pub joint_matrices: [glm::Mat4; PipelineData::MAX_NUMBER_OF_JOINTS],
+    pub morph_targets: [glm::Vec4; PipelineData::MAX_NUMBER_OF_MORPH_TARGETS],
+    pub morph_target_weights: [f32; PipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -92,7 +92,7 @@ pub struct NodeDynamicUniformBuffer {
     pub node_info: glm::Vec4,
 }
 
-pub struct GltfPipelineData {
+pub struct PipelineData {
     pub uniform_buffer: CpuToGpuBuffer,
     pub dynamic_uniform_buffer: CpuToGpuBuffer,
     pub dynamic_alignment: u64,
@@ -106,10 +106,10 @@ pub struct GltfPipelineData {
     pub dummy_sampler: Sampler,
 }
 
-impl GltfPipelineData {
+impl PipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
-    pub const MAX_NUMBER_OF_JOINTS: usize = 128;
+    pub const MAX_NUMBER_OF_JOINTS: usize = 200;
     pub const MAX_NUMBER_OF_MORPH_TARGETS: usize = 128;
     pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
@@ -403,7 +403,7 @@ impl GltfRenderer {
     pub fn new(
         command_buffer: vk::CommandBuffer,
         pipeline_layout: &PipelineLayout,
-        pipeline_data: &GltfPipelineData,
+        pipeline_data: &PipelineData,
         has_indices: bool,
     ) -> Self {
         Self {
@@ -453,7 +453,7 @@ impl GltfRenderer {
                                 continue;
                             }
 
-                            PushConstantMaterial::from_material(&primitive_material)?
+                            PushConstantMaterial::from_material(primitive_material)?
                         }
                         None => PushConstantMaterial::from_material(&Material::default())?,
                     };
@@ -495,7 +495,7 @@ impl GltfRenderer {
 }
 
 pub struct AssetRendering {
-    pub pipeline_data: GltfPipelineData,
+    pub pipeline_data: PipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
     pub pipeline_wireframe: Option<GraphicsPipeline>,
@@ -506,7 +506,7 @@ pub struct AssetRendering {
 
 impl AssetRendering {
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
-        let pipeline_data = GltfPipelineData::new(context, command_pool, &asset)?;
+        let pipeline_data = PipelineData::new(context, command_pool, &asset)?;
         Ok(Self {
             pipeline_data,
             pipeline: None,

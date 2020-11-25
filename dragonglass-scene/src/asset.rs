@@ -2,8 +2,10 @@ use anyhow::{Context, Result};
 use nalgebra_glm as glm;
 use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::ops::Index;
 
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
@@ -31,6 +33,7 @@ impl Scene {
     }
 }
 
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Node {
     pub name: String,
     pub transform: Transform,
@@ -40,7 +43,7 @@ pub struct Node {
     pub light: Option<Light>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transform {
     pub translation: glm::Vec3,
     pub rotation: glm::Quat,
@@ -73,6 +76,7 @@ impl Transform {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Light {
     pub name: String,
     pub color: glm::Vec3,
@@ -81,6 +85,7 @@ pub struct Light {
     pub kind: LightKind,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum LightKind {
     Directional,
     Point,
@@ -90,6 +95,7 @@ pub enum LightKind {
     },
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Camera {
     pub name: String,
     pub projection: Projection,
@@ -104,13 +110,13 @@ impl Camera {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Projection {
     Perspective(PerspectiveCamera),
     Orthographic(OrthographicCamera),
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct PerspectiveCamera {
     pub aspect_ratio: Option<f32>,
     pub y_fov_deg: f32,
@@ -135,7 +141,7 @@ impl PerspectiveCamera {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct OrthographicCamera {
     pub x_mag: f32,
     pub y_mag: f32,
@@ -168,24 +174,26 @@ impl OrthographicCamera {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Skin {
     pub name: String,
     pub joints: Vec<Joint>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Joint {
     pub target_node: usize,
     pub inverse_bind_matrix: glm::Mat4,
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Mesh {
     pub name: String,
     pub primitives: Vec<Primitive>,
     pub weights: Vec<f32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Primitive {
     pub first_vertex: usize,
     pub first_index: usize,
@@ -196,7 +204,21 @@ pub struct Primitive {
     pub aabb: AABB<f32>,
 }
 
-#[derive(Debug)]
+impl Default for Primitive {
+    fn default() -> Self {
+        Self {
+            first_vertex: 0,
+            first_index: 0,
+            number_of_vertices: 0,
+            number_of_indices: 0,
+            material_index: None,
+            morph_targets: Vec::new(),
+            aabb: AABB::new_invalid(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MorphTarget {
     pub positions: Vec<glm::Vec4>,
     pub normals: Vec<glm::Vec4>,
@@ -209,13 +231,13 @@ impl MorphTarget {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Geometry {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Vertex {
     pub position: glm::Vec3,
     pub normal: glm::Vec3,
@@ -226,7 +248,21 @@ pub struct Vertex {
     pub color_0: glm::Vec3,
 }
 
-#[derive(Debug)]
+impl Default for Vertex {
+    fn default() -> Self {
+        Self {
+            position: glm::Vec3::default(),
+            normal: glm::Vec3::default(),
+            uv_0: glm::Vec2::default(),
+            uv_1: glm::Vec2::default(),
+            joint_0: glm::Vec4::default(),
+            weight_0: glm::Vec4::default(),
+            color_0: glm::vec3(1.0, 1.0, 1.0),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Animation {
     pub name: String,
     pub time: f32,
@@ -234,7 +270,7 @@ pub struct Animation {
     pub max_animation_time: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Channel {
     pub target_node: usize,
     pub inputs: Vec<f32>,
@@ -242,14 +278,14 @@ pub struct Channel {
     pub _interpolation: Interpolation,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Interpolation {
     Linear,
     Step,
     CubicSpline,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TransformationSet {
     Translations(Vec<glm::Vec3>),
     Rotations(Vec<glm::Vec4>),
@@ -257,7 +293,7 @@ pub enum TransformationSet {
     MorphTargetWeights(Vec<f32>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Material {
     pub name: String,
     pub base_color_factor: glm::Vec4,
@@ -278,7 +314,7 @@ pub struct Material {
     pub roughness_factor: f32,
     pub alpha_mode: AlphaMode,
     pub alpha_cutoff: f32,
-    pub is_unlit: i32,
+    pub is_unlit: bool,
 }
 
 impl Default for Material {
@@ -303,12 +339,12 @@ impl Default for Material {
             roughness_factor: 0.0,
             alpha_mode: AlphaMode::Opaque,
             alpha_cutoff: 0.0,
-            is_unlit: 0,
+            is_unlit: false,
         }
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub enum AlphaMode {
     Opaque = 1,
     Mask,
@@ -321,7 +357,7 @@ impl Default for AlphaMode {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Texture {
     pub pixels: Vec<u8>,
     pub format: Format,
@@ -330,7 +366,7 @@ pub struct Texture {
     pub sampler: Sampler,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub enum Format {
     R8,
     R8G8,
@@ -344,7 +380,7 @@ pub enum Format {
     R16G16B16A16,
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Sampler {
     pub name: String,
     pub min_filter: Filter,
@@ -353,7 +389,7 @@ pub struct Sampler {
     pub wrap_t: WrappingMode,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum WrappingMode {
     ClampToEdge,
     MirroredRepeat,
@@ -366,7 +402,7 @@ impl Default for WrappingMode {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Filter {
     Nearest,
     Linear,
@@ -378,6 +414,7 @@ impl Default for Filter {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SceneGraph(Graph<usize, ()>);
 
 impl Default for SceneGraph {
@@ -432,6 +469,7 @@ impl Index<NodeIndex> for SceneGraph {
     }
 }
 
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Asset {
     pub nodes: Vec<Node>,
     pub scenes: Vec<Scene>,

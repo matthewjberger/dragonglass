@@ -34,7 +34,7 @@ layout(push_constant) uniform Material{
 
 layout(location = 0) out vec4 outColor;
 
-#define MAX_NUMBER_OF_JOINTS 128
+#define MAX_NUMBER_OF_JOINTS 200
 #define MAX_NUMBER_OF_MORPH_TARGETS 128
 #define MAX_NUMBER_OF_MORPH_WEIGHTS 128
 

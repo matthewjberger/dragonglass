@@ -9,7 +9,7 @@ layout(location=4) in vec4 inJoint0;
 layout(location=5) in vec4 inWeight0;
 layout(location=6) in vec3 inColor0;
 
-#define MAX_NUMBER_OF_JOINTS 128
+#define MAX_NUMBER_OF_JOINTS 200
 #define MAX_NUMBER_OF_MORPH_TARGETS 128
 #define MAX_NUMBER_OF_MORPH_WEIGHTS 128
 

@@ -1,6 +1,6 @@
 use crate::{
     adapters::CommandPool,
-    asset::{AssetUniformBuffer, GltfPipelineData},
+    asset::{AssetUniformBuffer, PipelineData},
     context::Context,
     frame::Frame,
     scene::Scene,
@@ -72,21 +72,21 @@ impl RenderingDevice {
                     camera_position.w = 1.0;
 
                     let mut joint_matrices =
-                        [glm::Mat4::identity(); GltfPipelineData::MAX_NUMBER_OF_JOINTS];
+                        [glm::Mat4::identity(); PipelineData::MAX_NUMBER_OF_JOINTS];
                     joint_matrices
                         .iter_mut()
                         .zip(asset.joint_matrices()?.into_iter())
                         .for_each(|(a, b)| *a = b);
 
                     let mut morph_targets =
-                        [glm::Vec4::identity(); GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
+                        [glm::Vec4::identity(); PipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
                     morph_targets
                         .iter_mut()
                         .zip(asset.morph_targets()?.into_iter())
                         .for_each(|(a, b)| *a = b);
 
                     let mut morph_target_weights =
-                        [0.0; GltfPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
+                        [0.0; PipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
                     morph_target_weights
                         .iter_mut()
                         .zip(asset.morph_target_weights()?.into_iter())

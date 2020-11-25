@@ -1,5 +1,6 @@
 /target
 settings.toml
 *.log
+*.dga
 **.spv
 .vscode

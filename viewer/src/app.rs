@@ -1,9 +1,13 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use dragonglass_scene::{load_gltf_asset, Asset};
+use dragonglass_scene::{
+    load_gltf_asset, Asset, Geometry, Material, Mesh, Node, Primitive, Scene, SceneGraph,
+    Transform, Vertex,
+};
 use image::ImageFormat;
 use log::{error, info, warn};
+use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
     event::ElementState,
@@ -25,7 +29,7 @@ pub struct App {
 }
 
 impl App {
-    pub const TITLE: &'static str = "Dragonglass - GLTF Model Viewer";
+    pub const TITLE: &'static str = "Dragonglass Vulkan Renderer";
 
     fn load_icon(icon_bytes: &[u8], format: ImageFormat) -> Result<Icon> {
         let (rgba, width, height) = {
@@ -55,10 +59,14 @@ impl App {
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
+        let mut rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
+
+        let asset = cube_asset()?;
+
+        rendering_device.load_asset(&asset)?;
 
         let app = Self {
-            asset: None,
+            asset: Some(asset),
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
@@ -124,11 +132,19 @@ impl App {
                                 Some("glb") | Some("gltf") => {
                                     let gltf_asset = load_gltf_asset(path.clone()).unwrap();
                                     if let Err(error) = rendering_device.load_asset(&gltf_asset) {
-                                        warn!("Failed to load asset: {}", error);
+                                        warn!("Failed to load gltf asset: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
-                                    info!("Loaded gltf asset: '{}'", raw_path);
                                     asset = Some(gltf_asset);
+                                    info!("Loaded gltf asset: '{}'", raw_path);
+                                }
+                                Some("dga") => {
+                                    let deserialized_asset = deserialize_from_file(raw_path).expect("Failed to deserialize asset!");
+                                    if let Err(error) = rendering_device.load_asset(&deserialized_asset) {
+                                        warn!("Failed to load dragonglass asset: {}", error);
+                                    }
+                                    asset = Some(deserialized_asset);
+                                    info!("Loaded dragonglass asset: '{}'", raw_path);
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {
@@ -147,17 +163,23 @@ impl App {
                 Event::WindowEvent {
                     event: WindowEvent::KeyboardInput {
                         input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(keycode),
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
                             ..
-                        },
-                        ..
                     },
                     ..
                 } => {
-                    if let VirtualKeyCode::T = keycode {
-                        rendering_device.toggle_wireframe();
+                    match keycode {
+                        VirtualKeyCode::T => rendering_device.toggle_wireframe(),
+                        VirtualKeyCode::S => {
+                            if let Some(asset) = asset.as_ref() {
+                                serialize_to_file("asset.dga", &asset).expect("Failed to serialize asset!");
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
@@ -189,4 +211,102 @@ impl App {
             camera.pan(&pan);
         }
     }
+}
+
+fn serialize_to_file(path: impl AsRef<std::path::Path>, asset: &Asset) -> Result<()> {
+    let serialized_bytes: Vec<u8> = bincode::serialize(&asset)?;
+    std::fs::write(path, &serialized_bytes)?;
+    Ok(())
+}
+
+fn deserialize_from_file(path: impl AsRef<std::path::Path>) -> Result<Asset> {
+    let asset_bytes = std::fs::read(path)?;
+    let asset: Asset = bincode::deserialize(&asset_bytes)?;
+    Ok(asset)
+}
+
+fn cube_asset() -> Result<Asset> {
+    let positions = vec![
+        glm::vec3(-0.5, -0.5, 0.5),
+        glm::vec3(0.5, -0.5, 0.5),
+        glm::vec3(0.5, 0.5, 0.5),
+        glm::vec3(-0.5, 0.5, 0.5),
+        glm::vec3(-0.5, -0.5, -0.5),
+        glm::vec3(0.5, -0.5, -0.5),
+        glm::vec3(0.5, 0.5, -0.5),
+        glm::vec3(-0.5, 0.5, -0.5),
+    ];
+    let vertices = positions
+        .into_iter()
+        .map(|position| Vertex {
+            position,
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
+    let indices = vec![
+        0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 7, 6, 5, 5, 4, 7, 4, 0, 3, 3, 7, 4, 4, 5, 1, 1, 0, 4,
+        3, 2, 6, 6, 7, 3,
+    ];
+    let geometry = Geometry { vertices, indices };
+
+    let mut scenegraph = SceneGraph::default();
+    let parent = scenegraph.add_node(0);
+    let child = scenegraph.add_node(1);
+    scenegraph.add_edge(parent, child);
+
+    let mut scenegraph_2 = SceneGraph::default();
+    scenegraph_2.add_node(2);
+
+    let cube_mesh = Mesh {
+        primitives: vec![Primitive {
+            number_of_vertices: geometry.vertices.len(),
+            number_of_indices: geometry.indices.len(),
+            material_index: Some(0),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let materials = vec![Material {
+        base_color_factor: glm::vec4(1.0, 0.0, 1.0, 1.0),
+        is_unlit: true,
+        ..Default::default()
+    }];
+
+    let asset = Asset {
+        scenes: vec![Scene {
+            graphs: vec![scenegraph, scenegraph_2],
+            ..Default::default()
+        }],
+        nodes: vec![
+            Node {
+                mesh: Some(cube_mesh.clone()),
+                transform: Transform {
+                    rotation: glm::quat_angle_axis(45_f32.to_radians(), &glm::vec3(0.0, 0.0, 1.0)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Node {
+                mesh: Some(cube_mesh.clone()),
+                transform: Transform {
+                    translation: glm::vec3(3.0, 0.0, 1.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Node {
+                mesh: Some(cube_mesh.clone()),
+                transform: Transform {
+                    translation: glm::vec3(-3.0, 0.0, 0.0),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        ],
+        materials,
+        geometry,
+        ..Default::default()
+    };
+    Ok(asset)
 }
