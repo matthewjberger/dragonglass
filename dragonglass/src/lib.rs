@@ -21,7 +21,7 @@ mod asset;
 mod core;
 mod cube;
 mod device;
-mod hdr;
+mod pbr;
 mod pipelines;
 mod scene;
 mod skybox;

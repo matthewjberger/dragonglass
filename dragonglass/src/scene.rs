@@ -4,7 +4,7 @@ use crate::{
         CommandPool, Context, Cubemap, Device, Image, ImageNode, RawImage, RenderGraph, Sampler,
         ShaderCache, Swapchain, SwapchainProperties,
     },
-    hdr::hdr_cubemap,
+    pbr::hdr_cubemap,
     pipelines::FullscreenPipeline,
     skybox::SkyboxRendering,
 };
