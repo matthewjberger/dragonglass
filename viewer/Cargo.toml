@@ -11,7 +11,7 @@ bincode = "1.3.1"
 config = "0.10.1"
 dragonglass = { path = "../dragonglass" }
 dragonglass-scene = { path = "../dragonglass-scene" }
-image = "0.23.11"
+image = "0.23.12"
 log = "0.4.11"
 nalgebra-glm = "0.9.0"
 serde = { version = "1.0.117", features = ["derive"] }

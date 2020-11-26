@@ -33,7 +33,7 @@ impl App {
 
     fn load_icon(icon_bytes: &[u8], format: ImageFormat) -> Result<Icon> {
         let (rgba, width, height) = {
-            let image = image::load_from_memory_with_format(icon_bytes, format)?.into_rgba();
+            let image = image::load_from_memory_with_format(icon_bytes, format)?.into_rgba8();
             let (width, height) = image.dimensions();
             let rgba = image.into_raw();
             (rgba, width, height)

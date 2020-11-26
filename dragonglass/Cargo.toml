@@ -11,7 +11,7 @@ anyhow = "1.0.34"
 derive_builder = "0.9.0"
 dragonglass-scene = { path = "../dragonglass-scene" }
 log = "0.4.11"
-image = "0.23.11"
+image = "0.23.12"
 nalgebra-glm = "0.9.0"
 petgraph = "0.5.1"
 raw-window-handle = "0.3.3"
