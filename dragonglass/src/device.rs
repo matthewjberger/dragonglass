@@ -1,7 +1,6 @@
 use crate::{
     asset::{AssetUniformBuffer, PipelineData},
-    core::{CommandPool, Context},
-    frame::Frame,
+    core::{CommandPool, Context, Frame},
     scene::Scene,
 };
 use anyhow::Result;
