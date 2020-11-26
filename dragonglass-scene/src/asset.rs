@@ -5,6 +5,9 @@ use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub struct Parent(pub hecs::Entity);
+pub struct Name(pub String);
+
 #[derive(Default)]
 pub struct Asset {
     pub world: hecs::World,

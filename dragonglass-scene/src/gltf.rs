@@ -11,9 +11,13 @@ use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
-pub fn create_scene_graph(node: &gltf::Node, entities: &[hecs::Entity]) -> SceneGraph {
+pub fn create_scene_graph(
+    node: &gltf::Node,
+    world: &mut hecs::World,
+    entities: &[hecs::Entity],
+) -> SceneGraph {
     let mut node_graph = SceneGraph::new();
-    graph_node(&mut node_graph, node, NodeIndex::new(0), entities);
+    graph_node(&mut node_graph, node, NodeIndex::new(0), world, entities);
     node_graph
 }
 
@@ -21,6 +25,7 @@ pub fn graph_node(
     graph: &mut SceneGraph,
     gltf_node: &gltf::Node,
     parent_index: NodeIndex,
+    world: &mut hecs::World,
     entities: &[hecs::Entity],
 ) {
     let entity = entities[gltf_node.index()];
@@ -29,7 +34,7 @@ pub fn graph_node(
         graph.add_edge(parent_index, index);
     }
     for child in gltf_node.children() {
-        graph_node(graph, &child, index, entities);
+        graph_node(graph, &child, index, world, entities);
     }
 }
 
@@ -56,7 +61,7 @@ pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
         .spawn_batch((0..gltf.nodes().len()).map(|i| ()))
         .collect::<Vec<_>>();
 
-    let scenes = load_scenes(&gltf, &entities);
+    let scenes = load_scenes(&gltf, &mut world, &entities);
     let animations = load_animations(&gltf, &buffers, &entities)?;
 
     let geometry = load_nodes(&gltf, &buffers, &mut world, &entities)?;
@@ -209,13 +214,17 @@ fn map_gltf_alpha_mode(alpha_mode: &gltf::material::AlphaMode) -> AlphaMode {
     }
 }
 
-fn load_scenes(gltf: &gltf::Document, entities: &[hecs::Entity]) -> Vec<Scene> {
+fn load_scenes(
+    gltf: &gltf::Document,
+    world: &mut hecs::World,
+    entities: &[hecs::Entity],
+) -> Vec<Scene> {
     gltf.scenes()
         .map(|scene| Scene {
             name: scene.name().unwrap_or(DEFAULT_NAME).to_string(),
             graphs: scene
                 .nodes()
-                .map(|node| create_scene_graph(&node, entities))
+                .map(|node| create_scene_graph(&node, world, entities))
                 .collect(),
         })
         .collect::<Vec<_>>()
