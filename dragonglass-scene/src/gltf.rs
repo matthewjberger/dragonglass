@@ -1,6 +1,6 @@
 use crate::{
     AlphaMode, Animation, Asset, Camera, Channel, Filter, Format, Geometry, Interpolation, Joint,
-    Light, LightKind, Material, Mesh, MorphTarget, Node, OrthographicCamera, PerspectiveCamera,
+    Light, LightKind, Material, Mesh, MorphTarget, OrthographicCamera, PerspectiveCamera,
     Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet,
     Vertex, WrappingMode,
 };
@@ -11,19 +11,25 @@ use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
-pub fn create_scene_graph(node: &gltf::Node) -> SceneGraph {
+pub fn create_scene_graph(node: &gltf::Node, entities: &[hecs::Entity]) -> SceneGraph {
     let mut node_graph = SceneGraph::new();
-    graph_node(&mut node_graph, node, NodeIndex::new(0));
+    graph_node(&mut node_graph, node, NodeIndex::new(0), entities);
     node_graph
 }
 
-pub fn graph_node(graph: &mut SceneGraph, gltf_node: &gltf::Node, parent_index: NodeIndex) {
-    let index = graph.add_node(gltf_node.index());
+pub fn graph_node(
+    graph: &mut SceneGraph,
+    gltf_node: &gltf::Node,
+    parent_index: NodeIndex,
+    entities: &[hecs::Entity],
+) {
+    let entity = entities[gltf_node.index()];
+    let index = graph.add_node(entity);
     if parent_index != index {
         graph.add_edge(parent_index, index);
     }
     for child in gltf_node.children() {
-        graph_node(graph, &child, index);
+        graph_node(graph, &child, index, entities);
     }
 }
 
@@ -43,15 +49,20 @@ pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
     let (gltf, buffers, images) = gltf::import(path)?;
 
     let textures = load_textures(&gltf, &images)?;
-    let scenes = load_scenes(&gltf);
-    let animations = load_animations(&gltf, &buffers)?;
     let materials = load_materials(&gltf)?;
 
     let mut world = hecs::World::new();
-    let (entities, geometry) = load_nodes(&gltf, &buffers, &mut world)?;
+    let entities = world
+        .spawn_batch((0..gltf.nodes().len()).map(|i| ()))
+        .collect::<Vec<_>>();
+
+    let scenes = load_scenes(&gltf, &entities);
+    let animations = load_animations(&gltf, &buffers, &entities)?;
+
+    let geometry = load_nodes(&gltf, &buffers, &mut world, &entities)?;
 
     Ok(Asset {
-        nodes: Vec::new(),
+        world,
         scenes,
         animations,
         materials,
@@ -198,13 +209,13 @@ fn map_gltf_alpha_mode(alpha_mode: &gltf::material::AlphaMode) -> AlphaMode {
     }
 }
 
-fn load_scenes(gltf: &gltf::Document) -> Vec<Scene> {
+fn load_scenes(gltf: &gltf::Document, entities: &[hecs::Entity]) -> Vec<Scene> {
     gltf.scenes()
         .map(|scene| Scene {
             name: scene.name().unwrap_or(DEFAULT_NAME).to_string(),
             graphs: scene
                 .nodes()
-                .map(|node| create_scene_graph(&node))
+                .map(|node| create_scene_graph(&node, entities))
                 .collect(),
         })
         .collect::<Vec<_>>()
@@ -214,38 +225,34 @@ fn load_nodes(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
     world: &mut hecs::World,
-) -> Result<(Vec<hecs::Entity>, Geometry)> {
+    entities: &[hecs::Entity],
+) -> Result<Geometry> {
     let mut geometry = Geometry::default();
-    let nodes = gltf
-        .nodes()
-        .map(|node| {
-            let mut entity_builder = hecs::EntityBuilder::new();
+    for (index, node) in gltf.nodes().enumerate() {
+        let entity = entities[index];
 
-            // TODO: Add name
-            // let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
-            entity_builder.add(node_transform(&node));
+        // TODO: Add name
+        // let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-            if let Some(camera) = node.camera() {
-                entity_builder.add(load_camera(&camera)?);
-            }
+        world.insert(entity, (node_transform(&node),))?;
 
-            if let Some(mesh) = node.mesh() {
-                entity_builder.add(load_mesh(&mesh, buffers, &mut geometry)?);
-            }
+        if let Some(camera) = node.camera() {
+            world.insert(entity, (load_camera(&camera)?,))?;
+        }
 
-            if let Some(skin) = node.skin() {
-                entity_builder.add(load_skin(&skin, buffers));
-            }
+        if let Some(mesh) = node.mesh() {
+            world.insert(entity, (load_mesh(&mesh, buffers, &mut geometry)?,))?;
+        }
 
-            if let Some(light) = node.light() {
-                entity_builder.add(load_light(&light));
-            }
+        if let Some(skin) = node.skin() {
+            world.insert(entity, (load_skin(&skin, buffers, entities),))?;
+        }
 
-            let entity = world.spawn(entity_builder.build());
-            Ok(entity)
-        })
-        .collect::<Result<_>>()?;
-    Ok((nodes, geometry))
+        if let Some(light) = node.light() {
+            world.insert(entity, (load_light(&light),))?;
+        }
+    }
+    Ok(geometry)
 }
 
 fn load_camera(camera: &gltf::Camera) -> Result<Camera> {
@@ -469,6 +476,7 @@ fn load_morph_targets(
 fn load_animations(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
+    entities: &[hecs::Entity],
 ) -> Result<Vec<Animation>> {
     let mut animations = Vec::new();
     for animation in gltf.animations() {
@@ -478,6 +486,7 @@ fn load_animations(
             let sampler = channel.sampler();
             let _interpolation = map_gltf_interpolation(sampler.interpolation());
             let target_node = channel.target().node().index();
+            let target = entities[target_node];
             let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
 
             let inputs = reader
@@ -512,7 +521,7 @@ fn load_animations(
                 }
             }
             channels.push(Channel {
-                target_node,
+                target,
                 inputs,
                 transformations,
                 _interpolation,
@@ -550,19 +559,23 @@ fn load_materials(gltf: &gltf::Document) -> Result<Vec<Material>> {
     Ok(materials)
 }
 
-fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data]) -> Skin {
+fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data], entities: &[hecs::Entity]) -> Skin {
     let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
     let inverse_bind_matrices = reader
         .read_inverse_bind_matrices()
         .map_or(Vec::new(), |matrices| {
             matrices.map(glm::Mat4::from).collect::<Vec<_>>()
         });
-    let joints = load_joints(skin, &inverse_bind_matrices);
+    let joints = load_joints(skin, &inverse_bind_matrices, entities);
     let name = skin.name().unwrap_or(DEFAULT_NAME).to_string();
     Skin { joints, name }
 }
 
-fn load_joints(skin: &gltf::Skin, inverse_bind_matrices: &[glm::Mat4]) -> Vec<Joint> {
+fn load_joints(
+    skin: &gltf::Skin,
+    inverse_bind_matrices: &[glm::Mat4],
+    entities: &[hecs::Entity],
+) -> Vec<Joint> {
     skin.joints()
         .enumerate()
         .map(|(index, joint_node)| {
@@ -571,7 +584,7 @@ fn load_joints(skin: &gltf::Skin, inverse_bind_matrices: &[glm::Mat4]) -> Vec<Jo
                 .unwrap_or(&glm::Mat4::identity());
             Joint {
                 inverse_bind_matrix,
-                target_node: joint_node.index(),
+                target: entities[joint_node.index()],
             }
         })
         .collect()

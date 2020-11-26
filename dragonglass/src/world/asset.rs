@@ -6,7 +6,7 @@ use crate::core::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    AlphaMode, Asset, Filter, Geometry, Material, Node, Sampler as AssetSampler, Scene, Vertex,
+    AlphaMode, Asset, Filter, Geometry, Material, Sampler as AssetSampler, Scene, Vertex,
     WrappingMode,
 };
 use nalgebra_glm as glm;
