@@ -1,8 +1,4 @@
-use crate::{
-    adapters::{DescriptorSetLayout, RenderPass},
-    context::Device,
-    resources::ShaderSet,
-};
+use crate::core::{DescriptorSetLayout, Device, RenderPass, ShaderSet};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;

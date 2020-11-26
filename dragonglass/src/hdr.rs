@@ -1,18 +1,12 @@
 use crate::{
-    adapters::GraphicsPipeline,
-    adapters::PipelineLayout,
-    adapters::RenderPass,
-    adapters::{
-        CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipelineSettingsBuilder,
-        ImageToImageCopyBuilder,
-    },
-    context::{Context, Device},
-    cube::Cube,
-    rendergraph::{ImageNode, RenderGraph},
-    resources::{
-        transition_image, Cubemap, ImageDescription, ImageLayoutTransitionBuilder, Sampler,
+    core::{
+        transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
+        Device, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
+        ImageLayoutTransitionBuilder, ImageToImageCopyBuilder, PipelineLayout, RenderPass, Sampler,
         ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Texture,
     },
+    cube::Cube,
+    rendergraph::{ImageNode, RenderGraph},
 };
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};

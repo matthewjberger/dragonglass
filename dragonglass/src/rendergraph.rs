@@ -1,9 +1,4 @@
-use crate::{
-    adapters::{Framebuffer, RenderPass},
-    context::Device,
-    resources::AllocatedImage,
-    resources::{Image, ImageView, Sampler},
-};
+use crate::core::{AllocatedImage, Device, Framebuffer, Image, ImageView, RenderPass, Sampler};
 use anyhow::{bail, ensure, Context, Result};
 use ash::vk;
 use petgraph::prelude::*;

@@ -1,13 +1,13 @@
 use crate::{
-    adapters::CommandPool,
     asset::AssetRendering,
-    context::{Context, Device},
+    core::{
+        CommandPool, Context, Cubemap, Device, Image, RawImage, Sampler, ShaderCache, Swapchain,
+        SwapchainProperties,
+    },
     hdr::hdr_cubemap,
     pipelines::FullscreenPipeline,
     rendergraph::{ImageNode, RenderGraph},
-    resources::{Cubemap, Image, RawImage, Sampler, ShaderCache},
     skybox::SkyboxRendering,
-    swapchain::{Swapchain, SwapchainProperties},
 };
 use anyhow::Result;
 use ash::vk;

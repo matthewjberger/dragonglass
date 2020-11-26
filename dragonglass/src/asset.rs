@@ -1,13 +1,7 @@
-use crate::{
-    adapters::{
-        CommandPool, DescriptorPool, DescriptorSetLayout, GraphicsPipeline,
-        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
-    },
-    context::{Context, Device},
-    resources::{
-        CpuToGpuBuffer, GeometryBuffer, ImageDescription, Sampler, ShaderCache, ShaderPathSet,
-        ShaderPathSetBuilder, Texture,
-    },
+use crate::core::{
+    CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
+    GeometryBuffer, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
+    PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Texture,
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -391,7 +385,7 @@ impl PipelineData {
     }
 }
 
-pub struct GltfRenderer {
+pub struct AssetRenderer {
     command_buffer: vk::CommandBuffer,
     pipeline_layout: vk::PipelineLayout,
     dynamic_alignment: u64,
@@ -399,7 +393,7 @@ pub struct GltfRenderer {
     has_indices: bool,
 }
 
-impl GltfRenderer {
+impl AssetRenderer {
     pub fn new(
         command_buffer: vk::CommandBuffer,
         pipeline_layout: &PipelineLayout,
@@ -609,7 +603,7 @@ impl AssetRendering {
             .as_ref()
             .context("Failed to get pipeline layout for rendering asset!")?;
 
-        let renderer = GltfRenderer::new(
+        let renderer = AssetRenderer::new(
             command_buffer,
             pipeline_layout,
             &self.pipeline_data,

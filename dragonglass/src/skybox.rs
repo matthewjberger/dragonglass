@@ -1,12 +1,10 @@
 use crate::{
-    adapters::DescriptorPool,
-    adapters::{
-        CommandPool, DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineSettingsBuilder,
-        PipelineLayout, RenderPass,
+    core::{
+        CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipeline,
+        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache, ShaderPathSet,
+        ShaderPathSetBuilder,
     },
-    context::{Context, Device},
     cube::Cube,
-    resources::{ShaderCache, ShaderPathSet, ShaderPathSetBuilder},
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};

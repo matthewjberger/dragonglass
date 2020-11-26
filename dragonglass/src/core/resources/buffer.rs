@@ -1,4 +1,4 @@
-use crate::adapters::{BufferToBufferCopyBuilder, CommandPool};
+use crate::core::{BufferToBufferCopyBuilder, CommandPool};
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use log::error;

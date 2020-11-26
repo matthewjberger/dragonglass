@@ -1,4 +1,4 @@
-use crate::{adapters::Fence, context::Device};
+use crate::core::{Device, Fence};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;

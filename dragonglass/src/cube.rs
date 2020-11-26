@@ -1,4 +1,4 @@
-use crate::{adapters::CommandPool, context::Context, resources::GeometryBuffer};
+use crate::core::{CommandPool, Context, GeometryBuffer};
 use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 

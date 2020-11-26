@@ -1,7 +1,6 @@
-use crate::{
-    adapters::{CommandPool, Fence, Semaphore},
-    context::{Context, Device},
-    swapchain::{create_swapchain, Swapchain, SwapchainProperties},
+use crate::core::{
+    create_swapchain, CommandPool, Context, Device, Fence, Semaphore, Swapchain,
+    SwapchainProperties,
 };
 use anyhow::{bail, Context as AnyhowContext, Result};
 use ash::{prelude::VkResult, version::DeviceV1_0, vk};

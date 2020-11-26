@@ -17,16 +17,13 @@
 
 pub use self::device::RenderingDevice;
 
-mod adapters;
 mod asset;
-mod context;
+mod core;
 mod cube;
 mod device;
 mod frame;
 mod hdr;
 mod pipelines;
 mod rendergraph;
-mod resources;
 mod scene;
 mod skybox;
-mod swapchain;

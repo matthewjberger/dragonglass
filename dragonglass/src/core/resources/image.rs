@@ -1,7 +1,6 @@
-use super::CpuToGpuBuffer;
-use crate::{
-    adapters::{BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, PipelineBarrierBuilder},
-    context::{Context, Device},
+use crate::core::{
+    BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, Context, CpuToGpuBuffer, Device,
+    PipelineBarrierBuilder,
 };
 use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
