@@ -43,13 +43,15 @@ pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
     let (gltf, buffers, images) = gltf::import(path)?;
 
     let textures = load_textures(&gltf, &images)?;
-    let (nodes, geometry) = load_nodes(&gltf, &buffers)?;
     let scenes = load_scenes(&gltf);
     let animations = load_animations(&gltf, &buffers)?;
     let materials = load_materials(&gltf)?;
 
+    let mut world = hecs::World::new();
+    let (entities, geometry) = load_nodes(&gltf, &buffers, &mut world)?;
+
     Ok(Asset {
-        nodes,
+        nodes: Vec::new(),
         scenes,
         animations,
         materials,
@@ -211,39 +213,36 @@ fn load_scenes(gltf: &gltf::Document) -> Vec<Scene> {
 fn load_nodes(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
-) -> Result<(Vec<Node>, Geometry)> {
+    world: &mut hecs::World,
+) -> Result<(Vec<hecs::Entity>, Geometry)> {
     let mut geometry = Geometry::default();
     let nodes = gltf
         .nodes()
         .map(|node| {
-            let camera = match node.camera() {
-                Some(camera) => Some(load_camera(&camera)?),
-                None => None,
-            };
+            let mut entity_builder = hecs::EntityBuilder::new();
 
-            let mesh = match node.mesh() {
-                Some(mesh) => Some(load_mesh(&mesh, buffers, &mut geometry)?),
-                None => None,
-            };
+            // TODO: Add name
+            // let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
+            entity_builder.add(node_transform(&node));
 
-            let skin = match node.skin() {
-                Some(skin) => Some(load_skin(&skin, buffers)),
-                None => None,
-            };
+            if let Some(camera) = node.camera() {
+                entity_builder.add(load_camera(&camera)?);
+            }
 
-            let light = match node.light() {
-                Some(light) => Some(load_light(&light)),
-                None => None,
-            };
+            if let Some(mesh) = node.mesh() {
+                entity_builder.add(load_mesh(&mesh, buffers, &mut geometry)?);
+            }
 
-            Ok(Node {
-                name: node.name().unwrap_or(DEFAULT_NAME).to_string(),
-                transform: node_transform(&node),
-                camera,
-                mesh,
-                skin,
-                light,
-            })
+            if let Some(skin) = node.skin() {
+                entity_builder.add(load_skin(&skin, buffers));
+            }
+
+            if let Some(light) = node.light() {
+                entity_builder.add(load_light(&light));
+            }
+
+            let entity = world.spawn(entity_builder.build());
+            Ok(entity)
         })
         .collect::<Result<_>>()?;
     Ok((nodes, geometry))
