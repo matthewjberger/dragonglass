@@ -1,12 +1,11 @@
 use crate::{
-    asset::AssetRendering,
     core::{
         CommandPool, Context, Cubemap, Device, Image, ImageNode, RawImage, RenderGraph, Sampler,
         ShaderCache, Swapchain, SwapchainProperties,
     },
     pbr::hdr_cubemap,
     pipelines::FullscreenPipeline,
-    skybox::SkyboxRendering,
+    world::{AssetRendering, SkyboxRendering},
 };
 use anyhow::Result;
 use ash::vk;

@@ -1,7 +1,7 @@
 use crate::{
-    asset::{AssetUniformBuffer, PipelineData},
     core::{CommandPool, Context, Frame},
     scene::Scene,
+    world::{AssetUniformBuffer, PipelineData},
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
