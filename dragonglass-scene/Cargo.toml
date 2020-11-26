@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.34"
-derive_builder = "0.9.0"
 gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual", "KHR_materials_unlit"] }
 image = "0.23.12"
 log = "0.4.11"

@@ -6,6 +6,308 @@ use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+pub struct Asset {
+    pub nodes: Vec<Node>,
+    pub scenes: Vec<Scene>,
+    pub animations: Vec<Animation>,
+    pub materials: Vec<Material>,
+    pub textures: Vec<Texture>,
+    pub geometry: Geometry,
+}
+
+impl Asset {
+    pub fn material_at_index(&self, index: usize) -> Result<&Material> {
+        let error_message = format!("Failed to lookup asset material at index: {}", index);
+        self.materials.get(index).context(error_message)
+    }
+
+    pub fn animate(&mut self, index: usize, step: f32) {
+        if self.animations.get(index).is_none() {
+            log::warn!("No animation at index: {}. Skipping...", index);
+            return;
+        }
+        let mut animation = &mut self.animations[index];
+
+        animation.time += step;
+
+        // TODO: Allow for specifying a specific animation by name
+        if animation.time > animation.max_animation_time {
+            animation.time = 0.0;
+        }
+        if animation.time < 0.0 {
+            animation.time = animation.max_animation_time;
+        }
+        for channel in animation.channels.iter_mut() {
+            let mut input_iter = channel.inputs.iter().enumerate().peekable();
+            while let Some((previous_key, previous_time)) = input_iter.next() {
+                if let Some((next_key, next_time)) = input_iter.peek() {
+                    let next_key = *next_key;
+                    let next_time = **next_time;
+                    let previous_time = *previous_time;
+
+                    if animation.time < previous_time || animation.time > next_time {
+                        continue;
+                    }
+
+                    let interpolation =
+                        (animation.time - previous_time) / (next_time - previous_time);
+
+                    // TODO: Interpolate with other methods
+                    // Only Linear interpolation is used for now
+                    match &channel.transformations {
+                        TransformationSet::Translations(translations) => {
+                            let start = translations[previous_key];
+                            let end = translations[next_key];
+                            let translation_vec = glm::mix(&start, &end, interpolation);
+                            self.nodes[channel.target_node].transform.translation = translation_vec;
+                        }
+                        TransformationSet::Rotations(rotations) => {
+                            let start = rotations[previous_key];
+                            let end = rotations[next_key];
+                            let start_quat = glm::make_quat(start.as_slice());
+                            let end_quat = glm::make_quat(end.as_slice());
+                            let rotation_quat =
+                                glm::quat_slerp(&start_quat, &end_quat, interpolation);
+                            self.nodes[channel.target_node].transform.rotation = rotation_quat;
+                        }
+                        TransformationSet::Scales(scales) => {
+                            let start = scales[previous_key];
+                            let end = scales[next_key];
+                            let scale_vec = glm::mix(&start, &end, interpolation);
+                            self.nodes[channel.target_node].transform.scale = scale_vec;
+                        }
+                        TransformationSet::MorphTargetWeights(animation_weights) => {
+                            match self.nodes[channel.target_node].mesh.as_mut() {
+                                Some(mesh) => {
+                                    let number_of_mesh_weights = mesh.weights.len();
+                                    if animation_weights.len() % number_of_mesh_weights != 0 {
+                                        log::warn!("Animation channel's weights are not a multiple of the mesh's weights: (channel) {} % (mesh) {} != 0", number_of_mesh_weights, animation_weights.len());
+                                        continue;
+                                    }
+                                    let weights = animation_weights
+                                        .as_slice()
+                                        .chunks(number_of_mesh_weights)
+                                        .collect::<Vec<_>>();
+                                    let start = weights[previous_key];
+                                    let end = weights[next_key];
+                                    for index in 0..number_of_mesh_weights {
+                                        mesh.weights[index] = glm::lerp_scalar(
+                                            start[index],
+                                            end[index],
+                                            interpolation,
+                                        );
+                                    }
+                                }
+                                None => {
+                                    log::warn!("Animation channel's target node animates morph target weights, but node has no mesh!");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
+        let mut offset = 0;
+        let first_scene = self.scenes.first().context("Failed to find a scene")?;
+
+        let mut number_of_joints = 0;
+        for graph in first_scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let node_offset = graph[node_index];
+                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
+                    number_of_joints += skin.joints.len();
+                }
+                Ok(())
+            })?;
+        }
+
+        let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
+        for graph in first_scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let node_offset = graph[node_index];
+                let node_transform = graph.global_transform(node_index, &self.nodes);
+                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
+                    for joint in skin.joints.iter() {
+                        let joint_transform = {
+                            let mut transform = glm::Mat4::identity();
+                            for graph in first_scene.graphs.iter() {
+                                if let Some(index) = graph.find_node(joint.target_node) {
+                                    transform = graph.global_transform(index, &self.nodes);
+                                }
+                            }
+                            transform
+                        };
+
+                        joint_matrices[offset] = glm::inverse(&node_transform)
+                            * joint_transform
+                            * joint.inverse_bind_matrix;
+
+                        offset += 1;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(joint_matrices)
+    }
+
+    pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
+        let first_scene = self.scenes.first().context("Failed to find a scene")?;
+        let number_of_morph_targets = self
+            .nodes
+            .iter()
+            .filter_map(|node| node.mesh.as_ref())
+            .flat_map(|mesh| &mesh.primitives)
+            .flat_map(|primitive| &primitive.morph_targets)
+            .map(|morph_target| morph_target.total_length())
+            .sum();
+
+        let mut offset = 0;
+        let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
+        for graph in first_scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let node_offset = graph[node_index];
+                if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
+                    for primitive in mesh.primitives.iter() {
+                        for morph_target in primitive.morph_targets.iter() {
+                            for position in morph_target.positions.iter() {
+                                morph_targets[offset] = *position;
+                                offset += 1;
+                            }
+
+                            for normal in morph_target.normals.iter() {
+                                morph_targets[offset] = *normal;
+                                offset += 1;
+                            }
+
+                            for tangent in morph_target.tangents.iter() {
+                                morph_targets[offset] = *tangent;
+                                offset += 1;
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(morph_targets)
+    }
+
+    pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
+        let first_scene = self.scenes.first().context("Failed to find a scene")?;
+        let number_of_morph_target_weights = self
+            .nodes
+            .iter()
+            .filter_map(|node| node.mesh.as_ref())
+            .map(|mesh| mesh.weights.len())
+            .sum();
+
+        let mut offset = 0;
+        let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
+        for graph in first_scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let node_offset = graph[node_index];
+                if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
+                    for weight in mesh.weights.iter() {
+                        morph_target_weights[offset] = *weight;
+                        offset += 1;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(morph_target_weights)
+    }
+
+    pub fn merge_with(&mut self, asset: Self) -> Result<()> {
+        let Self {
+            mut nodes,
+            mut scenes,
+            mut animations,
+            mut materials,
+            textures,
+            mut geometry,
+        } = asset;
+
+        let number_of_textures = self.textures.len();
+        self.textures.extend_from_slice(&textures);
+
+        let number_of_materials = self.materials.len();
+        materials.iter_mut().for_each(|material| {
+            let increment = |value: &mut i32| {
+                if *value != -1_i32 {
+                    *value += number_of_textures as i32;
+                }
+            };
+            increment(&mut material.color_texture_index);
+            increment(&mut material.metallic_roughness_texture_index);
+            increment(&mut material.normal_texture_index);
+            increment(&mut material.occlusion_texture_index);
+            increment(&mut material.emissive_texture_index);
+        });
+        materials
+            .into_iter()
+            .for_each(|material| self.materials.push(material));
+
+        let number_of_vertices = self.geometry.vertices.len();
+        let number_of_indices = self.geometry.indices.len();
+        geometry
+            .indices
+            .iter_mut()
+            .for_each(|index| *index += number_of_vertices as u32);
+
+        let Geometry { vertices, indices } = geometry;
+        vertices
+            .into_iter()
+            .for_each(|vertex| self.geometry.vertices.push(vertex));
+        indices
+            .into_iter()
+            .for_each(|index| self.geometry.indices.push(index));
+
+        let number_of_nodes = self.nodes.len();
+        nodes.iter_mut().for_each(|node| {
+            if let Some(mesh) = node.mesh.as_mut() {
+                for primitive in mesh.primitives.iter_mut() {
+                    primitive.first_index += number_of_indices;
+                    primitive.first_vertex += number_of_vertices;
+                    if let Some(material_index) = primitive.material_index.as_mut() {
+                        *material_index += number_of_materials;
+                    }
+                }
+            }
+
+            if let Some(skin) = node.skin.as_mut() {
+                for joint in skin.joints.iter_mut() {
+                    joint.target_node += number_of_nodes;
+                }
+            }
+        });
+        nodes.into_iter().for_each(|node| self.nodes.push(node));
+
+        scenes[0].graphs.iter_mut().for_each(|graph| {
+            let mut scenegraph = graph.clone();
+            scenegraph.offset_by(number_of_nodes);
+            self.scenes[0].graphs.push(scenegraph);
+        });
+
+        animations.iter_mut().for_each(|animation| {
+            for channel in animation.channels.iter_mut() {
+                channel.target_node += number_of_nodes;
+            }
+        });
+
+        animations
+            .into_iter()
+            .for_each(|node| self.animations.push(node));
+
+        Ok(())
+    }
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
@@ -487,307 +789,5 @@ impl Index<NodeIndex> for SceneGraph {
 impl IndexMut<NodeIndex> for SceneGraph {
     fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
         &mut self.0[index]
-    }
-}
-
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct Asset {
-    pub nodes: Vec<Node>,
-    pub scenes: Vec<Scene>,
-    pub animations: Vec<Animation>,
-    pub materials: Vec<Material>,
-    pub textures: Vec<Texture>,
-    pub geometry: Geometry,
-}
-
-impl Asset {
-    pub fn material_at_index(&self, index: usize) -> Result<&Material> {
-        let error_message = format!("Failed to lookup asset material at index: {}", index);
-        self.materials.get(index).context(error_message)
-    }
-
-    pub fn animate(&mut self, index: usize, step: f32) {
-        if self.animations.get(index).is_none() {
-            log::warn!("No animation at index: {}. Skipping...", index);
-            return;
-        }
-        let mut animation = &mut self.animations[index];
-
-        animation.time += step;
-
-        // TODO: Allow for specifying a specific animation by name
-        if animation.time > animation.max_animation_time {
-            animation.time = 0.0;
-        }
-        if animation.time < 0.0 {
-            animation.time = animation.max_animation_time;
-        }
-        for channel in animation.channels.iter_mut() {
-            let mut input_iter = channel.inputs.iter().enumerate().peekable();
-            while let Some((previous_key, previous_time)) = input_iter.next() {
-                if let Some((next_key, next_time)) = input_iter.peek() {
-                    let next_key = *next_key;
-                    let next_time = **next_time;
-                    let previous_time = *previous_time;
-
-                    if animation.time < previous_time || animation.time > next_time {
-                        continue;
-                    }
-
-                    let interpolation =
-                        (animation.time - previous_time) / (next_time - previous_time);
-
-                    // TODO: Interpolate with other methods
-                    // Only Linear interpolation is used for now
-                    match &channel.transformations {
-                        TransformationSet::Translations(translations) => {
-                            let start = translations[previous_key];
-                            let end = translations[next_key];
-                            let translation_vec = glm::mix(&start, &end, interpolation);
-                            self.nodes[channel.target_node].transform.translation = translation_vec;
-                        }
-                        TransformationSet::Rotations(rotations) => {
-                            let start = rotations[previous_key];
-                            let end = rotations[next_key];
-                            let start_quat = glm::make_quat(start.as_slice());
-                            let end_quat = glm::make_quat(end.as_slice());
-                            let rotation_quat =
-                                glm::quat_slerp(&start_quat, &end_quat, interpolation);
-                            self.nodes[channel.target_node].transform.rotation = rotation_quat;
-                        }
-                        TransformationSet::Scales(scales) => {
-                            let start = scales[previous_key];
-                            let end = scales[next_key];
-                            let scale_vec = glm::mix(&start, &end, interpolation);
-                            self.nodes[channel.target_node].transform.scale = scale_vec;
-                        }
-                        TransformationSet::MorphTargetWeights(animation_weights) => {
-                            match self.nodes[channel.target_node].mesh.as_mut() {
-                                Some(mesh) => {
-                                    let number_of_mesh_weights = mesh.weights.len();
-                                    if animation_weights.len() % number_of_mesh_weights != 0 {
-                                        log::warn!("Animation channel's weights are not a multiple of the mesh's weights: (channel) {} % (mesh) {} != 0", number_of_mesh_weights, animation_weights.len());
-                                        continue;
-                                    }
-                                    let weights = animation_weights
-                                        .as_slice()
-                                        .chunks(number_of_mesh_weights)
-                                        .collect::<Vec<_>>();
-                                    let start = weights[previous_key];
-                                    let end = weights[next_key];
-                                    for index in 0..number_of_mesh_weights {
-                                        mesh.weights[index] = glm::lerp_scalar(
-                                            start[index],
-                                            end[index],
-                                            interpolation,
-                                        );
-                                    }
-                                }
-                                None => {
-                                    log::warn!("Animation channel's target node animates morph target weights, but node has no mesh!");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
-        let mut offset = 0;
-        let first_scene = self.scenes.first().context("Failed to find a scene")?;
-
-        let mut number_of_joints = 0;
-        for graph in first_scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let node_offset = graph[node_index];
-                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
-                    number_of_joints += skin.joints.len();
-                }
-                Ok(())
-            })?;
-        }
-
-        let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
-        for graph in first_scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let node_offset = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.nodes);
-                if let Some(skin) = self.nodes[node_offset].skin.as_ref() {
-                    for joint in skin.joints.iter() {
-                        let joint_transform = {
-                            let mut transform = glm::Mat4::identity();
-                            for graph in first_scene.graphs.iter() {
-                                if let Some(index) = graph.find_node(joint.target_node) {
-                                    transform = graph.global_transform(index, &self.nodes);
-                                }
-                            }
-                            transform
-                        };
-
-                        joint_matrices[offset] = glm::inverse(&node_transform)
-                            * joint_transform
-                            * joint.inverse_bind_matrix;
-
-                        offset += 1;
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(joint_matrices)
-    }
-
-    pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
-        let first_scene = self.scenes.first().context("Failed to find a scene")?;
-        let number_of_morph_targets = self
-            .nodes
-            .iter()
-            .filter_map(|node| node.mesh.as_ref())
-            .flat_map(|mesh| &mesh.primitives)
-            .flat_map(|primitive| &primitive.morph_targets)
-            .map(|morph_target| morph_target.total_length())
-            .sum();
-
-        let mut offset = 0;
-        let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
-        for graph in first_scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let node_offset = graph[node_index];
-                if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
-                    for primitive in mesh.primitives.iter() {
-                        for morph_target in primitive.morph_targets.iter() {
-                            for position in morph_target.positions.iter() {
-                                morph_targets[offset] = *position;
-                                offset += 1;
-                            }
-
-                            for normal in morph_target.normals.iter() {
-                                morph_targets[offset] = *normal;
-                                offset += 1;
-                            }
-
-                            for tangent in morph_target.tangents.iter() {
-                                morph_targets[offset] = *tangent;
-                                offset += 1;
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(morph_targets)
-    }
-
-    pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
-        let first_scene = self.scenes.first().context("Failed to find a scene")?;
-        let number_of_morph_target_weights = self
-            .nodes
-            .iter()
-            .filter_map(|node| node.mesh.as_ref())
-            .map(|mesh| mesh.weights.len())
-            .sum();
-
-        let mut offset = 0;
-        let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
-        for graph in first_scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let node_offset = graph[node_index];
-                if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
-                    for weight in mesh.weights.iter() {
-                        morph_target_weights[offset] = *weight;
-                        offset += 1;
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(morph_target_weights)
-    }
-
-    pub fn merge_with(&mut self, asset: Self) -> Result<()> {
-        let Self {
-            mut nodes,
-            mut scenes,
-            mut animations,
-            mut materials,
-            textures,
-            mut geometry,
-        } = asset;
-
-        let number_of_textures = self.textures.len();
-        self.textures.extend_from_slice(&textures);
-
-        let number_of_materials = self.materials.len();
-        materials.iter_mut().for_each(|material| {
-            let increment = |value: &mut i32| {
-                if *value != -1_i32 {
-                    *value += number_of_textures as i32;
-                }
-            };
-            increment(&mut material.color_texture_index);
-            increment(&mut material.metallic_roughness_texture_index);
-            increment(&mut material.normal_texture_index);
-            increment(&mut material.occlusion_texture_index);
-            increment(&mut material.emissive_texture_index);
-        });
-        materials
-            .into_iter()
-            .for_each(|material| self.materials.push(material));
-
-        let number_of_vertices = self.geometry.vertices.len();
-        let number_of_indices = self.geometry.indices.len();
-        geometry
-            .indices
-            .iter_mut()
-            .for_each(|index| *index += number_of_vertices as u32);
-
-        let Geometry { vertices, indices } = geometry;
-        vertices
-            .into_iter()
-            .for_each(|vertex| self.geometry.vertices.push(vertex));
-        indices
-            .into_iter()
-            .for_each(|index| self.geometry.indices.push(index));
-
-        let number_of_nodes = self.nodes.len();
-        nodes.iter_mut().for_each(|node| {
-            if let Some(mesh) = node.mesh.as_mut() {
-                for primitive in mesh.primitives.iter_mut() {
-                    primitive.first_index += number_of_indices;
-                    primitive.first_vertex += number_of_vertices;
-                    if let Some(material_index) = primitive.material_index.as_mut() {
-                        *material_index += number_of_materials;
-                    }
-                }
-            }
-
-            if let Some(skin) = node.skin.as_mut() {
-                for joint in skin.joints.iter_mut() {
-                    joint.target_node += number_of_nodes;
-                }
-            }
-        });
-        nodes.into_iter().for_each(|node| self.nodes.push(node));
-
-        scenes[0].graphs.iter_mut().for_each(|graph| {
-            let mut scenegraph = graph.clone();
-            scenegraph.offset_by(number_of_nodes);
-            self.scenes[0].graphs.push(scenegraph);
-        });
-
-        animations.iter_mut().for_each(|animation| {
-            for channel in animation.channels.iter_mut() {
-                channel.target_node += number_of_nodes;
-            }
-        });
-
-        animations
-            .into_iter()
-            .for_each(|node| self.animations.push(node));
-
-        Ok(())
     }
 }
