@@ -107,8 +107,6 @@ impl App {
 
                     if let Err(error) = rendering_device.render(
                         &system.window_dimensions,
-                        camera.view_matrix(),
-                        camera.position(),
                         &asset,
                     ) {
                         error!("{}", error);

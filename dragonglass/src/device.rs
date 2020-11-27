@@ -47,13 +47,7 @@ impl RenderingDevice {
         Ok(())
     }
 
-    pub fn render(
-        &mut self,
-        dimensions: &[u32; 2],
-        view: glm::Mat4,
-        camera_position: glm::Vec3,
-        asset: &Asset,
-    ) -> Result<()> {
+    pub fn render(&mut self, dimensions: &[u32; 2], asset: &Asset) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
@@ -62,6 +56,8 @@ impl RenderingDevice {
         frame.render(dimensions, |command_buffer, image_index| {
             let projection =
                 glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+            let camera_position = glm::vec3(0.0, 0.0, -3.0);
+            let view = glm::translate(&glm::Mat4::identity(), &camera_position);
 
             if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
                 asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
