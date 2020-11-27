@@ -211,7 +211,7 @@ impl Scene {
         Ok(())
     }
 
-    pub fn load_asset(&mut self, context: &Context, asset: &Asset) -> Result<()> {
+    pub fn load_world(&mut self, context: &Context, asset: &Asset) -> Result<()> {
         self.world_render = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         let mut rendering = WorldRender::new(context, &self.transient_command_pool, asset)?;

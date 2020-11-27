@@ -1,8 +1,8 @@
 use crate::{
-    AlphaMode, Animation, Asset, Camera, Channel, Filter, Format, Geometry, Interpolation, Joint,
-    Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera, PerspectiveCamera,
-    Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform, TransformationSet,
-    Vertex, WrappingMode,
+    AlphaMode, Animation, Asset, Camera, Channel, Ecs, Entity, Filter, Format, Geometry,
+    Interpolation, Joint, Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera,
+    PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform,
+    TransformationSet, Vertex, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -11,13 +11,9 @@ use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
-pub fn create_scene_graph(
-    node: &gltf::Node,
-    world: &mut hecs::World,
-    entities: &[hecs::Entity],
-) -> SceneGraph {
+pub fn create_scene_graph(node: &gltf::Node, ecs: &mut Ecs, entities: &[Entity]) -> SceneGraph {
     let mut node_graph = SceneGraph::new();
-    graph_node(&mut node_graph, node, NodeIndex::new(0), world, entities);
+    graph_node(&mut node_graph, node, NodeIndex::new(0), ecs, entities);
     node_graph
 }
 
@@ -25,8 +21,8 @@ pub fn graph_node(
     graph: &mut SceneGraph,
     gltf_node: &gltf::Node,
     parent_index: NodeIndex,
-    world: &mut hecs::World,
-    entities: &[hecs::Entity],
+    ecs: &mut Ecs,
+    entities: &[Entity],
 ) {
     let entity = entities[gltf_node.index()];
     let index = graph.add_node(entity);
@@ -34,7 +30,7 @@ pub fn graph_node(
         graph.add_edge(parent_index, index);
     }
     for child in gltf_node.children() {
-        graph_node(graph, &child, index, world, entities);
+        graph_node(graph, &child, index, ecs, entities);
     }
 }
 
@@ -78,7 +74,7 @@ pub fn load_gltf(path: impl AsRef<Path>, mut asset: &mut Asset) -> Result<()> {
         .for_each(|texture| asset.textures.push(texture));
 
     let entities = asset
-        .world
+        .ecs
         .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
         .collect::<Vec<_>>();
 
@@ -88,7 +84,7 @@ pub fn load_gltf(path: impl AsRef<Path>, mut asset: &mut Asset) -> Result<()> {
 
     load_nodes(&gltf, &buffers, &mut asset, &entities)?;
     entities.iter().for_each(|entity| {
-        if let Ok(mut mesh) = asset.world.get_mut::<Mesh>(*entity) {
+        if let Ok(mut mesh) = asset.ecs.get_mut::<Mesh>(*entity) {
             mesh.primitives.iter_mut().for_each(|primitive| {
                 if let Some(material_index) = primitive.material_index.as_mut() {
                     *material_index += number_of_materials
@@ -98,7 +94,7 @@ pub fn load_gltf(path: impl AsRef<Path>, mut asset: &mut Asset) -> Result<()> {
     });
 
     // Only load/merge first scene
-    let new_scenes = load_scenes(&gltf, &mut asset.world, &entities);
+    let new_scenes = load_scenes(&gltf, &mut asset.ecs, &entities);
     if let Some(new_scene) = new_scenes.into_iter().next() {
         match asset.scenes.get_mut(0) {
             Some(asset_scene) => new_scene.graphs.into_iter().for_each(|graph| {
@@ -249,17 +245,13 @@ fn map_gltf_alpha_mode(alpha_mode: &gltf::material::AlphaMode) -> AlphaMode {
     }
 }
 
-fn load_scenes(
-    gltf: &gltf::Document,
-    world: &mut hecs::World,
-    entities: &[hecs::Entity],
-) -> Vec<Scene> {
+fn load_scenes(gltf: &gltf::Document, ecs: &mut Ecs, entities: &[Entity]) -> Vec<Scene> {
     gltf.scenes()
         .map(|scene| Scene {
             name: scene.name().unwrap_or(DEFAULT_NAME).to_string(),
             graphs: scene
                 .nodes()
-                .map(|node| create_scene_graph(&node, world, entities))
+                .map(|node| create_scene_graph(&node, ecs, entities))
                 .collect(),
         })
         .collect::<Vec<_>>()
@@ -269,35 +261,35 @@ fn load_nodes(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
     asset: &mut Asset,
-    entities: &[hecs::Entity],
+    entities: &[Entity],
 ) -> Result<()> {
     for (index, node) in gltf.nodes().enumerate() {
         let entity = entities[index];
 
         let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-        asset.world.insert(entity, (Name(name),))?;
+        asset.ecs.insert(entity, (Name(name),))?;
 
-        asset.world.insert(entity, (node_transform(&node),))?;
+        asset.ecs.insert(entity, (node_transform(&node),))?;
 
         if let Some(camera) = node.camera() {
-            asset.world.insert(entity, (load_camera(&camera)?,))?;
+            asset.ecs.insert(entity, (load_camera(&camera)?,))?;
         }
 
         if let Some(mesh) = node.mesh() {
             asset
-                .world
+                .ecs
                 .insert(entity, (load_mesh(&mesh, buffers, &mut asset.geometry)?,))?;
         }
 
         if let Some(skin) = node.skin() {
             asset
-                .world
+                .ecs
                 .insert(entity, (load_skin(&skin, buffers, entities),))?;
         }
 
         if let Some(light) = node.light() {
-            asset.world.insert(entity, (load_light(&light),))?;
+            asset.ecs.insert(entity, (load_light(&light),))?;
         }
     }
 
@@ -525,7 +517,7 @@ fn load_morph_targets(
 fn load_animations(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
-    entities: &[hecs::Entity],
+    entities: &[Entity],
 ) -> Result<Vec<Animation>> {
     let mut animations = Vec::new();
     for animation in gltf.animations() {
@@ -608,7 +600,7 @@ fn load_materials(gltf: &gltf::Document) -> Result<Vec<Material>> {
     Ok(materials)
 }
 
-fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data], entities: &[hecs::Entity]) -> Skin {
+fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data], entities: &[Entity]) -> Skin {
     let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
     let inverse_bind_matrices = reader
         .read_inverse_bind_matrices()
@@ -623,7 +615,7 @@ fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data], entities: &[hecs
 fn load_joints(
     skin: &gltf::Skin,
     inverse_bind_matrices: &[glm::Mat4],
-    entities: &[hecs::Entity],
+    entities: &[Entity],
 ) -> Vec<Joint> {
     skin.joints()
         .enumerate()

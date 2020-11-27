@@ -6,8 +6,8 @@ use crate::core::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    AlphaMode, Asset, Filter, Geometry, Hidden, Material, Mesh, Sampler as AssetSampler, Scene,
-    Skin, Vertex, WrappingMode,
+    AlphaMode, Asset, Ecs, Filter, Geometry, Hidden, Material, Mesh, Sampler as AssetSampler,
+    Scene, Skin, Vertex, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -345,12 +345,12 @@ impl WorldPipelineData {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
-        self.update_node_ubos(scene, &asset.world)?;
+        self.update_node_ubos(scene, &asset.ecs)?;
 
         Ok(())
     }
 
-    fn update_node_ubos(&self, scene: &Scene, world: &hecs::World) -> Result<()> {
+    fn update_node_ubos(&self, scene: &Scene, ecs: &Ecs) -> Result<()> {
         let mut buffers = vec![NodeDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
@@ -358,18 +358,18 @@ impl WorldPipelineData {
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, world);
+                let model = graph.global_transform(node_index, ecs);
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
-                if let Ok(skin) = world.get::<Skin>(entity) {
+                if let Ok(skin) = ecs.get::<Skin>(entity) {
                     let joint_count = skin.joints.len();
                     node_info.x = joint_count as f32;
                     node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                if let Ok(mesh) = world.get::<Mesh>(entity) {
+                if let Ok(mesh) = ecs.get::<Mesh>(entity) {
                     let weight_count = mesh.weights.len();
                     node_info.z = weight_count as f32;
                     node_info.w = weight_offset as f32;
@@ -429,11 +429,11 @@ impl WorldRenderer {
                 ubo_offset += 1;
                 let entity = graph[node_index];
 
-                if asset.world.get::<Hidden>(entity).is_ok() {
+                if asset.ecs.get::<Hidden>(entity).is_ok() {
                     return Ok(());
                 }
 
-                if let Ok(mesh) = asset.world.get::<Mesh>(entity) {
+                if let Ok(mesh) = asset.ecs.get::<Mesh>(entity) {
                     unsafe {
                         device.cmd_bind_descriptor_sets(
                             self.command_buffer,

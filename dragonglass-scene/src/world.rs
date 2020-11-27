@@ -5,13 +5,16 @@ use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub type Ecs = hecs::World;
+pub type Entity = hecs::Entity;
+
 pub struct Hidden;
-pub struct Parent(pub hecs::Entity);
+pub struct Parent(pub Entity);
 pub struct Name(pub String);
 
 #[derive(Default)]
 pub struct Asset {
-    pub world: hecs::World,
+    pub ecs: Ecs,
     pub scenes: Vec<Scene>,
     pub animations: Vec<Animation>,
     pub materials: Vec<Material>,
@@ -64,7 +67,7 @@ impl Asset {
                             let start = translations[previous_key];
                             let end = translations[next_key];
                             let translation_vec = glm::mix(&start, &end, interpolation);
-                            self.world.get_mut::<Transform>(channel.target)?.translation =
+                            self.ecs.get_mut::<Transform>(channel.target)?.translation =
                                 translation_vec;
                         }
                         TransformationSet::Rotations(rotations) => {
@@ -74,17 +77,16 @@ impl Asset {
                             let end_quat = glm::make_quat(end.as_slice());
                             let rotation_quat =
                                 glm::quat_slerp(&start_quat, &end_quat, interpolation);
-                            self.world.get_mut::<Transform>(channel.target)?.rotation =
-                                rotation_quat;
+                            self.ecs.get_mut::<Transform>(channel.target)?.rotation = rotation_quat;
                         }
                         TransformationSet::Scales(scales) => {
                             let start = scales[previous_key];
                             let end = scales[next_key];
                             let scale_vec = glm::mix(&start, &end, interpolation);
-                            self.world.get_mut::<Transform>(channel.target)?.scale = scale_vec;
+                            self.ecs.get_mut::<Transform>(channel.target)?.scale = scale_vec;
                         }
                         TransformationSet::MorphTargetWeights(animation_weights) => {
-                            match self.world.get_mut::<Mesh>(channel.target) {
+                            match self.ecs.get_mut::<Mesh>(channel.target) {
                                 Ok(mut mesh) => {
                                     let number_of_mesh_weights = mesh.weights.len();
                                     if animation_weights.len() % number_of_mesh_weights != 0 {
@@ -126,7 +128,7 @@ impl Asset {
         for graph in first_scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                if let Ok(skin) = self.world.get::<Skin>(entity) {
+                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
                     number_of_joints += skin.joints.len();
                 }
                 Ok(())
@@ -137,14 +139,14 @@ impl Asset {
         for graph in first_scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.world);
-                if let Ok(skin) = self.world.get::<Skin>(entity) {
+                let node_transform = graph.global_transform(node_index, &self.ecs);
+                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in first_scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
-                                    transform = graph.global_transform(index, &self.world);
+                                    transform = graph.global_transform(index, &self.ecs);
                                 }
                             }
                             transform
@@ -379,7 +381,7 @@ pub struct Skin {
 
 #[derive(Debug)]
 pub struct Joint {
-    pub target: hecs::Entity,
+    pub target: Entity,
     pub inverse_bind_matrix: glm::Mat4,
 }
 
@@ -469,7 +471,7 @@ pub struct Animation {
 
 #[derive(Debug)]
 pub struct Channel {
-    pub target: hecs::Entity,
+    pub target: Entity,
     pub inputs: Vec<f32>,
     pub transformations: TransformationSet,
     pub _interpolation: Interpolation,
@@ -612,7 +614,7 @@ impl Default for Filter {
 }
 
 #[derive(Debug, Clone)]
-pub struct SceneGraph(pub Graph<hecs::Entity, ()>);
+pub struct SceneGraph(pub Graph<Entity, ()>);
 
 impl Default for SceneGraph {
     fn default() -> Self {
@@ -622,14 +624,14 @@ impl Default for SceneGraph {
 
 impl SceneGraph {
     pub fn new() -> Self {
-        Self(Graph::<hecs::Entity, ()>::new())
+        Self(Graph::<Entity, ()>::new())
     }
 
     pub fn number_of_nodes(&self) -> usize {
         self.0.raw_nodes().len()
     }
 
-    pub fn add_node(&mut self, node: hecs::Entity) -> NodeIndex {
+    pub fn add_node(&mut self, node: Entity) -> NodeIndex {
         self.0.add_node(node)
     }
 
@@ -650,20 +652,20 @@ impl SceneGraph {
         Ok(())
     }
 
-    pub fn global_transform(&self, index: NodeIndex, world: &hecs::World) -> glm::Mat4 {
+    pub fn global_transform(&self, index: NodeIndex, ecs: &Ecs) -> glm::Mat4 {
         let entity = self[index];
-        let transform = match world.get::<Transform>(entity) {
+        let transform = match ecs.get::<Transform>(entity) {
             Ok(transform) => transform.matrix(),
             Err(_) => glm::Mat4::identity(),
         };
         let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
         match incoming_walker.next_node(&self.0) {
-            Some(parent_index) => self.global_transform(parent_index, world) * transform,
+            Some(parent_index) => self.global_transform(parent_index, ecs) * transform,
             None => transform,
         }
     }
 
-    pub fn find_node(&self, entity: hecs::Entity) -> Option<NodeIndex> {
+    pub fn find_node(&self, entity: Entity) -> Option<NodeIndex> {
         match self.0.node_indices().find(|i| self[*i] == entity) {
             Some(index) => Some(index),
             None => None,
@@ -672,7 +674,7 @@ impl SceneGraph {
 }
 
 impl Index<NodeIndex> for SceneGraph {
-    type Output = hecs::Entity;
+    type Output = Entity;
 
     fn index(&self, index: NodeIndex) -> &Self::Output {
         &self.0[index]

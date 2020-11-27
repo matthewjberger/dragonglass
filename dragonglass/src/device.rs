@@ -42,8 +42,8 @@ impl RenderingDevice {
         self.scene.load_skybox(&self.context, path)
     }
 
-    pub fn load_asset(&mut self, asset: &Asset) -> Result<()> {
-        self.scene.load_asset(&self.context, asset)?;
+    pub fn load_world(&mut self, asset: &Asset) -> Result<()> {
+        self.scene.load_world(&self.context, asset)?;
         Ok(())
     }
 

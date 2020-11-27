@@ -124,7 +124,7 @@ impl App {
                                 Some("glb") | Some("gltf") => {
                                     load_gltf(path.clone(), &mut asset).unwrap();
                                     // FIXME: Don't reload entire scene whenever something is added
-                                    if let Err(error) = rendering_device.load_asset(&asset) {
+                                    if let Err(error) = rendering_device.load_world(&asset) {
                                         warn!("Failed to load gltf asset: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
