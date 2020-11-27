@@ -107,6 +107,9 @@ impl PipelineData {
     pub const MAX_NUMBER_OF_MORPH_TARGETS: usize = 128;
     pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
+    // This does not need to be matched in the shader
+    pub const MAX_NUMBER_OF_MESHES: usize = 1000;
+
     pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
         let device = context.device.clone();
         let allocator = context.allocator.clone();
@@ -134,10 +137,9 @@ impl PipelineData {
         )?;
 
         let dynamic_alignment = context.dynamic_alignment_of::<NodeDynamicUniformBuffer>();
-        let number_of_nodes = asset.world.iter().count(); // TODO: Maybe only data is needed per-mesh rather than per-node
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             allocator,
-            (number_of_nodes as u64 * dynamic_alignment) as vk::DeviceSize,
+            (Self::MAX_NUMBER_OF_MESHES as u64 * dynamic_alignment) as vk::DeviceSize,
         )?;
 
         let geometry_buffer = Self::geometry_buffer(context, command_pool, &asset.geometry)?;
@@ -349,7 +351,7 @@ impl PipelineData {
     }
 
     fn update_node_ubos(&self, scene: &Scene, world: &hecs::World) -> Result<()> {
-        let mut buffers = vec![NodeDynamicUniformBuffer::default(); world.iter().count()];
+        let mut buffers = vec![NodeDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
         let mut ubo_offset = 0;

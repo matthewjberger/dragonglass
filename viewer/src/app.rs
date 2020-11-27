@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use dragonglass_scene::{load_gltf_asset, Asset};
+use dragonglass_scene::{load_gltf_asset, Asset, Mesh};
 use image::ImageFormat;
 use log::{error, info, warn};
 use winit::{
@@ -171,7 +171,7 @@ impl App {
         if !input.allowed {
             return;
         }
-        let scroll_multiplier = 0.01;
+        let scroll_multiplier = 1.0;
         let rotation_multiplier = 0.05;
         let drag_multiplier = 0.001;
 
