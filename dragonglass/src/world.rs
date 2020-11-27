@@ -77,7 +77,7 @@ pub struct WorldUniformBuffer {
 }
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct NodeDynamicUniformBuffer {
+pub struct EntityDynamicUniformBuffer {
     pub model: glm::Mat4,
     // X is the joint count.
     // Y is the joint matrix offset.
@@ -136,7 +136,7 @@ impl WorldPipelineData {
             mem::size_of::<WorldUniformBuffer>() as _,
         )?;
 
-        let dynamic_alignment = context.dynamic_alignment_of::<NodeDynamicUniformBuffer>();
+        let dynamic_alignment = context.dynamic_alignment_of::<EntityDynamicUniformBuffer>();
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             allocator,
             (Self::MAX_NUMBER_OF_MESHES as u64 * dynamic_alignment) as vk::DeviceSize,
@@ -347,7 +347,7 @@ impl WorldPipelineData {
     }
 
     fn update_node_ubos(&self, scene: &Scene, ecs: &Ecs) -> Result<()> {
-        let mut buffers = vec![NodeDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
+        let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
         let mut ubo_offset = 0;
@@ -372,7 +372,7 @@ impl WorldPipelineData {
                     weight_offset += weight_count;
                 }
 
-                buffers[ubo_offset] = NodeDynamicUniformBuffer { model, node_info };
+                buffers[ubo_offset] = EntityDynamicUniformBuffer { model, node_info };
                 ubo_offset += 1;
 
                 Ok(())
