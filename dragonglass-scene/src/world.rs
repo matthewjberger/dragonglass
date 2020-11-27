@@ -164,73 +164,70 @@ impl World {
     }
 
     pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
-        // let first_scene = self.scenes.first().context("Failed to find a scene")?;
-        // let number_of_morph_targets = self
-        //     .nodes
-        //     .iter()
-        //     .filter_map(|node| node.mesh.as_ref())
-        //     .flat_map(|mesh| &mesh.primitives)
-        //     .flat_map(|primitive| &primitive.morph_targets)
-        //     .map(|morph_target| morph_target.total_length())
-        //     .sum();
+        let number_of_morph_targets = self
+            .ecs
+            .query::<&Mesh>()
+            .iter()
+            .map(|(_entity, mesh)| mesh)
+            .flat_map(|mesh| &mesh.primitives)
+            .flat_map(|primitive| &primitive.morph_targets)
+            .map(|morph_target| morph_target.total_length())
+            .sum();
 
-        // let mut offset = 0;
-        // let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
-        // for graph in first_scene.graphs.iter() {
-        //     graph.walk(|node_index| {
-        //         let node_offset = graph[node_index];
-        //         if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
-        //             for primitive in mesh.primitives.iter() {
-        //                 for morph_target in primitive.morph_targets.iter() {
-        //                     for position in morph_target.positions.iter() {
-        //                         morph_targets[offset] = *position;
-        //                         offset += 1;
-        //                     }
+        let mut offset = 0;
+        let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
+        for graph in self.scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let entity = graph[node_index];
+                if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
+                    for primitive in mesh.primitives.iter() {
+                        for morph_target in primitive.morph_targets.iter() {
+                            for position in morph_target.positions.iter() {
+                                morph_targets[offset] = *position;
+                                offset += 1;
+                            }
 
-        //                     for normal in morph_target.normals.iter() {
-        //                         morph_targets[offset] = *normal;
-        //                         offset += 1;
-        //                     }
+                            for normal in morph_target.normals.iter() {
+                                morph_targets[offset] = *normal;
+                                offset += 1;
+                            }
 
-        //                     for tangent in morph_target.tangents.iter() {
-        //                         morph_targets[offset] = *tangent;
-        //                         offset += 1;
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //         Ok(())
-        //     })?;
-        // }
-        // Ok(morph_targets)
-        Ok(Vec::new())
+                            for tangent in morph_target.tangents.iter() {
+                                morph_targets[offset] = *tangent;
+                                offset += 1;
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(morph_targets)
     }
 
     pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
-        // let first_scene = self.scenes.first().context("Failed to find a scene")?;
-        // let number_of_morph_target_weights = self
-        //     .nodes
-        //     .iter()
-        //     .filter_map(|node| node.mesh.as_ref())
-        //     .map(|mesh| mesh.weights.len())
-        //     .sum();
+        let number_of_morph_target_weights = self
+            .ecs
+            .query::<&Mesh>()
+            .iter()
+            .map(|(_entity, mesh)| mesh.weights.len())
+            .sum();
 
-        // let mut offset = 0;
-        // let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
-        // for graph in first_scene.graphs.iter() {
-        //     graph.walk(|node_index| {
-        //         let node_offset = graph[node_index];
-        //         if let Some(mesh) = self.nodes[node_offset].mesh.as_ref() {
-        //             for weight in mesh.weights.iter() {
-        //                 morph_target_weights[offset] = *weight;
-        //                 offset += 1;
-        //             }
-        //         }
-        //         Ok(())
-        //     })?;
-        // }
-        // Ok(morph_target_weights)
-        Ok(Vec::new())
+        let mut offset = 0;
+        let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
+        for graph in self.scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let entity = graph[node_index];
+                if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
+                    for weight in mesh.weights.iter() {
+                        morph_target_weights[offset] = *weight;
+                        offset += 1;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        Ok(morph_target_weights)
     }
 }
 
