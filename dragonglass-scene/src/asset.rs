@@ -299,7 +299,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
+    pub fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
         match &self.projection {
             Projection::Perspective(camera) => camera.matrix(viewport_aspect_ratio),
             Projection::Orthographic(camera) => camera.matrix(),
@@ -322,7 +322,7 @@ pub struct PerspectiveCamera {
 }
 
 impl PerspectiveCamera {
-    fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
+    pub fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
         let aspect_ratio = if let Some(aspect_ratio) = self.aspect_ratio {
             aspect_ratio
         } else {
