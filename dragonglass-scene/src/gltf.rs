@@ -58,7 +58,7 @@ pub fn load_gltf_asset(path: impl AsRef<Path>) -> Result<Asset> {
 
     let mut world = hecs::World::new();
     let entities = world
-        .spawn_batch((0..gltf.nodes().len()).map(|i| ()))
+        .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
         .collect::<Vec<_>>();
 
     let scenes = load_scenes(&gltf, &mut world, &entities);

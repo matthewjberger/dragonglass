@@ -101,7 +101,9 @@ impl App {
 
                     if let Some(gltf_asset) = asset.as_mut() {
                         if !gltf_asset.animations.is_empty() {
-                            gltf_asset.animate(0, 0.75 * system.delta_time as f32);
+                            if let Err(error) = gltf_asset.animate(0, 0.75 * system.delta_time as f32) {
+                                log::warn!("Failed to animate asset: {}", error);
+                            }
                         }
                     }
 

@@ -6,8 +6,8 @@ use crate::core::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    AlphaMode, Asset, Filter, Geometry, Material, Sampler as AssetSampler, Scene, Vertex,
-    WrappingMode,
+    AlphaMode, Asset, Filter, Geometry, Material, Mesh, Sampler as AssetSampler, Scene, Skin,
+    Vertex, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -134,7 +134,7 @@ impl PipelineData {
         )?;
 
         let dynamic_alignment = context.dynamic_alignment_of::<NodeDynamicUniformBuffer>();
-        let number_of_nodes = asset.nodes.len(); // TODO: Maybe only data is needed per-mesh rather than per-node
+        let number_of_nodes = asset.world.iter().count(); // TODO: Maybe only data is needed per-mesh rather than per-node
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             allocator,
             (number_of_nodes as u64 * dynamic_alignment) as vk::DeviceSize,
@@ -343,37 +343,39 @@ impl PipelineData {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
-        self.update_node_ubos(scene, &asset.nodes)?;
+        self.update_node_ubos(scene, &asset.world)?;
 
         Ok(())
     }
 
-    fn update_node_ubos(&self, scene: &Scene, nodes: &[Node]) -> Result<()> {
-        let mut buffers = vec![NodeDynamicUniformBuffer::default(); nodes.len()];
+    fn update_node_ubos(&self, scene: &Scene, world: &hecs::World) -> Result<()> {
+        let mut buffers = vec![NodeDynamicUniformBuffer::default(); world.iter().count()];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
+        let mut ubo_offset = 0;
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
-                let offset = graph[node_index];
-                let model = graph.global_transform(node_index, nodes);
+                let entity = graph[node_index];
+                let model = graph.global_transform(node_index, world);
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
-                if let Some(skin) = nodes[offset].skin.as_ref() {
+                if let Ok(skin) = world.get::<Skin>(entity) {
                     let joint_count = skin.joints.len();
                     node_info.x = joint_count as f32;
                     node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                if let Some(mesh) = nodes[offset].mesh.as_ref() {
+                if let Ok(mesh) = world.get::<Mesh>(entity) {
                     let weight_count = mesh.weights.len();
                     node_info.z = weight_count as f32;
                     node_info.w = weight_offset as f32;
                     weight_offset += weight_count;
                 }
 
-                buffers[offset] = NodeDynamicUniformBuffer { model, node_info };
+                buffers[ubo_offset] = NodeDynamicUniformBuffer { model, node_info };
+                ubo_offset += 1;
 
                 Ok(())
             })?;
@@ -419,68 +421,66 @@ impl AssetRenderer {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
+        let mut ubo_offset = 0;
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
-                let node_offset = graph[node_index];
-                let node = &asset.nodes[node_offset];
-                let mesh = match node.mesh.as_ref() {
-                    Some(mesh) => mesh,
-                    _ => return Ok(()),
-                };
-
-                unsafe {
-                    device.cmd_bind_descriptor_sets(
-                        self.command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        self.pipeline_layout,
-                        0,
-                        &[self.descriptor_set],
-                        &[(node_offset as u64 * self.dynamic_alignment) as _],
-                    );
-                }
-
-                for primitive in mesh.primitives.iter() {
-                    let material = match primitive.material_index {
-                        Some(material_index) => {
-                            let primitive_material = asset.material_at_index(material_index)?;
-                            if primitive_material.alpha_mode != alpha_mode {
-                                continue;
-                            }
-
-                            PushConstantMaterial::from_material(primitive_material)?
-                        }
-                        None => PushConstantMaterial::from_material(&Material::default())?,
-                    };
-
+                let entity = graph[node_index];
+                if let Ok(mesh) = asset.world.get::<Mesh>(entity) {
                     unsafe {
-                        device.cmd_push_constants(
+                        device.cmd_bind_descriptor_sets(
                             self.command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
                             self.pipeline_layout,
-                            vk::ShaderStageFlags::ALL_GRAPHICS,
                             0,
-                            byte_slice_from(&material),
+                            &[self.descriptor_set],
+                            &[(ubo_offset as u64 * self.dynamic_alignment) as _],
                         );
+                    }
 
-                        if self.has_indices {
-                            device.cmd_draw_indexed(
+                    for primitive in mesh.primitives.iter() {
+                        let material = match primitive.material_index {
+                            Some(material_index) => {
+                                let primitive_material = asset.material_at_index(material_index)?;
+                                if primitive_material.alpha_mode != alpha_mode {
+                                    continue;
+                                }
+
+                                PushConstantMaterial::from_material(primitive_material)?
+                            }
+                            None => PushConstantMaterial::from_material(&Material::default())?,
+                        };
+
+                        unsafe {
+                            device.cmd_push_constants(
                                 self.command_buffer,
-                                primitive.number_of_indices as _,
-                                1,
-                                primitive.first_index as _,
+                                self.pipeline_layout,
+                                vk::ShaderStageFlags::ALL_GRAPHICS,
                                 0,
-                                0,
+                                byte_slice_from(&material),
                             );
-                        } else {
-                            device.cmd_draw(
-                                self.command_buffer,
-                                primitive.number_of_vertices as _,
-                                1,
-                                primitive.first_vertex as _,
-                                0,
-                            );
+
+                            if self.has_indices {
+                                device.cmd_draw_indexed(
+                                    self.command_buffer,
+                                    primitive.number_of_indices as _,
+                                    1,
+                                    primitive.first_index as _,
+                                    0,
+                                    0,
+                                );
+                            } else {
+                                device.cmd_draw(
+                                    self.command_buffer,
+                                    primitive.number_of_vertices as _,
+                                    1,
+                                    primitive.first_vertex as _,
+                                    0,
+                                );
+                            }
                         }
                     }
                 }
+                ubo_offset += 1;
                 Ok(())
             })?;
         }
