@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::Asset;
+use dragonglass_scene::{Asset, Camera, Transform};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -53,17 +53,16 @@ impl RenderingDevice {
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.device.clone();
 
-        frame.render(dimensions, |command_buffer, image_index| {
-            let projection =
-                glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-            let camera_position = glm::vec3(0.0, 0.0, -3.0);
-            let view = glm::translate(&glm::Mat4::identity(), &camera_position);
+        // Default camera
+        // TODO: Make this a node in the ecs, adding it if no cameras exist in the ecs
+        let mut projection =
+            glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+        let mut camera_position = glm::vec3(0.0, 0.0, -3.0);
+        let mut view = glm::translate(&glm::Mat4::identity(), &camera_position);
 
+        frame.render(dimensions, |command_buffer, image_index| {
             if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
                 asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
-
-                let mut camera_position = glm::vec3_to_vec4(&camera_position);
-                camera_position.w = 1.0;
 
                 let mut joint_matrices =
                     [glm::Mat4::identity(); PipelineData::MAX_NUMBER_OF_JOINTS];
@@ -85,6 +84,21 @@ impl RenderingDevice {
                     .iter_mut()
                     .zip(asset.morph_target_weights()?.into_iter())
                     .for_each(|(a, b)| *a = b);
+
+                if let Some((camera, transform)) = asset
+                    .world
+                    .query::<(&Camera, &Transform)>()
+                    .iter()
+                    .map(|(_entity, (camera, transform))| (camera, transform))
+                    .next()
+                {
+                    projection = camera.matrix(aspect_ratio);
+                    // FIXME: Need to transform camera
+                    // camera_position = scene.global
+                }
+
+                let mut camera_position = glm::vec3_to_vec4(&camera_position);
+                camera_position.w = 1.0;
 
                 let ubo = AssetUniformBuffer {
                     view,
