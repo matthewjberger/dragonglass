@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::vk;
-use dragonglass_scene::Asset;
+use dragonglass_scene::World;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {
@@ -211,10 +211,10 @@ impl Scene {
         Ok(())
     }
 
-    pub fn load_world(&mut self, context: &Context, asset: &Asset) -> Result<()> {
+    pub fn load_world(&mut self, context: &Context, world: &World) -> Result<()> {
         self.world_render = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
-        let mut rendering = WorldRender::new(context, &self.transient_command_pool, asset)?;
+        let mut rendering = WorldRender::new(context, &self.transient_command_pool, world)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
         self.world_render = Some(rendering);
         Ok(())

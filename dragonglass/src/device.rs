@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::Asset;
+use dragonglass_scene::World;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -42,8 +42,8 @@ impl RenderingDevice {
         self.scene.load_skybox(&self.context, path)
     }
 
-    pub fn load_world(&mut self, asset: &Asset) -> Result<()> {
-        self.scene.load_world(&self.context, asset)?;
+    pub fn load_world(&mut self, world: &World) -> Result<()> {
+        self.scene.load_world(&self.context, world)?;
         Ok(())
     }
 
@@ -52,7 +52,7 @@ impl RenderingDevice {
         dimensions: &[u32; 2],
         view: glm::Mat4,
         camera_position: glm::Vec3,
-        asset: &Asset,
+        world: &World,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -63,8 +63,8 @@ impl RenderingDevice {
             let projection =
                 glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
-            if let Some(asset_rendering) = scene.world_render.as_ref() {
-                asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
+            if let Some(world_render) = scene.world_render.as_ref() {
+                world_render.pipeline_data.update_dynamic_ubo(world)?;
 
                 let mut camera_position = glm::vec3_to_vec4(&camera_position);
                 camera_position.w = 1.0;
@@ -73,21 +73,21 @@ impl RenderingDevice {
                     [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
                 joint_matrices
                     .iter_mut()
-                    .zip(asset.joint_matrices()?.into_iter())
+                    .zip(world.joint_matrices()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let mut morph_targets =
                     [glm::Vec4::identity(); WorldPipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
                 morph_targets
                     .iter_mut()
-                    .zip(asset.morph_targets()?.into_iter())
+                    .zip(world.morph_targets()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let mut morph_target_weights =
                     [0.0; WorldPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
                 morph_target_weights
                     .iter_mut()
-                    .zip(asset.morph_target_weights()?.into_iter())
+                    .zip(world.morph_target_weights()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let ubo = WorldUniformBuffer {
@@ -98,7 +98,7 @@ impl RenderingDevice {
                     morph_targets,
                     morph_target_weights,
                 };
-                asset_rendering
+                world_render
                     .pipeline_data
                     .uniform_buffer
                     .upload_data(&[ubo], 0)?;
@@ -115,7 +115,7 @@ impl RenderingDevice {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
                     if let Some(world_render) = scene.world_render.as_ref() {
-                        world_render.issue_commands(command_buffer, asset)?;
+                        world_render.issue_commands(command_buffer, world)?;
                     }
                     Ok(())
                 },
@@ -152,8 +152,8 @@ impl RenderingDevice {
     }
 
     pub fn toggle_wireframe(&mut self) {
-        if let Some(asset_rendering) = self.scene.world_render.as_mut() {
-            asset_rendering.wireframe_enabled = !asset_rendering.wireframe_enabled;
+        if let Some(world_render) = self.scene.world_render.as_mut() {
+            world_render.wireframe_enabled = !world_render.wireframe_enabled;
         }
     }
 }

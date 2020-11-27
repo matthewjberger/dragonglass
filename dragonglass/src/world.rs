@@ -6,8 +6,8 @@ use crate::core::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    AlphaMode, Asset, Ecs, Filter, Geometry, Hidden, Material, Mesh, Sampler as AssetSampler,
-    Scene, Skin, Vertex, WrappingMode,
+    AlphaMode, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene, Skin, Vertex, World,
+    WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -110,13 +110,13 @@ impl WorldPipelineData {
     // This does not need to be matched in the shader
     pub const MAX_NUMBER_OF_MESHES: usize = 1000;
 
-    pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
+    pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
         let device = context.device.clone();
         let allocator = context.allocator.clone();
 
         let mut textures = Vec::new();
         let mut samplers = Vec::new();
-        for texture in asset.textures.iter() {
+        for texture in world.textures.iter() {
             let description = ImageDescription::from_texture(texture)?;
             textures.push(Texture::new(context, command_pool, &description)?);
             samplers.push(map_sampler(
@@ -142,7 +142,7 @@ impl WorldPipelineData {
             (Self::MAX_NUMBER_OF_MESHES as u64 * dynamic_alignment) as vk::DeviceSize,
         )?;
 
-        let geometry_buffer = Self::geometry_buffer(context, command_pool, &asset.geometry)?;
+        let geometry_buffer = Self::geometry_buffer(context, command_pool, &world.geometry)?;
 
         let empty_description = ImageDescription::empty(1, 1, vk::Format::R8G8B8A8_UNORM);
         let dummy_texture = Texture::new(context, command_pool, &empty_description)?;
@@ -331,21 +331,21 @@ impl WorldPipelineData {
         }
     }
 
-    pub fn update_dynamic_ubo(&self, asset: &Asset) -> Result<()> {
-        let asset_joint_matrices = asset.joint_matrices()?;
-        let number_of_joints = asset_joint_matrices.len();
+    pub fn update_dynamic_ubo(&self, world: &World) -> Result<()> {
+        let world_joint_matrices = world.joint_matrices()?;
+        let number_of_joints = world_joint_matrices.len();
         ensure!(
             number_of_joints < Self::MAX_NUMBER_OF_JOINTS,
-            "Too many joints in asset: {}/{}",
+            "Too many joints in world: {}/{}",
             number_of_joints,
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        let scene = asset
+        let scene = world
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
-        self.update_node_ubos(scene, &asset.ecs)?;
+        self.update_node_ubos(scene, &world.ecs)?;
 
         Ok(())
     }
@@ -413,13 +413,8 @@ impl WorldRenderer {
         }
     }
 
-    pub fn draw_asset(
-        &self,
-        device: &ash::Device,
-        asset: &Asset,
-        alpha_mode: AlphaMode,
-    ) -> Result<()> {
-        let scene = asset
+    pub fn render(&self, device: &ash::Device, world: &World, alpha_mode: AlphaMode) -> Result<()> {
+        let scene = world
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
@@ -429,11 +424,11 @@ impl WorldRenderer {
                 ubo_offset += 1;
                 let entity = graph[node_index];
 
-                if asset.ecs.get::<Hidden>(entity).is_ok() {
+                if world.ecs.get::<Hidden>(entity).is_ok() {
                     return Ok(());
                 }
 
-                if let Ok(mesh) = asset.ecs.get::<Mesh>(entity) {
+                if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
                     unsafe {
                         device.cmd_bind_descriptor_sets(
                             self.command_buffer,
@@ -448,7 +443,7 @@ impl WorldRenderer {
                     for primitive in mesh.primitives.iter() {
                         let material = match primitive.material_index {
                             Some(material_index) => {
-                                let primitive_material = asset.material_at_index(material_index)?;
+                                let primitive_material = world.material_at_index(material_index)?;
                                 if primitive_material.alpha_mode != alpha_mode {
                                     continue;
                                 }
@@ -506,8 +501,8 @@ pub struct WorldRender {
 }
 
 impl WorldRender {
-    pub fn new(context: &Context, command_pool: &CommandPool, asset: &Asset) -> Result<Self> {
-        let pipeline_data = WorldPipelineData::new(context, command_pool, &asset)?;
+    pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
+        let pipeline_data = WorldPipelineData::new(context, command_pool, &world)?;
         Ok(Self {
             pipeline_data,
             pipeline: None,
@@ -589,26 +584,26 @@ impl WorldRender {
         Ok(())
     }
 
-    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer, asset: &Asset) -> Result<()> {
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer, world: &World) -> Result<()> {
         let pipeline = self
             .pipeline
             .as_ref()
-            .context("Failed to get pipeline for rendering asset!")?;
+            .context("Failed to get pipeline for rendering world!")?;
 
         let pipeline_blended = self
             .pipeline_blended
             .as_ref()
-            .context("Failed to get blend pipeline for rendering asset!")?;
+            .context("Failed to get blend pipeline for rendering world!")?;
 
         let pipeline_wireframe = self
             .pipeline_wireframe
             .as_ref()
-            .context("Failed to get wireframe pipeline for rendering asset!")?;
+            .context("Failed to get wireframe pipeline for rendering world!")?;
 
         let pipeline_layout = self
             .pipeline_layout
             .as_ref()
-            .context("Failed to get pipeline layout for rendering asset!")?;
+            .context("Failed to get pipeline layout for rendering world!")?;
 
         let renderer = WorldRenderer::new(
             command_buffer,
@@ -634,7 +629,7 @@ impl WorldRender {
                     }
                 }
             }
-            renderer.draw_asset(&self.device.handle, asset, *alpha_mode)?;
+            renderer.render(&self.device.handle, world, *alpha_mode)?;
         }
 
         Ok(())
@@ -708,30 +703,30 @@ fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
 fn map_sampler(
     device: Arc<Device>,
     mip_levels: u32,
-    asset_sampler: &AssetSampler,
+    sampler: &dragonglass_scene::Sampler,
 ) -> Result<Sampler> {
-    let min_filter = match asset_sampler.min_filter {
+    let min_filter = match sampler.min_filter {
         Filter::Linear => vk::Filter::LINEAR,
         Filter::Nearest => vk::Filter::NEAREST,
     };
 
-    let mipmap_mode = match asset_sampler.min_filter {
+    let mipmap_mode = match sampler.min_filter {
         Filter::Linear => vk::SamplerMipmapMode::LINEAR,
         Filter::Nearest => vk::SamplerMipmapMode::NEAREST,
     };
 
-    let mag_filter = match asset_sampler.mag_filter {
+    let mag_filter = match sampler.mag_filter {
         Filter::Nearest => vk::Filter::NEAREST,
         Filter::Linear => vk::Filter::LINEAR,
     };
 
-    let address_mode_u = match asset_sampler.wrap_s {
+    let address_mode_u = match sampler.wrap_s {
         WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
         WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
         WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
     };
 
-    let address_mode_v = match asset_sampler.wrap_t {
+    let address_mode_v = match sampler.wrap_t {
         WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
         WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
         WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,

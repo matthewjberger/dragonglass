@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use dragonglass_scene::{load_gltf, Asset};
+use dragonglass_scene::{load_gltf, World};
 use image::ImageFormat;
 use log::{error, info, warn};
 use winit::{
@@ -14,7 +14,7 @@ use winit::{
 };
 
 pub struct App {
-    asset: Asset,
+    world: World,
     camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
@@ -58,7 +58,7 @@ impl App {
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
 
         let app = Self {
-            asset: Asset::default(),
+            world: World::default(),
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
@@ -77,7 +77,7 @@ impl App {
             mut input,
             mut system,
             mut rendering_device,
-            mut asset,
+            mut world,
             event_loop,
             ..
         } = self;
@@ -99,9 +99,9 @@ impl App {
 
                     Self::update_camera(&mut camera, &input, &system);
 
-                    if !asset.animations.is_empty() {
-                        if let Err(error) = asset.animate(0, 0.75 * system.delta_time as f32) {
-                            log::warn!("Failed to animate asset: {}", error);
+                    if !world.animations.is_empty() {
+                        if let Err(error) = world.animate(0, 0.75 * system.delta_time as f32) {
+                            log::warn!("Failed to animate world: {}", error);
                         }
                     }
 
@@ -109,7 +109,7 @@ impl App {
                         &system.window_dimensions,
                         camera.view_matrix(),
                         camera.position(),
-                        &asset,
+                        &world,
                     ) {
                         error!("{}", error);
                     }
@@ -122,13 +122,13 @@ impl App {
                         if let Some(extension) = path.extension() {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
-                                    load_gltf(path.clone(), &mut asset).unwrap();
+                                    load_gltf(path.clone(), &mut world).unwrap();
                                     // FIXME: Don't reload entire scene whenever something is added
-                                    if let Err(error) = rendering_device.load_world(&asset) {
-                                        warn!("Failed to load gltf asset: {}", error);
+                                    if let Err(error) = rendering_device.load_world(&world) {
+                                        warn!("Failed to load gltf world: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
-                                    info!("Loaded gltf asset: '{}'", raw_path);
+                                    info!("Loaded gltf world: '{}'", raw_path);
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {

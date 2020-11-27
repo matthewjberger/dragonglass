@@ -120,12 +120,12 @@ impl SkyboxRendering {
         let pipeline = self
             .pipeline
             .as_ref()
-            .context("Failed to get pipeline for rendering asset!")?;
+            .context("Failed to get pipeline for rendering world!")?;
 
         let pipeline_layout = self
             .pipeline_layout
             .as_ref()
-            .context("Failed to get pipeline layout for rendering asset!")?;
+            .context("Failed to get pipeline layout for rendering world!")?;
 
         pipeline.bind(&self.device.handle, command_buffer);
 

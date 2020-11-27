@@ -1,8 +1,8 @@
 use crate::{
-    AlphaMode, Animation, Asset, Camera, Channel, Ecs, Entity, Filter, Format, Geometry,
-    Interpolation, Joint, Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera,
+    AlphaMode, Animation, Camera, Channel, Ecs, Entity, Filter, Format, Geometry, Interpolation,
+    Joint, Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera,
     PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform,
-    TransformationSet, Vertex, WrappingMode,
+    TransformationSet, Vertex, World, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -46,12 +46,12 @@ fn node_transform(node: &gltf::Node) -> Transform {
 
 const DEFAULT_NAME: &str = "<Unnamed>";
 
-pub fn load_gltf(path: impl AsRef<Path>, mut asset: &mut Asset) -> Result<()> {
+pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
     let (gltf, buffers, images) = gltf::import(path)?;
 
-    let number_of_materials = asset.materials.len();
+    let number_of_materials = world.materials.len();
 
-    let number_of_textures = asset.textures.len();
+    let number_of_textures = world.textures.len();
     let mut materials = load_materials(&gltf)?;
     materials.iter_mut().for_each(|material| {
         let increment = |value: &mut i32| {
@@ -67,24 +67,24 @@ pub fn load_gltf(path: impl AsRef<Path>, mut asset: &mut Asset) -> Result<()> {
     });
     materials
         .into_iter()
-        .for_each(|material| asset.materials.push(material));
+        .for_each(|material| world.materials.push(material));
 
     load_textures(&gltf, &images)?
         .into_iter()
-        .for_each(|texture| asset.textures.push(texture));
+        .for_each(|texture| world.textures.push(texture));
 
-    let entities = asset
+    let entities = world
         .ecs
         .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
         .collect::<Vec<_>>();
 
     load_animations(&gltf, &buffers, &entities)?
         .into_iter()
-        .for_each(|node| asset.animations.push(node));
+        .for_each(|node| world.animations.push(node));
 
-    load_nodes(&gltf, &buffers, &mut asset, &entities)?;
+    load_nodes(&gltf, &buffers, &mut world, &entities)?;
     entities.iter().for_each(|entity| {
-        if let Ok(mut mesh) = asset.ecs.get_mut::<Mesh>(*entity) {
+        if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
             mesh.primitives.iter_mut().for_each(|primitive| {
                 if let Some(material_index) = primitive.material_index.as_mut() {
                     *material_index += number_of_materials
@@ -94,13 +94,13 @@ pub fn load_gltf(path: impl AsRef<Path>, mut asset: &mut Asset) -> Result<()> {
     });
 
     // Only load/merge first scene
-    let new_scenes = load_scenes(&gltf, &mut asset.ecs, &entities);
+    let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
     if let Some(new_scene) = new_scenes.into_iter().next() {
-        match asset.scenes.get_mut(0) {
-            Some(asset_scene) => new_scene.graphs.into_iter().for_each(|graph| {
-                asset_scene.graphs.push(graph);
+        match world.scenes.get_mut(0) {
+            Some(world_scene) => new_scene.graphs.into_iter().for_each(|graph| {
+                world_scene.graphs.push(graph);
             }),
-            None => asset.scenes.push(new_scene),
+            None => world.scenes.push(new_scene),
         }
     }
 
@@ -260,7 +260,7 @@ fn load_scenes(gltf: &gltf::Document, ecs: &mut Ecs, entities: &[Entity]) -> Vec
 fn load_nodes(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
-    asset: &mut Asset,
+    world: &mut World,
     entities: &[Entity],
 ) -> Result<()> {
     for (index, node) in gltf.nodes().enumerate() {
@@ -268,28 +268,28 @@ fn load_nodes(
 
         let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-        asset.ecs.insert(entity, (Name(name),))?;
+        world.ecs.insert(entity, (Name(name),))?;
 
-        asset.ecs.insert(entity, (node_transform(&node),))?;
+        world.ecs.insert(entity, (node_transform(&node),))?;
 
         if let Some(camera) = node.camera() {
-            asset.ecs.insert(entity, (load_camera(&camera)?,))?;
+            world.ecs.insert(entity, (load_camera(&camera)?,))?;
         }
 
         if let Some(mesh) = node.mesh() {
-            asset
+            world
                 .ecs
-                .insert(entity, (load_mesh(&mesh, buffers, &mut asset.geometry)?,))?;
+                .insert(entity, (load_mesh(&mesh, buffers, &mut world.geometry)?,))?;
         }
 
         if let Some(skin) = node.skin() {
-            asset
+            world
                 .ecs
                 .insert(entity, (load_skin(&skin, buffers, entities),))?;
         }
 
         if let Some(light) = node.light() {
-            asset.ecs.insert(entity, (load_light(&light),))?;
+            world.ecs.insert(entity, (load_light(&light),))?;
         }
     }
 

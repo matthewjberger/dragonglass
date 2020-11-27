@@ -13,7 +13,7 @@ pub struct Parent(pub Entity);
 pub struct Name(pub String);
 
 #[derive(Default)]
-pub struct Asset {
+pub struct World {
     pub ecs: Ecs,
     pub scenes: Vec<Scene>,
     pub animations: Vec<Animation>,
@@ -22,9 +22,9 @@ pub struct Asset {
     pub geometry: Geometry,
 }
 
-impl Asset {
+impl World {
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
-        let error_message = format!("Failed to lookup asset material at index: {}", index);
+        let error_message = format!("Failed to lookup material at index: {}", index);
         self.materials.get(index).context(error_message)
     }
 
