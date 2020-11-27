@@ -52,7 +52,7 @@ impl RenderingDevice {
         dimensions: &[u32; 2],
         view: glm::Mat4,
         camera_position: glm::Vec3,
-        asset: &Option<Asset>,
+        asset: &Asset,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -60,49 +60,47 @@ impl RenderingDevice {
         let device = self.context.device.clone();
 
         frame.render(dimensions, |command_buffer, image_index| {
-            if let Some(asset) = asset.as_ref() {
-                if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
-                    asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
-                    let projection =
-                        glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+            if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
+                asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
+                let projection =
+                    glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
-                    let mut camera_position = glm::vec3_to_vec4(&camera_position);
-                    camera_position.w = 1.0;
+                let mut camera_position = glm::vec3_to_vec4(&camera_position);
+                camera_position.w = 1.0;
 
-                    let mut joint_matrices =
-                        [glm::Mat4::identity(); PipelineData::MAX_NUMBER_OF_JOINTS];
-                    joint_matrices
-                        .iter_mut()
-                        .zip(asset.joint_matrices()?.into_iter())
-                        .for_each(|(a, b)| *a = b);
+                let mut joint_matrices =
+                    [glm::Mat4::identity(); PipelineData::MAX_NUMBER_OF_JOINTS];
+                joint_matrices
+                    .iter_mut()
+                    .zip(asset.joint_matrices()?.into_iter())
+                    .for_each(|(a, b)| *a = b);
 
-                    let mut morph_targets =
-                        [glm::Vec4::identity(); PipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
-                    morph_targets
-                        .iter_mut()
-                        .zip(asset.morph_targets()?.into_iter())
-                        .for_each(|(a, b)| *a = b);
+                let mut morph_targets =
+                    [glm::Vec4::identity(); PipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
+                morph_targets
+                    .iter_mut()
+                    .zip(asset.morph_targets()?.into_iter())
+                    .for_each(|(a, b)| *a = b);
 
-                    let mut morph_target_weights =
-                        [0.0; PipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
-                    morph_target_weights
-                        .iter_mut()
-                        .zip(asset.morph_target_weights()?.into_iter())
-                        .for_each(|(a, b)| *a = b);
+                let mut morph_target_weights =
+                    [0.0; PipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
+                morph_target_weights
+                    .iter_mut()
+                    .zip(asset.morph_target_weights()?.into_iter())
+                    .for_each(|(a, b)| *a = b);
 
-                    let ubo = AssetUniformBuffer {
-                        view,
-                        projection,
-                        camera_position,
-                        joint_matrices,
-                        morph_targets,
-                        morph_target_weights,
-                    };
-                    asset_rendering
-                        .pipeline_data
-                        .uniform_buffer
-                        .upload_data(&[ubo], 0)?;
-                }
+                let ubo = AssetUniformBuffer {
+                    view,
+                    projection,
+                    camera_position,
+                    joint_matrices,
+                    morph_targets,
+                    morph_target_weights,
+                };
+                asset_rendering
+                    .pipeline_data
+                    .uniform_buffer
+                    .upload_data(&[ubo], 0)?;
             }
 
             // TODO: This is decoupled from scene projection matrix for now
@@ -119,9 +117,7 @@ impl RenderingDevice {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
                     if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
-                        if let Some(asset) = asset.as_ref() {
-                            asset_rendering.issue_commands(command_buffer, asset)?;
-                        }
+                        asset_rendering.issue_commands(command_buffer, asset)?;
                     }
                     Ok(())
                 },

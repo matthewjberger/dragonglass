@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use dragonglass_scene::{load_gltf_asset, Asset, Hidden};
+use dragonglass_scene::{load_gltf, Asset};
 use image::ImageFormat;
 use log::{error, info, warn};
 use winit::{
@@ -14,7 +14,7 @@ use winit::{
 };
 
 pub struct App {
-    asset: Option<Asset>,
+    asset: Asset,
     camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
@@ -58,7 +58,7 @@ impl App {
         let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
 
         let app = Self {
-            asset: None,
+            asset: Asset::default(),
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
@@ -99,11 +99,9 @@ impl App {
 
                     Self::update_camera(&mut camera, &input, &system);
 
-                    if let Some(gltf_asset) = asset.as_mut() {
-                        if !gltf_asset.animations.is_empty() {
-                            if let Err(error) = gltf_asset.animate(0, 0.75 * system.delta_time as f32) {
-                                log::warn!("Failed to animate asset: {}", error);
-                            }
+                    if !asset.animations.is_empty() {
+                        if let Err(error) = asset.animate(0, 0.75 * system.delta_time as f32) {
+                            log::warn!("Failed to animate asset: {}", error);
                         }
                     }
 
@@ -124,15 +122,13 @@ impl App {
                         if let Some(extension) = path.extension() {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
-                                    let mut gltf_asset = load_gltf_asset(path.clone()).unwrap();
-                                    if let Err(error) = rendering_device.load_asset(&gltf_asset) {
+                                    load_gltf(path.clone(), &mut asset).unwrap();
+                                    // FIXME: Don't reload entire scene whenever something is added
+                                    if let Err(error) = rendering_device.load_asset(&asset) {
                                         warn!("Failed to load gltf asset: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
                                     info!("Loaded gltf asset: '{}'", raw_path);
-                                    let (last_entity, _) = gltf_asset.world.iter().nth(2).unwrap();
-                                    gltf_asset.world.insert_one(last_entity, Hidden).unwrap();
-                                    asset = Some(gltf_asset);
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {
