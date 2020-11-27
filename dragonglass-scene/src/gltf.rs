@@ -93,15 +93,12 @@ pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
         }
     });
 
-    // Only load/merge first scene
+    // Only merge default scene
     let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
     if let Some(new_scene) = new_scenes.into_iter().next() {
-        match world.scenes.get_mut(0) {
-            Some(world_scene) => new_scene.graphs.into_iter().for_each(|graph| {
-                world_scene.graphs.push(graph);
-            }),
-            None => world.scenes.push(new_scene),
-        }
+        new_scene.graphs.into_iter().for_each(|graph| {
+            world.scene.graphs.push(graph);
+        });
     }
 
     Ok(())

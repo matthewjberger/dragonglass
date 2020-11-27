@@ -341,11 +341,7 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        let scene = world
-            .scenes
-            .first()
-            .context("Failed to get first scene to render!")?;
-        self.update_node_ubos(scene, &world.ecs)?;
+        self.update_node_ubos(&world.scene, &world.ecs)?;
 
         Ok(())
     }
@@ -414,12 +410,8 @@ impl WorldRenderer {
     }
 
     pub fn render(&self, device: &ash::Device, world: &World, alpha_mode: AlphaMode) -> Result<()> {
-        let scene = world
-            .scenes
-            .first()
-            .context("Failed to get first scene to render!")?;
         let mut ubo_offset = -1;
-        for graph in scene.graphs.iter() {
+        for graph in world.scene.graphs.iter() {
             graph.walk(|node_index| {
                 ubo_offset += 1;
                 let entity = graph[node_index];

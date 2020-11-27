@@ -15,7 +15,7 @@ pub struct Name(pub String);
 #[derive(Default)]
 pub struct World {
     pub ecs: Ecs,
-    pub scenes: Vec<Scene>,
+    pub scene: Scene,
     pub animations: Vec<Animation>,
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
@@ -122,10 +122,8 @@ impl World {
 
     pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
         let mut offset = 0;
-        let first_scene = self.scenes.first().context("Failed to find a scene")?;
-
         let mut number_of_joints = 0;
-        for graph in first_scene.graphs.iter() {
+        for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
                 if let Ok(skin) = self.ecs.get::<Skin>(entity) {
@@ -136,7 +134,7 @@ impl World {
         }
 
         let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
-        for graph in first_scene.graphs.iter() {
+        for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
                 let node_transform = graph.global_transform(node_index, &self.ecs);
@@ -144,7 +142,7 @@ impl World {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
-                            for graph in first_scene.graphs.iter() {
+                            for graph in self.scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
                                     transform = graph.global_transform(index, &self.ecs);
                                 }
