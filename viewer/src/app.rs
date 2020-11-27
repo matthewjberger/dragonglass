@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::RenderingDevice;
-use dragonglass_scene::{load_gltf_asset, Asset, Mesh};
+use dragonglass_scene::{load_gltf_asset, Asset, Hidden};
 use image::ImageFormat;
 use log::{error, info, warn};
 use winit::{
@@ -124,13 +124,15 @@ impl App {
                         if let Some(extension) = path.extension() {
                             match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
-                                    let gltf_asset = load_gltf_asset(path.clone()).unwrap();
+                                    let mut gltf_asset = load_gltf_asset(path.clone()).unwrap();
                                     if let Err(error) = rendering_device.load_asset(&gltf_asset) {
                                         warn!("Failed to load gltf asset: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
-                                    asset = Some(gltf_asset);
                                     info!("Loaded gltf asset: '{}'", raw_path);
+                                    let (last_entity, _) = gltf_asset.world.iter().nth(2).unwrap();
+                                    gltf_asset.world.insert_one(last_entity, Hidden).unwrap();
+                                    asset = Some(gltf_asset);
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = rendering_device.load_skybox(raw_path) {

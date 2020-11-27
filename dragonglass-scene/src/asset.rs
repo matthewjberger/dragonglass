@@ -5,6 +5,7 @@ use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
+pub struct Hidden;
 pub struct Parent(pub hecs::Entity);
 pub struct Name(pub String);
 

@@ -6,8 +6,8 @@ use crate::core::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_scene::{
-    AlphaMode, Asset, Filter, Geometry, Material, Mesh, Sampler as AssetSampler, Scene, Skin,
-    Vertex, WrappingMode,
+    AlphaMode, Asset, Filter, Geometry, Hidden, Material, Mesh, Sampler as AssetSampler, Scene,
+    Skin, Vertex, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -423,10 +423,16 @@ impl AssetRenderer {
             .scenes
             .first()
             .context("Failed to get first scene to render!")?;
-        let mut ubo_offset = 0;
+        let mut ubo_offset = -1;
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
+                ubo_offset += 1;
                 let entity = graph[node_index];
+
+                if asset.world.get::<Hidden>(entity).is_ok() {
+                    return Ok(());
+                }
+
                 if let Ok(mesh) = asset.world.get::<Mesh>(entity) {
                     unsafe {
                         device.cmd_bind_descriptor_sets(
@@ -482,7 +488,6 @@ impl AssetRenderer {
                         }
                     }
                 }
-                ubo_offset += 1;
                 Ok(())
             })?;
         }
