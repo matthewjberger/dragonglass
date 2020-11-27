@@ -1,6 +1,6 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
-use dragonglass::RenderingDevice;
+use dragonglass::Renderer;
 use dragonglass_scene::{load_gltf, World};
 use image::ImageFormat;
 use log::{error, info, warn};
@@ -20,7 +20,7 @@ pub struct App {
     input: Input,
     system: System,
     _window: Window,
-    rendering_device: RenderingDevice,
+    renderer: Renderer,
     event_loop: EventLoop<()>,
 }
 
@@ -55,7 +55,7 @@ impl App {
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let rendering_device = RenderingDevice::new(&window, &window_dimensions)?;
+        let rendering_device = Renderer::new(&window, &window_dimensions)?;
 
         let app = Self {
             world: World::default(),
@@ -64,7 +64,7 @@ impl App {
             input: Input::default(),
             system: System::new(window_dimensions),
             _window: window,
-            rendering_device,
+            renderer: rendering_device,
             event_loop,
         };
 
@@ -76,7 +76,7 @@ impl App {
             mut camera,
             mut input,
             mut system,
-            mut rendering_device,
+            mut renderer,
             mut world,
             event_loop,
             ..
@@ -105,7 +105,7 @@ impl App {
                         }
                     }
 
-                    if let Err(error) = rendering_device.render(
+                    if let Err(error) = renderer.render(
                         &system.window_dimensions,
                         camera.view_matrix(),
                         camera.position(),
@@ -124,14 +124,14 @@ impl App {
                                 Some("glb") | Some("gltf") => {
                                     load_gltf(path.clone(), &mut world).unwrap();
                                     // FIXME: Don't reload entire scene whenever something is added
-                                    if let Err(error) = rendering_device.load_world(&world) {
+                                    if let Err(error) = renderer.load_world(&world) {
                                         warn!("Failed to load gltf world: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
                                     info!("Loaded gltf world: '{}'", raw_path);
                                 }
                                 Some("hdr") => {
-                                    if let Err(error) = rendering_device.load_skybox(raw_path) {
+                                    if let Err(error) = renderer.load_skybox(raw_path) {
                                         error!("Viewer error: {}", error);
                                     }
                                     camera = OrbitalCamera::default();
@@ -157,7 +157,7 @@ impl App {
                     ..
                 } => {
                         if let VirtualKeyCode::T = keycode { 
-                            rendering_device.toggle_wireframe();
+                            renderer.toggle_wireframe();
                         }
                 }
                 _ => {}

@@ -11,14 +11,14 @@ use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::{path::Path, sync::Arc};
 
-pub struct RenderingDevice {
+pub struct Renderer {
     _command_pool: CommandPool,
     frame: Frame,
     scene: Scene,
     context: Arc<Context>,
 }
 
-impl RenderingDevice {
+impl Renderer {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
@@ -158,7 +158,7 @@ impl RenderingDevice {
     }
 }
 
-impl Drop for RenderingDevice {
+impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             if let Err(error) = self.context.device.handle.device_wait_idle() {

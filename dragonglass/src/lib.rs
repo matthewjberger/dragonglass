@@ -15,13 +15,13 @@
     clippy::wildcard_imports
 )]
 
-pub use self::device::RenderingDevice;
+pub use self::renderer::Renderer;
 
 mod core;
 mod cube;
-mod device;
 mod pbr;
 mod pipelines;
+mod renderer;
 mod scene;
 mod skybox;
 mod world;
