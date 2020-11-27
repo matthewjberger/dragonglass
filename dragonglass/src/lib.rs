@@ -23,4 +23,5 @@ mod device;
 mod pbr;
 mod pipelines;
 mod scene;
+mod skybox;
 mod world;

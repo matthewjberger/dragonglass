@@ -1,7 +1,7 @@
 use crate::{
     core::{CommandPool, Context, Frame},
     scene::Scene,
-    world::{AssetUniformBuffer, PipelineData},
+    world::{WorldPipelineData, WorldUniformBuffer},
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
@@ -63,34 +63,34 @@ impl RenderingDevice {
             let projection =
                 glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
-            if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
+            if let Some(asset_rendering) = scene.world_render.as_ref() {
                 asset_rendering.pipeline_data.update_dynamic_ubo(asset)?;
 
                 let mut camera_position = glm::vec3_to_vec4(&camera_position);
                 camera_position.w = 1.0;
 
                 let mut joint_matrices =
-                    [glm::Mat4::identity(); PipelineData::MAX_NUMBER_OF_JOINTS];
+                    [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
                 joint_matrices
                     .iter_mut()
                     .zip(asset.joint_matrices()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let mut morph_targets =
-                    [glm::Vec4::identity(); PipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
+                    [glm::Vec4::identity(); WorldPipelineData::MAX_NUMBER_OF_MORPH_TARGETS];
                 morph_targets
                     .iter_mut()
                     .zip(asset.morph_targets()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let mut morph_target_weights =
-                    [0.0; PipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
+                    [0.0; WorldPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS];
                 morph_target_weights
                     .iter_mut()
                     .zip(asset.morph_target_weights()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
-                let ubo = AssetUniformBuffer {
+                let ubo = WorldUniformBuffer {
                     view,
                     projection,
                     camera_position,
@@ -114,8 +114,8 @@ impl RenderingDevice {
                 |pass, command_buffer| {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
-                    if let Some(asset_rendering) = scene.asset_rendering.as_ref() {
-                        asset_rendering.issue_commands(command_buffer, asset)?;
+                    if let Some(world_render) = scene.world_render.as_ref() {
+                        world_render.issue_commands(command_buffer, asset)?;
                     }
                     Ok(())
                 },
@@ -152,7 +152,7 @@ impl RenderingDevice {
     }
 
     pub fn toggle_wireframe(&mut self) {
-        if let Some(asset_rendering) = self.scene.asset_rendering.as_mut() {
+        if let Some(asset_rendering) = self.scene.world_render.as_mut() {
             asset_rendering.wireframe_enabled = !asset_rendering.wireframe_enabled;
         }
     }

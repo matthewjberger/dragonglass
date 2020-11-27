@@ -5,7 +5,8 @@ use crate::{
     },
     pbr::hdr_cubemap,
     pipelines::FullscreenPipeline,
-    world::{AssetRendering, SkyboxRendering},
+    skybox::SkyboxRendering,
+    world::WorldRender,
 };
 use anyhow::Result;
 use ash::vk;
@@ -13,7 +14,7 @@ use dragonglass_scene::Asset;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {
-    pub asset_rendering: Option<AssetRendering>,
+    pub world_render: Option<WorldRender>,
     pub skybox_rendering: SkyboxRendering,
     pub fullscreen_pipeline: Option<FullscreenPipeline>,
     pub rendergraph: RenderGraph,
@@ -54,7 +55,7 @@ impl Scene {
         )?;
 
         let mut scene = Self {
-            asset_rendering: None,
+            world_render: None,
             skybox_rendering,
             fullscreen_pipeline: None,
             rendergraph,
@@ -86,8 +87,8 @@ impl Scene {
             self.samples,
         )?;
 
-        if let Some(asset_rendering) = self.asset_rendering.as_mut() {
-            asset_rendering.create_pipeline(
+        if let Some(world_render) = self.world_render.as_mut() {
+            world_render.create_pipeline(
                 &mut self.shader_cache,
                 offscreen_renderpass,
                 self.samples,
@@ -211,11 +212,11 @@ impl Scene {
     }
 
     pub fn load_asset(&mut self, context: &Context, asset: &Asset) -> Result<()> {
-        self.asset_rendering = None;
+        self.world_render = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
-        let mut rendering = AssetRendering::new(context, &self.transient_command_pool, asset)?;
+        let mut rendering = WorldRender::new(context, &self.transient_command_pool, asset)?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
-        self.asset_rendering = Some(rendering);
+        self.world_render = Some(rendering);
         Ok(())
     }
 }
