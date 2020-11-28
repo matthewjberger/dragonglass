@@ -1,4 +1,6 @@
-use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
+use crate::{
+    camera::OrbitalCamera, input::Input, settings::Settings, state::StateMachine, system::System,
+};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
 use dragonglass_world::{load_gltf, World};
@@ -14,6 +16,7 @@ use winit::{
 };
 
 pub struct App {
+    state_machine: StateMachine<(), ()>,
     world: World,
     camera: OrbitalCamera,
     _settings: Settings,
@@ -62,6 +65,7 @@ impl App {
         )?);
 
         let app = Self {
+            state_machine: StateMachine::new(),
             world: World::default(),
             camera: OrbitalCamera::default(),
             _settings: settings,
