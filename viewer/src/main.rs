@@ -19,6 +19,7 @@ mod app;
 mod camera;
 mod input;
 mod logger;
+mod physics;
 mod settings;
 mod system;
 

@@ -1,9 +1,13 @@
-use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
+use crate::{
+    camera::OrbitalCamera, input::Input, physics::PhysicsWorld, settings::Settings, system::System,
+};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_world::{load_gltf, World};
+use dragonglass_world::{load_gltf, Mesh, Transform, World};
 use image::ImageFormat;
 use log::{error, info, warn};
+use nalgebra_glm as glm;
+use rapier3d::data::arena::Index;
 use winit::{
     dpi::PhysicalSize,
     event::ElementState,
@@ -13,8 +17,11 @@ use winit::{
     window::{Icon, Window, WindowBuilder},
 };
 
+pub struct RigidBody(pub Index);
+
 pub struct App {
     world: World,
+    physics_world: PhysicsWorld,
     camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
@@ -63,6 +70,7 @@ impl App {
 
         let app = Self {
             world: World::default(),
+            physics_world: PhysicsWorld::new(),
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
@@ -82,11 +90,18 @@ impl App {
             mut system,
             mut renderer,
             mut world,
+            mut physics_world,
             event_loop,
             ..
         } = self;
 
         input.allowed = true;
+
+        log::info!("bodies: {}", physics_world.bodies.len());
+        log::info!("colliders: {}", physics_world.colliders.len());
+        physics_world.add_cubes();
+        log::info!("bodies: {}", physics_world.bodies.len());
+        log::info!("colliders: {}", physics_world.colliders.len());
 
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
@@ -102,6 +117,8 @@ impl App {
                     }
 
                     Self::update_camera(&mut camera, &input, &system);
+                    physics_world.step();
+                    Self::update_physics(&mut world, &mut physics_world);
 
                     if !world.animations.is_empty() {
                         if let Err(error) = world.animate(0, 0.75 * system.delta_time as f32) {
@@ -165,6 +182,16 @@ impl App {
                 _ => {}
             }
         });
+    }
+
+    fn update_physics(world: &mut World, physics_world: &mut PhysicsWorld) {
+        for (_id, (transform,)) in world.ecs.query_mut::<(&mut Transform,)>() {
+            transform.rotation = glm::quat_rotate_normalized_axis(
+                &transform.rotation,
+                1_f32.to_radians(),
+                &glm::vec3(0.0, 0.0, 1.0),
+            );
+        }
     }
 
     fn update_camera(camera: &mut OrbitalCamera, input: &Input, system: &System) {
