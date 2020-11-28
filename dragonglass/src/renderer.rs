@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dragonglass_scene::World;
+use dragonglass_world::World;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 

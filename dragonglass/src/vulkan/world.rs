@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::{
+use dragonglass_world::{
     AlphaMode, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene, Skin, Vertex, World,
     WrappingMode,
 };
@@ -693,7 +693,7 @@ fn vertex_inputs() -> [vk::VertexInputBindingDescription; 1] {
 fn map_sampler(
     device: Arc<Device>,
     mip_levels: u32,
-    sampler: &dragonglass_scene::Sampler,
+    sampler: &dragonglass_world::Sampler,
 ) -> Result<Sampler> {
     let min_filter = match sampler.min_filter {
         Filter::Linear => vk::Filter::LINEAR,

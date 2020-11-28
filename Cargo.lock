@@ -494,7 +494,7 @@ dependencies = [
  "ash",
  "ash-window",
  "derive_builder",
- "dragonglass-scene",
+ "dragonglass-world",
  "hecs",
  "image",
  "log",
@@ -507,7 +507,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dragonglass-scene"
+name = "dragonglass-world"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1739,7 +1739,7 @@ dependencies = [
  "anyhow",
  "config",
  "dragonglass",
- "dragonglass-scene",
+ "dragonglass-world",
  "image",
  "log",
  "nalgebra-glm",

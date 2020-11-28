@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_scene::{load_gltf, World};
+use dragonglass_world::{load_gltf, World};
 use image::ImageFormat;
 use log::{error, info, warn};
 use winit::{

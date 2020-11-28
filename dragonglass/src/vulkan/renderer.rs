@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_scene::World;
+use dragonglass_world::World;
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;

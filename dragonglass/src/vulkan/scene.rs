@@ -10,7 +10,7 @@ use crate::vulkan::{
 };
 use anyhow::Result;
 use ash::vk;
-use dragonglass_scene::World;
+use dragonglass_world::World;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {

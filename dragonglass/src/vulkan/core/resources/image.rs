@@ -115,7 +115,7 @@ impl ImageDescription {
         Ok(description)
     }
 
-    pub fn from_texture(data: &dragonglass_scene::Texture) -> Result<Self> {
+    pub fn from_texture(data: &dragonglass_world::Texture) -> Result<Self> {
         let format = Self::map_to_vulkan_format(&data.format);
         let mut description = Self {
             format,
@@ -128,18 +128,18 @@ impl ImageDescription {
         Ok(description)
     }
 
-    fn map_to_vulkan_format(format: &dragonglass_scene::Format) -> vk::Format {
+    fn map_to_vulkan_format(format: &dragonglass_world::Format) -> vk::Format {
         match format {
-            dragonglass_scene::Format::R8 => vk::Format::R8_UNORM,
-            dragonglass_scene::Format::R8G8 => vk::Format::R8G8_UNORM,
-            dragonglass_scene::Format::R8G8B8A8 => vk::Format::R8G8B8A8_UNORM,
-            dragonglass_scene::Format::B8G8R8A8 => vk::Format::B8G8R8A8_UNORM,
-            dragonglass_scene::Format::R8G8B8 => vk::Format::R8G8B8_UNORM,
-            dragonglass_scene::Format::B8G8R8 => vk::Format::B8G8R8_UNORM,
-            dragonglass_scene::Format::R16 => vk::Format::R16_UNORM,
-            dragonglass_scene::Format::R16G16 => vk::Format::R16G16_UNORM,
-            dragonglass_scene::Format::R16G16B16 => vk::Format::R16G16B16_UNORM,
-            dragonglass_scene::Format::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
+            dragonglass_world::Format::R8 => vk::Format::R8_UNORM,
+            dragonglass_world::Format::R8G8 => vk::Format::R8G8_UNORM,
+            dragonglass_world::Format::R8G8B8A8 => vk::Format::R8G8B8A8_UNORM,
+            dragonglass_world::Format::B8G8R8A8 => vk::Format::B8G8R8A8_UNORM,
+            dragonglass_world::Format::R8G8B8 => vk::Format::R8G8B8_UNORM,
+            dragonglass_world::Format::B8G8R8 => vk::Format::B8G8R8_UNORM,
+            dragonglass_world::Format::R16 => vk::Format::R16_UNORM,
+            dragonglass_world::Format::R16G16 => vk::Format::R16G16_UNORM,
+            dragonglass_world::Format::R16G16B16 => vk::Format::R16G16B16_UNORM,
+            dragonglass_world::Format::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
         }
     }
 

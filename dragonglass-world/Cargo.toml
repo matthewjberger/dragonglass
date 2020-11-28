@@ -1,5 +1,5 @@
 [package]
-name = "dragonglass-scene"
+name = "dragonglass-world"
 version = "0.1.0"
 authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
