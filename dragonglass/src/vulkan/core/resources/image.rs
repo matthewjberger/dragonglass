@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::vulkan::core::{
     BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, Context, CpuToGpuBuffer, Device,
     PipelineBarrierBuilder,
 };

@@ -5,20 +5,26 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-ash = "0.31.0"
-ash-window = "0.5.0"
 anyhow = "1.0.34"
 derive_builder = "0.9.0"
 dragonglass-scene = { path = "../dragonglass-scene" }
 log = "0.4.11"
 image = "0.23.12"
 nalgebra-glm = "0.9.0"
+hecs = "0.3.1"
 petgraph = "0.5.1"
 raw-window-handle = "0.3.3"
-vk-mem = "0.2.2"
-hecs = "0.3.1"
+
+# Opted into by features
+ash = { version = "0.31.0", optional = true }
+ash-window = { version = "0.5.0", optional = true }
+vk-mem = { version = "0.2.2", optional = true }
 
 [build-dependencies]
 log = "0.4.11"
 shader-compilation = { path = "../shader-compilation" }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
+
+[features]
+default = ["vulkan"]
+vulkan = ["ash", "ash-window", "vk-mem"]

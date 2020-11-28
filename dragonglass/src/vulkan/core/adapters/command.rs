@@ -1,4 +1,4 @@
-use crate::core::{Device, Fence};
+use crate::vulkan::core::{Device, Fence};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;

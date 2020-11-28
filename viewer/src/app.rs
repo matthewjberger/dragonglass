@@ -1,6 +1,6 @@
 use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
 use anyhow::Result;
-use dragonglass::Renderer;
+use dragonglass::{Backend, Renderer};
 use dragonglass_scene::{load_gltf, World};
 use image::ImageFormat;
 use log::{error, info, warn};
@@ -20,7 +20,7 @@ pub struct App {
     input: Input,
     system: System,
     _window: Window,
-    renderer: Renderer,
+    renderer: Box<dyn Renderer>,
     event_loop: EventLoop<()>,
 }
 
@@ -55,7 +55,11 @@ impl App {
 
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
-        let rendering_device = Renderer::new(&window, &window_dimensions)?;
+        let renderer = Box::new(Renderer::create_backend(
+            &Backend::Vulkan,
+            &window,
+            &window_dimensions,
+        )?);
 
         let app = Self {
             world: World::default(),
@@ -64,7 +68,7 @@ impl App {
             input: Input::default(),
             system: System::new(window_dimensions),
             _window: window,
-            renderer: rendering_device,
+            renderer,
             event_loop,
         };
 
@@ -156,9 +160,7 @@ impl App {
                     },
                     ..
                 } => {
-                        if let VirtualKeyCode::T = keycode { 
-                            renderer.toggle_wireframe();
-                        }
+                    if let VirtualKeyCode::T = keycode { renderer.toggle_wireframe(); }
                 }
                 _ => {}
             }

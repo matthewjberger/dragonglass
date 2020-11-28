@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::vulkan::core::{
     create_swapchain, CommandPool, Context, Device, Fence, Semaphore, Swapchain,
     SwapchainProperties,
 };

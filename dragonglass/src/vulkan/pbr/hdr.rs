@@ -1,23 +1,21 @@
 use crate::{
-    core::{
-        transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
-        Device, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
-        ImageLayoutTransitionBuilder, ImageNode, ImageToImageCopyBuilder, PipelineLayout,
-        RenderGraph, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
-        Texture,
+    renderer::byte_slice_from,
+    vulkan::{
+        core::{
+            transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
+            Device, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
+            ImageLayoutTransitionBuilder, ImageNode, ImageToImageCopyBuilder, PipelineLayout,
+            RenderGraph, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+            Texture,
+        },
+        cube::Cube,
     },
-    cube::Cube,
 };
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
-use std::{mem, path::Path, slice, sync::Arc};
+use std::{mem, path::Path, sync::Arc};
 use vk_mem::Allocator;
-
-pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
-    let data_ptr = (data as *const T) as *const u8;
-    slice::from_raw_parts(data_ptr, mem::size_of::<T>())
-}
 
 #[allow(dead_code)]
 struct PushConstantHdr {

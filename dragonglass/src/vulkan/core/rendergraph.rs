@@ -1,4 +1,6 @@
-use crate::core::{AllocatedImage, Device, Framebuffer, Image, ImageView, RenderPass, Sampler};
+use crate::vulkan::core::{
+    AllocatedImage, Device, Framebuffer, Image, ImageView, RenderPass, Sampler,
+};
 use anyhow::{bail, ensure, Context, Result};
 use ash::vk;
 use petgraph::prelude::*;

@@ -1,4 +1,4 @@
-use crate::core::{DescriptorSetLayout, Device, RenderPass, ShaderSet};
+use crate::vulkan::core::{DescriptorSetLayout, Device, RenderPass, ShaderSet};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;

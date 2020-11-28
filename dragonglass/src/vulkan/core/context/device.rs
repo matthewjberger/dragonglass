@@ -1,4 +1,4 @@
-use crate::core::{Instance, PhysicalDevice};
+use crate::vulkan::core::{Instance, PhysicalDevice};
 use anyhow::Result;
 use ash::{
     extensions::khr::Swapchain,

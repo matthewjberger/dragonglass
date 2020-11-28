@@ -1,7 +1,11 @@
-use crate::core::{
-    CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
-    GeometryBuffer, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
-    PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder, Texture,
+use crate::{
+    renderer::byte_slice_from,
+    vulkan::core::{
+        CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
+        GeometryBuffer, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
+        PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+        Texture,
+    },
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -12,12 +16,6 @@ use dragonglass_scene::{
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
 
-pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
-    let data_ptr = (data as *const T) as *const u8;
-    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
-}
-
-#[derive(Debug)]
 pub struct PushConstantMaterial {
     pub base_color_factor: glm::Vec4,
     pub emissive_factor: glm::Vec3,

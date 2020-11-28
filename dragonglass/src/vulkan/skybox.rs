@@ -1,21 +1,18 @@
 use crate::{
-    core::{
-        CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipeline,
-        GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache, ShaderPathSet,
-        ShaderPathSetBuilder,
+    renderer::byte_slice_from,
+    vulkan::{
+        core::{
+            CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipeline,
+            GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
+            ShaderPathSet, ShaderPathSetBuilder,
+        },
+        cube::Cube,
     },
-    cube::Cube,
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
-
 use nalgebra_glm as glm;
 use std::sync::Arc;
-
-pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
-    let data_ptr = (data as *const T) as *const u8;
-    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
-}
 
 #[derive(Debug)]
 pub struct SkyboxPushConstantBlock {

@@ -1,4 +1,4 @@
-use crate::core::{
+use crate::vulkan::core::{
     Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipeline,
     GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
     ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
