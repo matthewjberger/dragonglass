@@ -20,6 +20,7 @@ mod camera;
 mod input;
 mod logger;
 mod settings;
+mod state;
 mod system;
 
 use anyhow::Result;
