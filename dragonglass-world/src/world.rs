@@ -23,6 +23,15 @@ pub struct World {
 }
 
 impl World {
+    pub fn clear(&mut self) {
+        self.ecs.clear();
+        self.scene.graphs.clear();
+        self.textures.clear();
+        self.animations.clear();
+        self.materials.clear();
+        self.geometry.clear();
+    }
+
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
         let error_message = format!("Failed to lookup material at index: {}", index);
         self.materials.get(index).context(error_message)
@@ -429,6 +438,13 @@ impl MorphTarget {
 pub struct Geometry {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
+}
+
+impl Geometry {
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.indices.clear();
+    }
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]

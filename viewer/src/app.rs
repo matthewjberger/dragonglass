@@ -120,7 +120,7 @@ impl App {
                     let draw_data = gui
                         .render_frame(&window, |ui| {
                             imgui::Window::new(im_str!("Scene Information"))
-                                .size([300.0, 200.0], Condition::FirstUseEver)
+                                .size([300.0, 400.0], Condition::FirstUseEver)
                                 .build(&ui, || {
                                     let number_of_entities = world.ecs.iter().count();
                                     let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
@@ -213,8 +213,17 @@ impl App {
                     },
                     ..
                 } => {
-                    if let VirtualKeyCode::T = keycode { renderer.toggle_wireframe(); }
-                }
+                    match keycode {
+                        VirtualKeyCode::T => renderer.toggle_wireframe(),
+                        VirtualKeyCode::C => { 
+                            world.clear();
+                            if let Err(error) = renderer.load_world(&world) {
+                                warn!("Failed to load gltf world: {}", error);
+                            }
+                        }
+                        _ => {}
+                    }
+            }
                 _ => {}
             }
         });
