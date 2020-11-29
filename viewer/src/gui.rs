@@ -1,5 +1,5 @@
 use anyhow::Result;
-use imgui::{im_str, Condition, Context, DrawData, FontConfig, FontSource};
+use imgui::{Context, DrawData, FontConfig, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use winit::{event::Event, window::Window};
 
@@ -35,23 +35,16 @@ impl Gui {
             .handle_event(self.context.io_mut(), &window, &event);
     }
 
-    pub fn render_frame(&mut self, window: &Window) -> Result<&DrawData> {
+    pub fn render_frame(
+        &mut self,
+        window: &Window,
+        mut action: impl FnMut(&Ui),
+    ) -> Result<&DrawData> {
         self.platform.prepare_frame(self.context.io_mut(), window)?;
 
         let ui = self.context.frame();
 
-        imgui::Window::new(im_str!("Hello world"))
-            .size([300.0, 100.0], Condition::FirstUseEver)
-            .build(&ui, || {
-                ui.text(im_str!("Hello world!"));
-                ui.text(im_str!("This...is...imgui-rs!"));
-                ui.separator();
-                let mouse_pos = ui.io().mouse_pos;
-                ui.text(format!(
-                    "Mouse Position: ({:.1},{:.1})",
-                    mouse_pos[0], mouse_pos[1]
-                ));
-            });
+        action(&ui);
 
         self.platform.prepare_render(&ui, window);
 

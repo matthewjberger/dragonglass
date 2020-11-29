@@ -1,8 +1,9 @@
 use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_world::{load_gltf, World};
+use dragonglass_world::{load_gltf, Mesh, World};
 use image::ImageFormat;
+use imgui::{im_str, Condition};
 use log::{error, info, warn};
 use winit::{
     dpi::PhysicalSize,
@@ -110,8 +111,30 @@ impl App {
                         *control_flow = ControlFlow::Exit;
                     }
 
-                     let draw_data = gui
-                        .render_frame(&window)
+                    let draw_data = gui
+                        .render_frame(&window, |ui| {
+                            imgui::Window::new(im_str!("Scene Information"))
+                                .size([300.0, 200.0], Condition::FirstUseEver)
+                                .build(&ui, || {
+                                    let number_of_entities = world.ecs.iter().count();
+                                    let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
+                                    ui.text(im_str!("Number of entities: {}", number_of_entities));
+                                    ui.text(im_str!("Number of meshes: {}", number_of_meshes));
+                                    ui.text(im_str!("Number of animations: {}", world.animations.len()));
+                                    ui.text(im_str!("Number of textures: {}", world.textures.len()));
+                                    ui.text(im_str!("Number of materials: {}", world.materials.len()));
+
+                                    ui.separator();
+                                    ui.text(im_str!("Controls"));
+                                    if ui.button(im_str!("Toggle Wireframe"), [200.0, 20.0]) {
+                                        renderer.toggle_wireframe();
+                                    }
+                                    ui.separator();
+                                    for (entity, mesh) in world.ecs.query::<&Mesh>().iter() {
+                                        ui.text(im_str!("Entity: {:?}, Mesh Name: {}", entity, mesh.name));
+                                    }
+                                });
+                        })
                         .expect("Failed to render gui frame!");
 
                     Self::update_camera(&mut camera, &input, &system);
