@@ -106,7 +106,7 @@ impl WorldPipelineData {
     pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
     // This does not need to be matched in the shader
-    pub const MAX_NUMBER_OF_MESHES: usize = 1000;
+    pub const MAX_NUMBER_OF_ENTITIES: usize = 300;
 
     pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
         let device = context.device.clone();
@@ -137,7 +137,7 @@ impl WorldPipelineData {
         let dynamic_alignment = context.dynamic_alignment_of::<EntityDynamicUniformBuffer>();
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
             allocator,
-            (Self::MAX_NUMBER_OF_MESHES as u64 * dynamic_alignment) as vk::DeviceSize,
+            (Self::MAX_NUMBER_OF_ENTITIES as u64 * dynamic_alignment) as vk::DeviceSize,
         )?;
 
         let geometry_buffer = Self::geometry_buffer(context, command_pool, &world.geometry)?;
@@ -345,7 +345,7 @@ impl WorldPipelineData {
     }
 
     fn update_node_ubos(&self, scene: &Scene, ecs: &Ecs) -> Result<()> {
-        let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
+        let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_ENTITIES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
         let mut ubo_offset = 0;
@@ -484,6 +484,7 @@ pub struct WorldRender {
     pub pipeline_data: WorldPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
+    pub pipeline_outline: Option<GraphicsPipeline>,
     pub pipeline_wireframe: Option<GraphicsPipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub wireframe_enabled: bool,
@@ -497,6 +498,7 @@ impl WorldRender {
             pipeline_data,
             pipeline: None,
             pipeline_blended: None,
+            pipeline_outline: None,
             pipeline_wireframe: None,
             pipeline_layout: None,
             wireframe_enabled: false,
@@ -508,6 +510,15 @@ impl WorldRender {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/gltf/gltf.vert.spv")
             .fragment("assets/shaders/gltf/gltf.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        Ok(shader_path_set)
+    }
+
+    fn outline_shader_paths() -> Result<ShaderPathSet> {
+        let shader_path_set = ShaderPathSetBuilder::default()
+            .vertex("assets/shaders/gltf/outline.vert.spv")
+            .fragment("assets/shaders/gltf/outline.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)
@@ -539,14 +550,47 @@ impl WorldRender {
             .cull_mode(vk::CullModeFlags::BACK)
             .push_constant_range(push_constant_range);
 
+        // TODO: Make this toggle-able (should you set stencil or not)
+        let stencil_op_state = vk::StencilOpState::builder()
+            .compare_op(vk::CompareOp::ALWAYS)
+            .fail_op(vk::StencilOp::REPLACE)
+            .depth_fail_op(vk::StencilOp::REPLACE)
+            .pass_op(vk::StencilOp::REPLACE)
+            .compare_mask(0xFF)
+            .write_mask(0xFF)
+            .reference(1)
+            .build();
+        settings.stencil_test_enabled(true);
+        settings.stencil_front_state(stencil_op_state);
+        settings.stencil_back_state(stencil_op_state);
+
         let mut blend_settings = settings.clone();
         blend_settings.blended(true);
+
+        let mut outline_settings = settings.clone();
+        let outline_stencil_op_state = vk::StencilOpState::builder()
+            .compare_op(vk::CompareOp::NOT_EQUAL)
+            .fail_op(vk::StencilOp::KEEP)
+            .depth_fail_op(vk::StencilOp::KEEP)
+            .pass_op(vk::StencilOp::REPLACE)
+            .compare_mask(0xFF)
+            .write_mask(0xFF)
+            .reference(1)
+            .build();
+        outline_settings.stencil_front_state(outline_stencil_op_state);
+        outline_settings.stencil_back_state(outline_stencil_op_state);
+        outline_settings.depth_test_enabled(false);
+        let outline_shader_paths = Self::outline_shader_paths()?;
+        let outline_shader_set =
+            shader_cache.create_shader_set(self.device.clone(), &outline_shader_paths)?;
+        outline_settings.shader_set(outline_shader_set);
 
         let mut wireframe_settings = settings.clone();
         wireframe_settings.polygon_mode(vk::PolygonMode::LINE);
 
         self.pipeline = None;
         self.pipeline_blended = None;
+        self.pipeline_outline = None;
         self.pipeline_wireframe = None;
         self.pipeline_layout = None;
 
@@ -561,6 +605,11 @@ impl WorldRender {
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
 
+        let (pipeline_outline, _) = outline_settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
         let (pipeline_wireframe, _) = wireframe_settings
             .build()
             .map_err(|error| anyhow!("{}", error))?
@@ -568,6 +617,7 @@ impl WorldRender {
 
         self.pipeline = Some(pipeline);
         self.pipeline_blended = Some(pipeline_blended);
+        self.pipeline_outline = Some(pipeline_outline);
         self.pipeline_wireframe = Some(pipeline_wireframe);
         self.pipeline_layout = Some(pipeline_layout);
 
@@ -584,6 +634,11 @@ impl WorldRender {
             .pipeline_blended
             .as_ref()
             .context("Failed to get blend pipeline for rendering world!")?;
+
+        let pipeline_outline = self
+            .pipeline_outline
+            .as_ref()
+            .context("Failed to get outline pipeline for rendering world!")?;
 
         let pipeline_wireframe = self
             .pipeline_wireframe
@@ -620,6 +675,16 @@ impl WorldRender {
                 }
             }
             renderer.render(&self.device.handle, world, *alpha_mode)?;
+        }
+
+        // Draw outline
+        for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
+            if self.wireframe_enabled {
+                continue;
+            } else {
+                pipeline_outline.bind(&self.device.handle, command_buffer);
+                renderer.render(&self.device.handle, world, *alpha_mode)?;
+            }
         }
 
         Ok(())
