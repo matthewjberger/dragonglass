@@ -592,7 +592,7 @@ pub enum WrappingMode {
 
 impl Default for WrappingMode {
     fn default() -> Self {
-        Self::ClampToEdge
+        Self::Repeat
     }
 }
 
