@@ -26,10 +26,41 @@ mod system;
 use anyhow::Result;
 use app::App;
 use logger::create_logger;
+use state::*;
+
+#[derive(Default)]
+struct Viewer;
+
+impl State<(), ()> for Viewer {
+    fn initialize(&mut self, data: StateData<'_, (), ()>) -> Result<Transition<(), ()>> {
+        log::info!("Initializing state...");
+        Ok(Transition::None)
+    }
+
+    fn finalize(&mut self, data: StateData<'_, (), ()>) -> Result<Transition<(), ()>> {
+        log::info!("Finalizing state...");
+        Ok(Transition::None)
+    }
+
+    fn pause(&mut self, data: StateData<'_, (), ()>) -> Result<Transition<(), ()>> {
+        log::info!("Pausing state...");
+        Ok(Transition::None)
+    }
+
+    fn resume(&mut self, data: StateData<'_, (), ()>) -> Result<Transition<(), ()>> {
+        log::info!("Resuming state...");
+        Ok(Transition::None)
+    }
+
+    fn update(&mut self, data: StateData<'_, (), ()>) -> Result<Transition<(), ()>> {
+        log::info!("Updating state...");
+        Ok(Transition::None)
+    }
+}
 
 fn main() -> Result<()> {
     create_logger()?;
     let app = App::new()?;
-    app.run()?;
+    app.run(Box::new(Viewer::default()))?;
     Ok(())
 }

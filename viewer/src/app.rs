@@ -1,4 +1,10 @@
-use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
+use crate::{
+    camera::OrbitalCamera,
+    input::Input,
+    settings::Settings,
+    state::{State, StateData, StateMachine},
+    system::System,
+};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
 use dragonglass_world::{load_gltf, World};
@@ -75,7 +81,7 @@ impl App {
         Ok(app)
     }
 
-    pub fn run(self) -> Result<()> {
+    pub fn run(self, initial_state: Box<dyn State<(), ()>>) -> Result<()> {
         let Self {
             mut camera,
             mut input,
@@ -85,6 +91,11 @@ impl App {
             event_loop,
             ..
         } = self;
+
+        // let mut custom_data = ();
+        // let data = StateData::new(&mut world, &(), &mut custom_data);
+        // let mut state_machine = StateMachine::new(data.transfer());
+        // state_machine.push(initial_state)?;
 
         input.allowed = true;
 
@@ -101,6 +112,7 @@ impl App {
                         *control_flow = ControlFlow::Exit;
                     }
 
+                    // state_machine.update();
                     Self::update_camera(&mut camera, &input, &system);
 
                     if !world.animations.is_empty() {
