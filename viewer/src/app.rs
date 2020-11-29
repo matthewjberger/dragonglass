@@ -96,6 +96,12 @@ impl App {
 
         input.allowed = true;
 
+        let mut camera_multipliers = CameraMultipliers {
+            scroll: 1.0,
+            rotation: 0.05,
+            drag: 0.001,
+        };
+
         info!("Running viewer");
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -129,15 +135,25 @@ impl App {
                                     if ui.button(im_str!("Toggle Wireframe"), [200.0, 20.0]) {
                                         renderer.toggle_wireframe();
                                     }
+                                    ui.text(im_str!("Multipliers"));
+                                    let _ = ui.input_float(im_str!("Scroll"), &mut camera_multipliers.scroll)
+                                        .step(0.1)
+                                        .step_fast(1.0).build();
+                                    let _ = ui.input_float(im_str!("Drag"), &mut camera_multipliers.drag)
+                                        .step(0.1)
+                                        .step_fast(1.0).build();
+                                    let _ = ui.input_float(im_str!("Rotation"), &mut camera_multipliers.rotation)
+                                        .step(0.1)
+                                        .step_fast(1.0).build();
                                     ui.separator();
                                     for (entity, mesh) in world.ecs.query::<&Mesh>().iter() {
                                         ui.text(im_str!("Entity: {:?}, Mesh Name: {}", entity, mesh.name));
                                     }
                                 });
                         })
-                        .expect("Failed to render gui frame!");
+                    .expect("Failed to render gui frame!");
 
-                    Self::update_camera(&mut camera, &input, &system);
+                    Self::update_camera(&mut camera, &input, &system, &camera_multipliers);
 
                     if !world.animations.is_empty() {
                         if let Err(error) = world.animate(0, 0.75 * system.delta_time as f32) {
@@ -204,15 +220,17 @@ impl App {
         });
     }
 
-    fn update_camera(camera: &mut OrbitalCamera, input: &Input, system: &System) {
+    fn update_camera(
+        camera: &mut OrbitalCamera,
+        input: &Input,
+        system: &System,
+        multipliers: &CameraMultipliers,
+    ) {
         if !input.allowed {
             return;
         }
-        let scroll_multiplier = 1.0;
-        let rotation_multiplier = 0.05;
-        let drag_multiplier = 0.001;
 
-        camera.forward(input.mouse.wheel_delta.y * scroll_multiplier);
+        camera.forward(input.mouse.wheel_delta.y * multipliers.scroll);
 
         if input.is_key_pressed(VirtualKeyCode::R) {
             *camera = OrbitalCamera::default();
@@ -220,12 +238,18 @@ impl App {
 
         if input.mouse.is_left_clicked {
             let delta = input.mouse.position_delta;
-            let rotation = delta * rotation_multiplier * system.delta_time as f32;
+            let rotation = delta * multipliers.rotation * system.delta_time as f32;
             camera.rotate(&rotation);
         } else if input.mouse.is_right_clicked {
             let delta = input.mouse.position_delta;
-            let pan = delta * drag_multiplier;
+            let pan = delta * multipliers.drag;
             camera.pan(&pan);
         }
     }
+}
+
+struct CameraMultipliers {
+    scroll: f32,
+    rotation: f32,
+    drag: f32,
 }

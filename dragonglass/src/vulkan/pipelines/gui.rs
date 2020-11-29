@@ -320,7 +320,7 @@ impl GuiRender {
                 .cmd_set_viewport(command_buffer, 0, &viewports);
         }
 
-        geometry_buffer.bind(&device.handle, command_buffer);
+        geometry_buffer.bind(&device.handle, command_buffer)?;
 
         // Render draw lists
         // Adapted from: https://github.com/adrien-ben/imgui-rs-vulkan-renderer
