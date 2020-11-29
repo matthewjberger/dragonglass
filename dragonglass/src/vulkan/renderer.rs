@@ -9,6 +9,7 @@ use crate::{
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::World;
+use imgui::{Context as ImguiContext, DrawData};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -24,10 +25,19 @@ pub struct VulkanRenderer {
 impl VulkanRenderer {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new<T: HasRawWindowHandle>(window_handle: &T, dimensions: &[u32; 2]) -> Result<Self> {
+    pub fn new<T: HasRawWindowHandle>(
+        window_handle: &T,
+        dimensions: &[u32; 2],
+        imgui: &mut ImguiContext,
+    ) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
         let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
-        let scene = Scene::new(&context, frame.swapchain()?, &frame.swapchain_properties)?;
+        let scene = Scene::new(
+            &context,
+            imgui,
+            frame.swapchain()?,
+            &frame.swapchain_properties,
+        )?;
         let create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(context.physical_device.graphics_queue_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
@@ -58,11 +68,20 @@ impl Renderer for VulkanRenderer {
         view: glm::Mat4,
         camera_position: glm::Vec3,
         world: &World,
+        draw_data: &DrawData,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.device.clone();
+
+        // FIXME: Don't reallocate gui geometry buffers each frame...
+        scene.gui_render.resize_geometry_buffer(
+            self.context.allocator.clone(),
+            self.context.graphics_queue(),
+            &scene.transient_command_pool,
+            draw_data,
+        )?;
 
         frame.render(dimensions, |command_buffer, image_index| {
             let projection =
@@ -135,6 +154,7 @@ impl Renderer for VulkanRenderer {
                     if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
                         fullscreen_pipeline.issue_commands(command_buffer)?;
                     }
+                    scene.gui_render.issue_commands(command_buffer, draw_data)?;
                     Ok(())
                 },
             )?;

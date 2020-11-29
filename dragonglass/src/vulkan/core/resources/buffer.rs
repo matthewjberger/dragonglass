@@ -192,6 +192,8 @@ impl Drop for Buffer {
 pub struct GeometryBuffer {
     pub vertex_buffer: GpuBuffer,
     pub index_buffer: Option<GpuBuffer>,
+    pub vertex_buffer_size: vk::DeviceSize,
+    pub index_buffer_size: Option<vk::DeviceSize>,
 }
 
 impl GeometryBuffer {
@@ -210,6 +212,8 @@ impl GeometryBuffer {
         let geometry_buffer = Self {
             vertex_buffer,
             index_buffer,
+            vertex_buffer_size,
+            index_buffer_size,
         };
         Ok(geometry_buffer)
     }

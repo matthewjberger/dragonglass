@@ -1,4 +1,4 @@
-use crate::{camera::OrbitalCamera, input::Input, settings::Settings, system::System};
+use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
 use dragonglass_world::{load_gltf, World};
@@ -14,12 +14,13 @@ use winit::{
 };
 
 pub struct App {
+    gui: Gui,
     world: World,
     camera: OrbitalCamera,
     _settings: Settings,
     input: Input,
     system: System,
-    _window: Window,
+    window: Window,
     renderer: Box<dyn Renderer>,
     event_loop: EventLoop<()>,
 }
@@ -53,21 +54,25 @@ impl App {
             .with_inner_size(PhysicalSize::new(settings.width, settings.height))
             .build(&event_loop)?;
 
+        let mut gui = Gui::new(&window);
+
         let logical_size = window.inner_size();
         let window_dimensions = [logical_size.width, logical_size.height];
         let renderer = Box::new(Renderer::create_backend(
             &Backend::Vulkan,
             &window,
             &window_dimensions,
+            gui.context_mut(),
         )?);
 
         let app = Self {
+            gui,
             world: World::default(),
             camera: OrbitalCamera::default(),
             _settings: settings,
             input: Input::default(),
             system: System::new(window_dimensions),
-            _window: window,
+            window,
             renderer,
             event_loop,
         };
@@ -82,6 +87,8 @@ impl App {
             mut system,
             mut renderer,
             mut world,
+            mut gui,
+            window,
             event_loop,
             ..
         } = self;
@@ -93,13 +100,19 @@ impl App {
             *control_flow = ControlFlow::Poll;
 
             system.handle_event(&event);
+            gui.handle_event(&event, &window);
             input.handle_event(&event, system.window_center());
+            input.allowed = !gui.capturing_input();
 
             match event {
                 Event::MainEventsCleared => {
                     if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
                         *control_flow = ControlFlow::Exit;
                     }
+
+                     let draw_data = gui
+                        .render_frame(&window)
+                        .expect("Failed to render gui frame!");
 
                     Self::update_camera(&mut camera, &input, &system);
 
@@ -114,6 +127,7 @@ impl App {
                         camera.view_matrix(),
                         camera.position(),
                         &world,
+                        draw_data,
                     ) {
                         error!("{}", error);
                     }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use dragonglass_world::World;
+use imgui::{Context as ImguiContext, DrawData};
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 
@@ -25,6 +26,7 @@ pub trait Renderer {
         view: glm::Mat4,
         camera_position: glm::Vec3,
         world: &World,
+        draw_data: &DrawData,
     ) -> Result<()>;
 }
 
@@ -33,10 +35,11 @@ impl dyn Renderer {
         backend: &Backend,
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
+        imgui: &mut ImguiContext,
     ) -> Result<impl Renderer> {
         match backend {
             #[cfg(feature = "vulkan")]
-            Backend::Vulkan => VulkanRenderer::new(window_handle, dimensions),
+            Backend::Vulkan => VulkanRenderer::new(window_handle, dimensions, imgui),
         }
     }
 }
