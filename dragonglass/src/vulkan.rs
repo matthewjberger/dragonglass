@@ -24,4 +24,5 @@ mod pipelines;
 mod renderer;
 mod scene;
 mod skybox;
+mod technique;
 mod world;
