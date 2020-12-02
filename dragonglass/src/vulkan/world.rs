@@ -1,17 +1,21 @@
 use crate::{
     renderer::byte_slice_from,
-    vulkan::core::{
-        CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
-        GeometryBuffer, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
-        PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
-        Texture,
+    vulkan::{
+        core::{
+            CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
+            GeometryBuffer, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
+            PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+            Texture,
+        },
+        cube::Cube,
+        pipelines::CubeRender,
     },
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{
-    AlphaMode, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene, Skin, Vertex, World,
-    WrappingMode,
+    AlphaMode, BoundingBoxVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene, Skin,
+    Vertex, World, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -106,7 +110,7 @@ impl WorldPipelineData {
     pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
     // This does not need to be matched in the shader
-    pub const MAX_NUMBER_OF_MESHES: usize = 1000;
+    pub const MAX_NUMBER_OF_MESHES: usize = 500;
 
     pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
         let device = context.device.clone();
@@ -329,7 +333,7 @@ impl WorldPipelineData {
         }
     }
 
-    pub fn update_dynamic_ubo(&self, world: &World) -> Result<()> {
+    pub fn update_dynamic_ubo(&mut self, world: &World) -> Result<()> {
         let world_joint_matrices = world.joint_matrices()?;
         let number_of_joints = world_joint_matrices.len();
         ensure!(
@@ -344,7 +348,7 @@ impl WorldPipelineData {
         Ok(())
     }
 
-    fn update_node_ubos(&self, scene: &Scene, ecs: &Ecs) -> Result<()> {
+    fn update_node_ubos(&mut self, scene: &Scene, ecs: &Ecs) -> Result<()> {
         let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
@@ -383,104 +387,8 @@ impl WorldPipelineData {
     }
 }
 
-pub struct WorldRenderer {
-    command_buffer: vk::CommandBuffer,
-    pipeline_layout: vk::PipelineLayout,
-    dynamic_alignment: u64,
-    descriptor_set: vk::DescriptorSet,
-    has_indices: bool,
-}
-
-impl WorldRenderer {
-    pub fn new(
-        command_buffer: vk::CommandBuffer,
-        pipeline_layout: &PipelineLayout,
-        pipeline_data: &WorldPipelineData,
-        has_indices: bool,
-    ) -> Self {
-        Self {
-            command_buffer,
-            pipeline_layout: pipeline_layout.handle,
-            dynamic_alignment: pipeline_data.dynamic_alignment,
-            descriptor_set: pipeline_data.descriptor_set,
-            has_indices,
-        }
-    }
-
-    pub fn render(&self, device: &ash::Device, world: &World, alpha_mode: AlphaMode) -> Result<()> {
-        let mut ubo_offset = -1;
-        for graph in world.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                ubo_offset += 1;
-                let entity = graph[node_index];
-
-                if world.ecs.get::<Hidden>(entity).is_ok() {
-                    return Ok(());
-                }
-
-                if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
-                    unsafe {
-                        device.cmd_bind_descriptor_sets(
-                            self.command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pipeline_layout,
-                            0,
-                            &[self.descriptor_set],
-                            &[(ubo_offset as u64 * self.dynamic_alignment) as _],
-                        );
-                    }
-
-                    for primitive in mesh.primitives.iter() {
-                        let material = match primitive.material_index {
-                            Some(material_index) => {
-                                let primitive_material = world.material_at_index(material_index)?;
-                                if primitive_material.alpha_mode != alpha_mode {
-                                    continue;
-                                }
-
-                                PushConstantMaterial::from_material(primitive_material)?
-                            }
-                            None => PushConstantMaterial::from_material(&Material::default())?,
-                        };
-
-                        unsafe {
-                            device.cmd_push_constants(
-                                self.command_buffer,
-                                self.pipeline_layout,
-                                vk::ShaderStageFlags::ALL_GRAPHICS,
-                                0,
-                                byte_slice_from(&material),
-                            );
-
-                            if self.has_indices {
-                                device.cmd_draw_indexed(
-                                    self.command_buffer,
-                                    primitive.number_of_indices as _,
-                                    1,
-                                    primitive.first_index as _,
-                                    0,
-                                    0,
-                                );
-                            } else {
-                                device.cmd_draw(
-                                    self.command_buffer,
-                                    primitive.number_of_vertices as _,
-                                    1,
-                                    primitive.first_vertex as _,
-                                    0,
-                                );
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(())
-    }
-}
-
 pub struct WorldRender {
+    pub cube_render: CubeRender,
     pub pipeline_data: WorldPipelineData,
     pub pipeline: Option<GraphicsPipeline>,
     pub pipeline_blended: Option<GraphicsPipeline>,
@@ -492,8 +400,11 @@ pub struct WorldRender {
 
 impl WorldRender {
     pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
-        let pipeline_data = WorldPipelineData::new(context, command_pool, &world)?;
+        let pipeline_data = WorldPipelineData::new(context, command_pool, world)?;
+        let cube = Cube::new(context, command_pool)?;
+        let cube_render = CubeRender::new(context.device.clone(), cube);
         Ok(Self {
+            cube_render,
             pipeline_data,
             pipeline: None,
             pipeline_blended: None,
@@ -519,6 +430,9 @@ impl WorldRender {
         render_pass: Arc<RenderPass>,
         samples: vk::SampleCountFlags,
     ) -> Result<()> {
+        self.cube_render
+            .create_pipeline(shader_cache, render_pass.clone(), samples)?;
+
         let push_constant_range = vk::PushConstantRange::builder()
             .stage_flags(vk::ShaderStageFlags::ALL_GRAPHICS)
             .size(mem::size_of::<PushConstantMaterial>() as u32)
@@ -575,7 +489,13 @@ impl WorldRender {
         Ok(())
     }
 
-    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer, world: &World) -> Result<()> {
+    pub fn issue_commands(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        world: &World,
+        projection: glm::Mat4,
+        view: glm::Mat4,
+    ) -> Result<()> {
         let pipeline = self
             .pipeline
             .as_ref()
@@ -596,31 +516,105 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        let renderer = WorldRenderer::new(
-            command_buffer,
-            pipeline_layout,
-            &self.pipeline_data,
-            self.pipeline_data.geometry_buffer.index_buffer.is_some(),
-        );
-
-        self.pipeline_data
-            .geometry_buffer
-            .bind(&self.device.handle, command_buffer)?;
-
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
-            if self.wireframe_enabled {
-                pipeline_wireframe.bind(&self.device.handle, command_buffer);
-            } else {
-                match alpha_mode {
-                    AlphaMode::Opaque | AlphaMode::Mask => {
-                        pipeline.bind(&self.device.handle, command_buffer);
+            let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
+            let mut ubo_offset = -1;
+            for graph in world.scene.graphs.iter() {
+                graph.walk(|node_index| {
+                    ubo_offset += 1;
+                    let entity = graph[node_index];
+
+                    if world.ecs.get::<Hidden>(entity).is_ok() {
+                        return Ok(());
                     }
-                    AlphaMode::Blend => {
-                        pipeline_blended.bind(&self.device.handle, command_buffer);
+
+                    if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
+                        if world.ecs.get::<BoundingBoxVisible>(entity).is_ok() {
+                            let bounding_box = mesh.bounding_box();
+                            let model = graph.global_transform(node_index, &world.ecs);
+                            let offset = glm::translation(&bounding_box.center());
+                            let scale = glm::scaling(&bounding_box.extents());
+                            self.cube_render.issue_commands(
+                                command_buffer,
+                                projection * view * model * offset * scale,
+                            )?;
+                        }
+
+                        if self.wireframe_enabled {
+                            pipeline_wireframe.bind(&self.device.handle, command_buffer);
+                        } else {
+                            match alpha_mode {
+                                AlphaMode::Opaque | AlphaMode::Mask => {
+                                    pipeline.bind(&self.device.handle, command_buffer);
+                                }
+                                AlphaMode::Blend => {
+                                    pipeline_blended.bind(&self.device.handle, command_buffer);
+                                }
+                            }
+                        }
+
+                        self.pipeline_data
+                            .geometry_buffer
+                            .bind(&self.device.handle, command_buffer)?;
+
+                        unsafe {
+                            self.device.handle.cmd_bind_descriptor_sets(
+                                command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline_layout.handle,
+                                0,
+                                &[self.pipeline_data.descriptor_set],
+                                &[(ubo_offset as u64 * self.pipeline_data.dynamic_alignment) as _],
+                            );
+                        }
+
+                        for primitive in mesh.primitives.iter() {
+                            let material = match primitive.material_index {
+                                Some(material_index) => {
+                                    let primitive_material =
+                                        world.material_at_index(material_index)?;
+                                    if primitive_material.alpha_mode != *alpha_mode {
+                                        continue;
+                                    }
+
+                                    PushConstantMaterial::from_material(primitive_material)?
+                                }
+                                None => PushConstantMaterial::from_material(&Material::default())?,
+                            };
+
+                            unsafe {
+                                self.device.handle.cmd_push_constants(
+                                    command_buffer,
+                                    pipeline_layout.handle,
+                                    vk::ShaderStageFlags::ALL_GRAPHICS,
+                                    0,
+                                    byte_slice_from(&material),
+                                );
+
+                                if has_indices {
+                                    self.device.handle.cmd_draw_indexed(
+                                        command_buffer,
+                                        primitive.number_of_indices as _,
+                                        1,
+                                        primitive.first_index as _,
+                                        0,
+                                        0,
+                                    );
+                                } else {
+                                    self.device.handle.cmd_draw(
+                                        command_buffer,
+                                        primitive.number_of_vertices as _,
+                                        1,
+                                        primitive.first_vertex as _,
+                                        0,
+                                    );
+                                }
+                            }
+                        }
                     }
-                }
+                    Ok(())
+                })?;
             }
-            renderer.render(&self.device.handle, world, *alpha_mode)?;
         }
 
         Ok(())

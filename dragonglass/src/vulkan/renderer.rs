@@ -87,7 +87,7 @@ impl Renderer for VulkanRenderer {
             let projection =
                 glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
 
-            if let Some(world_render) = scene.world_render.as_ref() {
+            if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world)?;
 
                 let mut camera_position = glm::vec3_to_vec4(&camera_position);
@@ -139,7 +139,7 @@ impl Renderer for VulkanRenderer {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
                     if let Some(world_render) = scene.world_render.as_ref() {
-                        world_render.issue_commands(command_buffer, world)?;
+                        world_render.issue_commands(command_buffer, world, projection, view)?;
                     }
                     Ok(())
                 },

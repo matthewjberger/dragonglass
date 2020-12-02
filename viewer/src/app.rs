@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_world::{load_gltf, Mesh, World};
+use dragonglass_world::{load_gltf, Mesh, World, BoundingBoxVisible};
 use image::ImageFormat;
 use imgui::{im_str, Condition};
 use log::{error, info, warn};
@@ -129,7 +129,6 @@ impl App {
                                     ui.text(im_str!("Number of animations: {}", world.animations.len()));
                                     ui.text(im_str!("Number of textures: {}", world.textures.len()));
                                     ui.text(im_str!("Number of materials: {}", world.materials.len()));
-
                                     ui.separator();
                                     ui.text(im_str!("Controls"));
                                     if ui.button(im_str!("Toggle Wireframe"), [200.0, 20.0]) {
@@ -146,8 +145,12 @@ impl App {
                                         .step(0.1)
                                         .step_fast(1.0).build();
                                     ui.separator();
-                                    for (entity, mesh) in world.ecs.query::<&Mesh>().iter() {
-                                        ui.text(im_str!("Entity: {:?}, Mesh Name: {}", entity, mesh.name));
+
+                                    let entities = world.ecs.query::<&Mesh>().iter().map(|(entity, _)| entity).collect::<Vec<_>>();
+                                    entities.into_iter().for_each(|entity| {let _ = world.ecs.insert_one(entity, BoundingBoxVisible {});});
+
+                                    for (_entity, mesh) in world.ecs.query::<&Mesh>().iter() {
+                                        ui.text(im_str!("Mesh: {}", mesh.name));
                                     }
                                 });
                         })

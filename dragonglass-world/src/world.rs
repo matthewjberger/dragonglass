@@ -8,6 +8,7 @@ pub type Ecs = hecs::World;
 pub type Entity = hecs::Entity;
 
 pub struct Hidden;
+pub struct BoundingBoxVisible;
 pub struct Parent(pub Entity);
 pub struct Name(pub String);
 
@@ -396,7 +397,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn aabb(&self) -> BoundingBox {
+    pub fn bounding_box(&self) -> BoundingBox {
         let mut bounding_box = BoundingBox::default();
         self.primitives
             .iter()
@@ -415,6 +416,18 @@ pub struct BoundingBox {
 impl BoundingBox {
     pub fn new(min: glm::Vec3, max: glm::Vec3) -> Self {
         Self { min, max }
+    }
+
+    pub fn extents(&self) -> glm::Vec3 {
+        glm::abs(&(self.max - self.min))
+    }
+
+    pub fn half_extents(&self) -> glm::Vec3 {
+        self.extents() / 2.0
+    }
+
+    pub fn center(&self) -> glm::Vec3 {
+        self.min + self.half_extents()
     }
 
     pub fn fit_box(&mut self, bounding_box: &Self) {

@@ -18,25 +18,21 @@ pub struct CubePushConstantBlock {
     pub mvp: glm::Mat4,
 }
 
-pub struct CubeRendering {
+pub struct CubeRender {
     pub cube: Cube,
     pub pipeline: Option<GraphicsPipeline>,
     pub segment_pipeline: Option<GraphicsPipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
-    pub is_bounding_box: bool,
-    pub mvp: glm::Mat4,
     device: Arc<Device>,
 }
 
-impl CubeRendering {
+impl CubeRender {
     pub fn new(device: Arc<Device>, cube: Cube) -> Self {
         Self {
             cube,
             pipeline: None,
             segment_pipeline: None,
             pipeline_layout: None,
-            is_bounding_box: false,
-            mvp: glm::Mat4::identity(),
             device,
         }
     }
@@ -111,7 +107,7 @@ impl CubeRendering {
         Ok(())
     }
 
-    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer, mvp: glm::Mat4) -> Result<()> {
         let pipeline = self
             .pipeline
             .as_ref()
@@ -124,7 +120,7 @@ impl CubeRendering {
 
         pipeline.bind(&self.device.handle, command_buffer);
 
-        let push_constants = CubePushConstantBlock { mvp: self.mvp };
+        let push_constants = CubePushConstantBlock { mvp };
 
         unsafe {
             self.device.handle.cmd_push_constants(

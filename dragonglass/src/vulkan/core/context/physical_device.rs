@@ -136,7 +136,12 @@ impl PhysicalDevice {
 
     fn features_supported(instance: &ash::Instance, device: vk::PhysicalDevice) -> bool {
         let features = unsafe { instance.get_physical_device_features(device) };
-        let required_features = [features.sampler_anisotropy, features.wide_lines];
+        let required_features = [
+            features.sampler_anisotropy,
+            features.wide_lines,
+            features.fill_mode_non_solid,
+            features.wide_lines,
+        ];
         required_features.iter().all(|feature| *feature == vk::TRUE)
     }
 

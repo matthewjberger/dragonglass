@@ -108,7 +108,7 @@ impl Scene {
         if let Some(world_render) = self.world_render.as_mut() {
             world_render.create_pipeline(
                 &mut self.shader_cache,
-                offscreen_renderpass,
+                offscreen_renderpass.clone(),
                 self.samples,
             )?;
         }
