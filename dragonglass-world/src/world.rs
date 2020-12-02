@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use nalgebra_glm as glm;
-use ncollide3d::bounding_volume::AABB;
 use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
@@ -396,6 +395,43 @@ pub struct Mesh {
     pub weights: Vec<f32>,
 }
 
+impl Mesh {
+    pub fn aabb(&self) -> BoundingBox {
+        let mut bounding_box = BoundingBox::default();
+        self.primitives
+            .iter()
+            .map(|primitive| &primitive.bounding_box)
+            .for_each(|primitive_bounding_box| bounding_box.fit_box(primitive_bounding_box));
+        bounding_box
+    }
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct BoundingBox {
+    pub min: glm::Vec3,
+    pub max: glm::Vec3,
+}
+
+impl BoundingBox {
+    pub fn new(min: glm::Vec3, max: glm::Vec3) -> Self {
+        Self { min, max }
+    }
+
+    pub fn fit_box(&mut self, bounding_box: &BoundingBox) {
+        self.fit_point(bounding_box.min);
+        self.fit_point(bounding_box.max);
+    }
+
+    pub fn fit_point(&mut self, point: glm::Vec3) {
+        if point < self.min {
+            self.min = point;
+        }
+        if point > self.max {
+            self.max = point;
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Primitive {
     pub first_vertex: usize,
@@ -404,21 +440,7 @@ pub struct Primitive {
     pub number_of_indices: usize,
     pub material_index: Option<usize>,
     pub morph_targets: Vec<MorphTarget>,
-    pub aabb: AABB<f32>,
-}
-
-impl Default for Primitive {
-    fn default() -> Self {
-        Self {
-            first_vertex: 0,
-            first_index: 0,
-            number_of_vertices: 0,
-            number_of_indices: 0,
-            material_index: None,
-            morph_targets: Vec::new(),
-            aabb: AABB::new_invalid(),
-        }
-    }
+    pub bounding_box: BoundingBox,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,13 +1,12 @@
 use crate::{
-    AlphaMode, Animation, Camera, Channel, Ecs, Entity, Filter, Format, Geometry, Interpolation,
-    Joint, Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera,
+    AlphaMode, Animation, BoundingBox, Camera, Channel, Ecs, Entity, Filter, Format, Geometry,
+    Interpolation, Joint, Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera,
     PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform,
     TransformationSet, Vertex, World, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
 use nalgebra_glm as glm;
-use ncollide3d::{bounding_volume::AABB, na::Point3};
 use petgraph::prelude::*;
 use std::path::Path;
 
@@ -351,9 +350,9 @@ fn load_primitive(
     let number_of_vertices = load_primitive_vertices(primitive, buffers, geometry)?;
     let bounding_box = primitive.bounding_box();
     let morph_targets = load_morph_targets(primitive, buffers)?;
-    let aabb: AABB<f32> = AABB::new(
-        Point3::from_slice(&bounding_box.min),
-        Point3::from_slice(&bounding_box.max),
+    let bounding_box = BoundingBox::new(
+        glm::Vec3::from(bounding_box.min),
+        glm::Vec3::from(bounding_box.max),
     );
     Ok(Primitive {
         first_index,
@@ -362,7 +361,7 @@ fn load_primitive(
         number_of_vertices,
         morph_targets,
         material_index: primitive.material().index(),
-        aabb,
+        bounding_box,
     })
 }
 
