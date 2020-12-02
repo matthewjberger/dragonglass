@@ -18,7 +18,7 @@ pub const VERTICES: &[f32; 24] =
     ];
 
 #[rustfmt::skip]
-pub const INDICES: &[u32; 36] =
+pub const INDICES: &[u32; 44] =
     &[
         // Front
         0, 1, 2,
@@ -37,8 +37,15 @@ pub const INDICES: &[u32; 36] =
         1, 0, 4,
         // Top
         3, 2, 6,
-        6, 7, 3
+        6, 7, 3,
+        // Line Segments
+        0,4,
+        1,5,
+        2,6,
+        3,7,
     ];
+
+pub const NUMBER_OF_LINE_SEGMENTS: usize = 8;
 
 pub struct Cube {
     pub geometry_buffer: GeometryBuffer,
@@ -91,7 +98,39 @@ impl Cube {
     pub fn draw(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.geometry_buffer.bind(device, command_buffer)?;
         unsafe {
-            device.cmd_draw_indexed(command_buffer, INDICES.len() as _, 1, 0, 0, 0);
+            device.cmd_draw_indexed(
+                command_buffer,
+                (INDICES.len() - NUMBER_OF_LINE_SEGMENTS) as _,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+        Ok(())
+    }
+
+    pub fn draw_loops(
+        &self,
+        device: &ash::Device,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
+        self.geometry_buffer.bind(device, command_buffer)?;
+        unsafe {
+            device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
+            device.cmd_draw_indexed(command_buffer, 6, 1, 12, 0, 0);
+        }
+        Ok(())
+    }
+
+    pub fn draw_segments(
+        &self,
+        device: &ash::Device,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
+        self.geometry_buffer.bind(device, command_buffer)?;
+        unsafe {
+            device.cmd_draw_indexed(command_buffer, 8, 1, 36, 0, 0);
         }
         Ok(())
     }
