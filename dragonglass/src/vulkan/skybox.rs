@@ -93,6 +93,7 @@ impl SkyboxRendering {
             .depth_test_enabled(false)
             .depth_write_enabled(false)
             .cull_mode(vk::CullModeFlags::FRONT)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .push_constant_range(push_constant_range);
 
         let mut wireframe_settings = settings.clone();

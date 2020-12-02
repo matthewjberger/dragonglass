@@ -537,6 +537,7 @@ impl WorldRender {
             .rasterization_samples(samples)
             .sample_shading_enabled(true)
             .cull_mode(vk::CullModeFlags::BACK)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .push_constant_range(push_constant_range);
 
         let mut blend_settings = settings.clone();

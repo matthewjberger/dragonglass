@@ -71,6 +71,7 @@ impl FullscreenPipeline {
             .vertex_inputs(Vec::new())
             .vertex_attributes(Vec::new())
             .descriptor_set_layout(descriptor_set_layout)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(settings)

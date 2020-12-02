@@ -143,6 +143,7 @@ impl GuiRender {
             .front_face(vk::FrontFace::CLOCKWISE)
             .depth_test_enabled(false)
             .depth_write_enabled(false)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .build()
             .expect("Failed to create render pipeline settings");
 

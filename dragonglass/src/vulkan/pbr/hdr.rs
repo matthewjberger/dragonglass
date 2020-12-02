@@ -344,6 +344,7 @@ fn pipeline(
         .descriptor_set_layout(descriptor_set_layout)
         .shader_set(shader_set)
         .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+        .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
         .push_constant_range(push_constant_range);
     settings
         .build()

@@ -136,7 +136,8 @@ impl PhysicalDevice {
 
     fn features_supported(instance: &ash::Instance, device: vk::PhysicalDevice) -> bool {
         let features = unsafe { instance.get_physical_device_features(device) };
-        features.sampler_anisotropy == vk::TRUE
+        let required_features = [features.sampler_anisotropy, features.wide_lines];
+        required_features.iter().all(|feature| *feature == vk::TRUE)
     }
 
     pub fn queue_indices(&self) -> Vec<u32> {
