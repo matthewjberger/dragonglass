@@ -417,7 +417,7 @@ impl BoundingBox {
         Self { min, max }
     }
 
-    pub fn fit_box(&mut self, bounding_box: &BoundingBox) {
+    pub fn fit_box(&mut self, bounding_box: &Self) {
         self.fit_point(bounding_box.min);
         self.fit_point(bounding_box.max);
     }
