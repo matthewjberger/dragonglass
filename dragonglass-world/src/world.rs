@@ -398,10 +398,7 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn bounding_box(&self) -> BoundingBox {
-        let mut bounding_box = BoundingBox::new(
-            glm::vec3(f32::MAX, f32::MAX, f32::MAX),
-            glm::vec3(f32::MIN, f32::MIN, f32::MIN),
-        );
+        let mut bounding_box = BoundingBox::new_invalid();
         self.primitives
             .iter()
             .map(|primitive| &primitive.bounding_box)
@@ -417,6 +414,13 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    pub fn new_invalid() -> Self {
+        Self {
+            min: glm::vec3(f32::MAX, f32::MAX, f32::MAX),
+            max: glm::vec3(f32::MIN, f32::MIN, f32::MIN),
+        }
+    }
+
     pub fn new(min: glm::Vec3, max: glm::Vec3) -> Self {
         Self { min, max }
     }
@@ -439,25 +443,13 @@ impl BoundingBox {
     }
 
     pub fn fit_point(&mut self, point: glm::Vec3) {
-        if point.x < self.min.x {
-            self.min.x = point.x;
-        }
-        if point.y < self.min.y {
-            self.min.y = point.y;
-        }
-        if point.z < self.min.z {
-            self.min.z = point.z;
-        }
+        self.min.x = f32::min(self.min.x, point.x);
+        self.min.y = f32::min(self.min.y, point.y);
+        self.min.z = f32::min(self.min.z, point.z);
 
-        if point.x > self.max.x {
-            self.max.x = point.x;
-        }
-        if point.y > self.max.y {
-            self.max.y = point.y;
-        }
-        if point.z > self.max.z {
-            self.max.z = point.z;
-        }
+        self.max.x = f32::max(self.max.x, point.x);
+        self.max.y = f32::max(self.max.y, point.y);
+        self.max.z = f32::max(self.max.z, point.z);
     }
 }
 
