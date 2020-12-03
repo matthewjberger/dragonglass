@@ -246,6 +246,20 @@ pub struct Scene {
     pub graphs: Vec<SceneGraph>,
 }
 
+// impl Scene {
+//     pub fn bounding_box(&self, ecs: &Ecs) -> Result<BoundingBox> {
+//         let mut bounding_box = BoundingBox::new_invalid();
+//         for graph in self.graphs {
+//             graph.walk(|node_index| {
+//                 let entity = graph[node_index];
+//                 let node_transform = graph.global_transform(node_index, ecs);
+//                 Ok(())
+//             })?;
+//         }
+//         Ok(bounding_box)
+//     }
+// }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Transform {
     pub translation: glm::Vec3,
