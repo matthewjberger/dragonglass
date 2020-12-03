@@ -114,8 +114,6 @@ impl GuiRender {
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
     ) -> Result<()> {
-        debug!("Recreating gui pipeline");
-
         let push_constant_range = vk::PushConstantRange::builder()
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             .size(mem::size_of::<PushConstantBlockGui>() as u32)
