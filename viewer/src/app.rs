@@ -1,7 +1,7 @@
 use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_world::{load_gltf, Mesh, World, BoundingBoxVisible};
+use dragonglass_world::{load_gltf, BoundingBoxVisible, Mesh, World};
 use image::ImageFormat;
 use imgui::{im_str, Condition};
 use log::{error, info, warn};
@@ -218,7 +218,7 @@ impl App {
                 } => {
                     match keycode {
                         VirtualKeyCode::T => renderer.toggle_wireframe(),
-                        VirtualKeyCode::C => { 
+                        VirtualKeyCode::C => {
                             world.clear();
                             if let Err(error) = renderer.load_world(&world) {
                                 warn!("Failed to load gltf world: {}", error);
