@@ -2,8 +2,8 @@ use crate::{
     renderer::byte_slice_from,
     vulkan::{
         core::{
-            CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipeline,
-            GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass, ShaderCache,
+            CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device,
+            GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
             ShaderPathSet, ShaderPathSetBuilder,
         },
         cube::Cube,
@@ -22,7 +22,7 @@ pub struct SkyboxPushConstantBlock {
 
 pub struct SkyboxRendering {
     pub cube: Cube,
-    pub pipeline: Option<GraphicsPipeline>,
+    pub pipeline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub view: glm::Mat4,
     pub projection: glm::Mat4,

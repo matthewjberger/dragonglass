@@ -3,7 +3,7 @@ use crate::{
     vulkan::{
         core::{
             CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
-            GeometryBuffer, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
+            GeometryBuffer, GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline,
             PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
             Texture,
         },
@@ -390,9 +390,9 @@ impl WorldPipelineData {
 pub struct WorldRender {
     pub cube_render: CubeRender,
     pub pipeline_data: WorldPipelineData,
-    pub pipeline: Option<GraphicsPipeline>,
-    pub pipeline_blended: Option<GraphicsPipeline>,
-    pub pipeline_wireframe: Option<GraphicsPipeline>,
+    pub pipeline: Option<Pipeline>,
+    pub pipeline_blended: Option<Pipeline>,
+    pub pipeline_wireframe: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub wireframe_enabled: bool,
     device: Arc<Device>,

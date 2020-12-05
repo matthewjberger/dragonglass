@@ -1,14 +1,14 @@
 use crate::vulkan::core::{
-    Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipeline,
-    GraphicsPipelineSettings, GraphicsPipelineSettingsBuilder, PipelineLayout, RenderPass,
-    ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+    Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipelineSettings,
+    GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
+    ShaderPathSet, ShaderPathSetBuilder,
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 
 pub struct FullscreenPipeline {
-    pub pipeline: Option<GraphicsPipeline>,
+    pub pipeline: Option<Pipeline>,
     pub pipeline_layout: PipelineLayout,
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,

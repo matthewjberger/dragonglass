@@ -2,8 +2,8 @@ use crate::{
     renderer::byte_slice_from,
     vulkan::{
         core::{
-            DescriptorSetLayout, Device, GraphicsPipeline, GraphicsPipelineSettingsBuilder,
-            PipelineLayout, RenderPass, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+            DescriptorSetLayout, Device, GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout,
+            RenderPass, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
         },
         cube::Cube,
     },
@@ -20,8 +20,8 @@ pub struct CubePushConstantBlock {
 
 pub struct CubeRender {
     pub cube: Cube,
-    pub pipeline: Option<GraphicsPipeline>,
-    pub segment_pipeline: Option<GraphicsPipeline>,
+    pub pipeline: Option<Pipeline>,
+    pub segment_pipeline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     device: Arc<Device>,
 }

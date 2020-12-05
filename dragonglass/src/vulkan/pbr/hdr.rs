@@ -3,10 +3,10 @@ use crate::{
     vulkan::{
         core::{
             transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
-            Device, GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription,
-            ImageLayoutTransitionBuilder, ImageNode, ImageToImageCopyBuilder, PipelineLayout,
-            RenderGraph, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
-            Texture,
+            Device, GraphicsPipelineSettingsBuilder, ImageDescription,
+            ImageLayoutTransitionBuilder, ImageNode, ImageToImageCopyBuilder, Pipeline,
+            PipelineLayout, RenderGraph, RenderPass, Sampler, ShaderCache, ShaderPathSet,
+            ShaderPathSetBuilder, Texture,
         },
         cube::Cube,
     },
@@ -329,7 +329,7 @@ fn pipeline(
     shader_cache: &mut ShaderCache,
     descriptor_set_layout: Arc<DescriptorSetLayout>,
     render_pass: Arc<RenderPass>,
-) -> Result<(GraphicsPipeline, PipelineLayout)> {
+) -> Result<(Pipeline, PipelineLayout)> {
     let push_constant_range = vk::PushConstantRange::builder()
         .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
         .size(mem::size_of::<PushConstantHdr>() as u32)

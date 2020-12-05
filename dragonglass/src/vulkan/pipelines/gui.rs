@@ -2,8 +2,8 @@ use crate::{
     renderer::byte_slice_from,
     vulkan::core::{
         CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GeometryBuffer,
-        GraphicsPipeline, GraphicsPipelineSettingsBuilder, ImageDescription, PipelineLayout,
-        RenderPass, Sampler, ShaderCache, ShaderPathSetBuilder, Texture,
+        GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline, PipelineLayout, RenderPass,
+        Sampler, ShaderCache, ShaderPathSetBuilder, Texture,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -24,7 +24,7 @@ pub struct GuiRender {
     pub descriptor_pool: DescriptorPool,
     pub font_texture: Texture,
     pub font_texture_sampler: Sampler,
-    pub pipeline: Option<GraphicsPipeline>,
+    pub pipeline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub geometry_buffer: Option<GeometryBuffer>,
     device: Arc<Device>,

@@ -4,13 +4,14 @@ use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use std::sync::Arc;
 
-pub struct GraphicsPipeline {
+pub struct Pipeline {
     pub handle: vk::Pipeline,
+    bindpoint: vk::PipelineBindPoint,
     device: Arc<Device>,
 }
 
-impl GraphicsPipeline {
-    pub fn new(
+impl Pipeline {
+    pub fn new_graphics(
         device: Arc<Device>,
         create_info: vk::GraphicsPipelineCreateInfoBuilder,
     ) -> Result<Self> {
@@ -25,18 +26,48 @@ impl GraphicsPipeline {
                 Err((_, error_code)) => Err(error_code),
             }
         }?;
-        let pipeline = Self { handle, device };
+        let bindpoint = vk::PipelineBindPoint::GRAPHICS;
+        let pipeline = Self {
+            handle,
+            bindpoint,
+            device,
+        };
+        Ok(pipeline)
+    }
+
+    #[allow(dead_code)]
+    pub fn new_compute(
+        device: Arc<Device>,
+        create_info: vk::ComputePipelineCreateInfoBuilder,
+    ) -> Result<Self> {
+        let handle = unsafe {
+            let result = device.handle.create_compute_pipelines(
+                vk::PipelineCache::null(),
+                &[create_info.build()],
+                None,
+            );
+            match result {
+                Ok(pipelines) => Ok(pipelines[0]),
+                Err((_, error_code)) => Err(error_code),
+            }
+        }?;
+        let bindpoint = vk::PipelineBindPoint::COMPUTE;
+        let pipeline = Self {
+            handle,
+            bindpoint,
+            device,
+        };
         Ok(pipeline)
     }
 
     pub fn bind(&self, device: &ash::Device, command_buffer: vk::CommandBuffer) {
         unsafe {
-            device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.handle);
+            device.cmd_bind_pipeline(command_buffer, self.bindpoint, self.handle);
         }
     }
 }
 
-impl Drop for GraphicsPipeline {
+impl Drop for Pipeline {
     fn drop(&mut self) {
         unsafe {
             self.device.handle.destroy_pipeline(self.handle, None);
@@ -120,10 +151,7 @@ pub struct GraphicsPipelineSettings {
 }
 
 impl GraphicsPipelineSettings {
-    pub fn create_pipeline(
-        &self,
-        device: Arc<Device>,
-    ) -> Result<(GraphicsPipeline, PipelineLayout)> {
+    pub fn create_pipeline(&self, device: Arc<Device>) -> Result<(Pipeline, PipelineLayout)> {
         let stages = self.shader_set.stages()?;
         let vertex_state_info = self.vertex_input_state();
         let input_assembly_create_info = self.input_assembly_create_info();
@@ -148,7 +176,7 @@ impl GraphicsPipelineSettings {
             .layout(pipeline_layout.handle)
             .render_pass(self.render_pass.handle)
             .subpass(0);
-        let pipeline = GraphicsPipeline::new(device, pipeline_create_info)?;
+        let pipeline = Pipeline::new_graphics(device, pipeline_create_info)?;
         Ok((pipeline, pipeline_layout))
     }
 
