@@ -19,3 +19,4 @@ serde = { version = "1.0.117", features = ["derive"] }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
 toml = "0.5.7"
 winit = "0.23.0"
+rapier3d = "0.4.2"

@@ -1,10 +1,19 @@
+use std::collections::HashMap;
+
 use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_world::{load_gltf, BoundingBoxVisible, Mesh, World};
+use dragonglass_world::{load_gltf, BoundingBoxVisible, Mesh, Transform, World};
 use image::ImageFormat;
 use imgui::{im_str, Condition};
 use log::{error, info, warn};
+use rapier3d::geometry::{BroadPhase, ColliderSet, NarrowPhase};
+use rapier3d::na::Vector3;
+use rapier3d::pipeline::PhysicsPipeline;
+use rapier3d::{
+    dynamics::{IntegrationParameters, JointSet, RigidBodyBuilder, RigidBodySet},
+    geometry::ColliderBuilder,
+};
 use winit::{
     dpi::PhysicalSize,
     event::ElementState,
@@ -94,6 +103,29 @@ impl App {
             ..
         } = self;
 
+        // Here the gravity is -9.81 along the y axis.
+        let mut pipeline = PhysicsPipeline::new();
+        let gravity = Vector3::new(0.0, -9.81, 0.0);
+        let integration_parameters = IntegrationParameters::default();
+        let mut broad_phase = BroadPhase::new();
+        let mut narrow_phase = NarrowPhase::new();
+        let mut bodies = RigidBodySet::new();
+        let mut colliders = ColliderSet::new();
+        let mut joints = JointSet::new();
+        // We ignore contact events for now.
+        let event_handler = ();
+
+        // Add a ground plane
+        let ground_size = 1000.1;
+        let rigid_body = RigidBodyBuilder::new_static()
+            .translation(0.0, -10.0, 0.0)
+            .build();
+        let handle = bodies.insert(rigid_body);
+        let collider = ColliderBuilder::cuboid(ground_size, 1.0, ground_size).build();
+        colliders.insert(collider, handle, &mut bodies);
+
+        let mut physics_handles = HashMap::new();
+
         input.allowed = true;
 
         let mut camera_multipliers = CameraMultipliers {
@@ -116,6 +148,9 @@ impl App {
                     if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
                         *control_flow = ControlFlow::Exit;
                     }
+
+                    let entities = world.ecs.query::<&Mesh>().iter().map(|(entity, _)| entity).collect::<Vec<_>>();
+                    entities.into_iter().for_each(|entity| {let _ = world.ecs.insert_one(entity, BoundingBoxVisible {});});
 
                     let draw_data = gui
                         .render_frame(&window, |ui| {
@@ -146,9 +181,6 @@ impl App {
                                         .step_fast(1.0).build();
                                     ui.separator();
 
-                                    let entities = world.ecs.query::<&Mesh>().iter().map(|(entity, _)| entity).collect::<Vec<_>>();
-                                    entities.into_iter().for_each(|entity| {let _ = world.ecs.insert_one(entity, BoundingBoxVisible {});});
-
                                     for (_entity, mesh) in world.ecs.query::<&Mesh>().iter() {
                                         ui.text(im_str!("Mesh: {}", mesh.name));
                                     }
@@ -157,6 +189,31 @@ impl App {
                     .expect("Failed to render gui frame!");
 
                     Self::update_camera(&mut camera, &input, &system, &camera_multipliers);
+
+                    pipeline.step(
+                        &gravity,
+                        &integration_parameters,
+                        &mut broad_phase,
+                        &mut narrow_phase,
+                        &mut bodies,
+                        &mut colliders,
+                        &mut joints,
+                        None,
+                        None,
+                        &event_handler
+                    );
+
+                    // Sync the render transforms with the physics rigid bodies
+                    for (entity, (mesh, transform)) in world.ecs.query_mut::<(&Mesh, &mut Transform)>() {
+                        if physics_handles.contains_key(&entity) {
+                            let handle = physics_handles[&entity];
+                            if let Some(body) = bodies.get(handle) {
+                                let position = body.position();
+                                transform.translation = position.translation.vector;
+                                transform.rotation = *position.rotation.quaternion();
+                            }
+                        }
+                    }
 
                     if !world.animations.is_empty() {
                         if let Err(error) = world.animate(0, 0.75 * system.delta_time as f32) {
@@ -187,8 +244,26 @@ impl App {
                                     if let Err(error) = renderer.load_world(&world) {
                                         warn!("Failed to load gltf world: {}", error);
                                     }
-                                    camera = OrbitalCamera::default();
                                     info!("Loaded gltf world: '{}'", raw_path);
+
+                                    physics_handles.clear();
+
+                                    for (entity, (mesh, transform)) in world.ecs.query::<(&Mesh, &Transform)>().iter() {
+                                        // Insert a corresponding rigid body
+                                        let rigid_body = RigidBodyBuilder::new_dynamic()
+                                        .translation(transform.translation.x, transform.translation.y, transform.translation.z)
+                                        .rotation(transform.rotation.as_vector().xyz())
+                                        .build();
+                                        let handle = bodies.insert(rigid_body);
+                                        // Insert a collider
+                                        let bounding_box = mesh.bounding_box();
+                                        let half_extents = bounding_box.half_extents();
+                                        let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
+                                        colliders.insert(collider, handle, &mut bodies);
+                                        physics_handles.insert(entity, handle);
+                                    }
+
+                                    log::info!("Handles: {:#?}", physics_handles);
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = renderer.load_skybox(raw_path) {
