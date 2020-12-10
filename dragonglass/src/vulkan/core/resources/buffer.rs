@@ -42,7 +42,6 @@ impl GpuBuffer {
         data: &[T],
         offset: usize,
         pool: &CommandPool,
-        graphics_queue: vk::Queue,
     ) -> Result<()> {
         let size = data.len() * std::mem::size_of::<T>();
 
@@ -55,7 +54,6 @@ impl GpuBuffer {
             .build();
 
         let info = BufferToBufferCopyBuilder::default()
-            .graphics_queue(graphics_queue)
             .source(staging_buffer.buffer.handle)
             .destination(self.buffer.handle)
             .regions(vec![region])

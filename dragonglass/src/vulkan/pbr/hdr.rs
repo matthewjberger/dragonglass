@@ -93,13 +93,12 @@ pub fn hdr_cubemap(
     );
 
     transition_cubemap_to_transfer_dst(
-        context.graphics_queue(),
         command_pool,
         cubemap.image.handle,
         cubemap_description.mip_levels,
     )?;
 
-    let cube = Arc::new(Cube::new(context, command_pool)?);
+    let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
     let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
     let matrices = cubemap_matrices();
     let (pipeline, pipeline_layout) = pipeline(
@@ -122,7 +121,7 @@ pub fn hdr_cubemap(
                 mvp: projection * matrix,
             };
 
-            command_pool.execute_once(context.graphics_queue(), |command_buffer| {
+            command_pool.execute_once(|command_buffer| {
                 rendergraph.execute_pass(command_buffer, "offscreen", 0, |_, command_buffer| {
                     device.update_viewport(command_buffer, extent, true)?;
                     unsafe {
@@ -153,11 +152,7 @@ pub fn hdr_cubemap(
                 Ok(())
             })?;
 
-            transition_backbuffer_to_transfer_src(
-                context.graphics_queue(),
-                command_pool,
-                color_image,
-            )?;
+            transition_backbuffer_to_transfer_src(command_pool, color_image)?;
 
             let src_subresource = vk::ImageSubresourceLayers::builder()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -186,7 +181,6 @@ pub fn hdr_cubemap(
                 .build();
 
             let copy_info = ImageToImageCopyBuilder::default()
-                .graphics_queue(context.graphics_queue())
                 .source(color_image)
                 .destination(cubemap.image.handle)
                 .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
@@ -196,16 +190,11 @@ pub fn hdr_cubemap(
                 .map_err(|error| anyhow!("{}", error))?;
             command_pool.copy_image_to_image(&copy_info)?;
 
-            transition_backbuffer_to_color_attachment(
-                context.graphics_queue(),
-                command_pool,
-                color_image,
-            )?;
+            transition_backbuffer_to_color_attachment(command_pool, color_image)?;
         }
     }
 
     transition_cubemap_to_shader_read(
-        context.graphics_queue(),
         command_pool,
         cubemap.image.handle,
         cubemap_description.mip_levels,
@@ -353,13 +342,11 @@ fn pipeline(
 }
 
 fn transition_cubemap_to_transfer_dst(
-    graphics_queue: vk::Queue,
     command_pool: &CommandPool,
     cubemap_image: vk::Image,
     mip_levels: u32,
 ) -> Result<()> {
     let transition = ImageLayoutTransitionBuilder::default()
-        .graphics_queue(graphics_queue)
         .base_mip_level(0)
         .level_count(mip_levels)
         .layer_count(6)
@@ -376,12 +363,10 @@ fn transition_cubemap_to_transfer_dst(
 }
 
 fn transition_backbuffer_to_transfer_src(
-    graphics_queue: vk::Queue,
     command_pool: &CommandPool,
     color_image: vk::Image,
 ) -> Result<()> {
     let transition = ImageLayoutTransitionBuilder::default()
-        .graphics_queue(graphics_queue)
         .base_mip_level(0)
         .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
@@ -396,12 +381,10 @@ fn transition_backbuffer_to_transfer_src(
 }
 
 fn transition_backbuffer_to_color_attachment(
-    graphics_queue: vk::Queue,
     command_pool: &CommandPool,
     color_image: vk::Image,
 ) -> Result<()> {
     let transition = ImageLayoutTransitionBuilder::default()
-        .graphics_queue(graphics_queue)
         .base_mip_level(0)
         .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
         .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -416,13 +399,11 @@ fn transition_backbuffer_to_color_attachment(
 }
 
 fn transition_cubemap_to_shader_read(
-    graphics_queue: vk::Queue,
     command_pool: &CommandPool,
     cubemap_image: vk::Image,
     mip_levels: u32,
 ) -> Result<()> {
     let transition = ImageLayoutTransitionBuilder::default()
-        .graphics_queue(graphics_queue)
         .base_mip_level(0)
         .level_count(mip_levels)
         .layer_count(6)

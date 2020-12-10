@@ -30,8 +30,8 @@ impl Device {
         let features = Self::features();
 
         let queue_indices = [
-            physical_device.graphics_queue_index,
-            physical_device.presentation_queue_index,
+            physical_device.graphics_queue_family_index,
+            physical_device.presentation_queue_family_index,
         ];
         let queue_create_info_list = Self::queue_create_info_list(&queue_indices);
 

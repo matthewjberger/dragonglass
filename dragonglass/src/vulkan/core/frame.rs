@@ -28,9 +28,10 @@ impl Frame {
             .map(|_| FrameLock::new(context.device.clone()))
             .collect::<Result<Vec<_>>>()?;
 
-        let graphics_queue_index = context.physical_device.graphics_queue_index;
+        let graphics_queue_index = context.physical_device.graphics_queue_family_index;
         let command_pool = CommandPool::new(
             context.device.clone(),
+            context.graphics_queue(),
             vk::CommandPoolCreateInfo::builder()
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
                 .queue_family_index(graphics_queue_index),

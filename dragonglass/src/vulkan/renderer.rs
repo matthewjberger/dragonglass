@@ -39,9 +39,13 @@ impl VulkanRenderer {
             &frame.swapchain_properties,
         )?;
         let create_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(context.physical_device.graphics_queue_index)
+            .queue_family_index(context.physical_device.graphics_queue_family_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
-        let command_pool = CommandPool::new(context.device.clone(), create_info)?;
+        let command_pool = CommandPool::new(
+            context.device.clone(),
+            context.graphics_queue(),
+            create_info,
+        )?;
         let renderer = Self {
             _command_pool: command_pool,
             frame,
@@ -78,7 +82,6 @@ impl Renderer for VulkanRenderer {
         // FIXME: Don't reallocate gui geometry buffers each frame...
         scene.gui_render.resize_geometry_buffer(
             self.context.allocator.clone(),
-            self.context.graphics_queue(),
             &scene.transient_command_pool,
             draw_data,
         )?;

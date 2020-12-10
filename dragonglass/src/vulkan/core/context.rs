@@ -116,12 +116,12 @@ impl Context {
     }
 
     pub fn graphics_queue(&self) -> vk::Queue {
-        let index = self.physical_device.presentation_queue_index;
+        let index = self.physical_device.graphics_queue_family_index;
         unsafe { self.device.handle.get_device_queue(index, 0) }
     }
 
     pub fn presentation_queue(&self) -> vk::Queue {
-        let index = self.physical_device.presentation_queue_index;
+        let index = self.physical_device.presentation_queue_family_index;
         unsafe { self.device.handle.get_device_queue(index, 0) }
     }
 

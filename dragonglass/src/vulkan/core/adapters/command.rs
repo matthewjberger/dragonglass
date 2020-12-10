@@ -6,13 +6,23 @@ use std::sync::Arc;
 
 pub struct CommandPool {
     pub handle: vk::CommandPool,
+    queue: vk::Queue,
     device: Arc<Device>,
 }
 
 impl CommandPool {
-    pub fn new(device: Arc<Device>, create_info: vk::CommandPoolCreateInfoBuilder) -> Result<Self> {
+    pub fn new(
+        device: Arc<Device>,
+        queue: vk::Queue,
+        create_info: vk::CommandPoolCreateInfoBuilder,
+    ) -> Result<Self> {
+        // TODO: Construct create info in this method using just a Queue wrapper that has an index and the queue handle
         let handle = unsafe { device.handle.create_command_pool(&create_info, None)? };
-        let command_pool = Self { handle, device };
+        let command_pool = Self {
+            handle,
+            queue,
+            device,
+        };
         Ok(command_pool)
     }
 
@@ -32,7 +42,7 @@ impl CommandPool {
 
     pub fn copy_buffer_to_buffer(&self, info: &BufferToBufferCopy) -> Result<()> {
         let device = self.device.handle.clone();
-        self.execute_once(info.graphics_queue, |command_buffer| {
+        self.execute_once(|command_buffer| {
             unsafe {
                 device.cmd_copy_buffer(command_buffer, info.source, info.destination, &info.regions)
             };
@@ -42,7 +52,7 @@ impl CommandPool {
 
     pub fn copy_buffer_to_image(&self, info: &BufferToImageCopy) -> Result<()> {
         let device = self.device.handle.clone();
-        self.execute_once(info.graphics_queue, |command_buffer| {
+        self.execute_once(|command_buffer| {
             unsafe {
                 device.cmd_copy_buffer_to_image(
                     command_buffer,
@@ -58,7 +68,7 @@ impl CommandPool {
 
     pub fn copy_image_to_image(&self, info: &ImageToImageCopy) -> Result<()> {
         let device = self.device.handle.clone();
-        self.execute_once(info.graphics_queue, |command_buffer| {
+        self.execute_once(|command_buffer| {
             unsafe {
                 device.cmd_copy_image(
                     command_buffer,
@@ -75,7 +85,7 @@ impl CommandPool {
 
     pub fn transition_image_layout(&self, info: &PipelineBarrier) -> Result<()> {
         let device = self.device.handle.clone();
-        self.execute_once(info.graphics_queue, |command_buffer| {
+        self.execute_once(|command_buffer| {
             unsafe {
                 device.cmd_pipeline_barrier(
                     command_buffer,
@@ -92,7 +102,7 @@ impl CommandPool {
     }
 
     pub fn blit_image(&self, info: &BlitImage) -> Result<()> {
-        self.execute_once(info.graphics_queue, |command_buffer| {
+        self.execute_once(|command_buffer| {
             unsafe {
                 self.device.handle.cmd_blit_image(
                     command_buffer,
@@ -110,7 +120,6 @@ impl CommandPool {
 
     pub fn execute_once(
         &self,
-        queue: vk::Queue,
         executor: impl FnMut(vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         let command_buffer = self.allocate_command_buffers(1, vk::CommandBufferLevel::PRIMARY)?[0];
@@ -131,13 +140,13 @@ impl CommandPool {
 
         let device = self.device.handle.clone();
         unsafe {
-            device.queue_submit(queue, &submit_info_arr, fence.handle)?;
+            device.queue_submit(self.queue, &submit_info_arr, fence.handle)?;
             device.wait_for_fences(
                 &[fence.handle],
                 true,
                 std::time::Duration::from_secs(100).as_nanos() as _,
             )?;
-            device.queue_wait_idle(queue)?;
+            device.queue_wait_idle(self.queue)?;
             device.free_command_buffers(self.handle, &command_buffers);
         }
 
@@ -155,7 +164,6 @@ impl Drop for CommandPool {
 
 #[derive(Builder)]
 pub struct BufferToBufferCopy {
-    pub graphics_queue: vk::Queue,
     pub source: vk::Buffer,
     pub destination: vk::Buffer,
     pub regions: Vec<vk::BufferCopy>,
@@ -163,7 +171,6 @@ pub struct BufferToBufferCopy {
 
 #[derive(Builder)]
 pub struct BufferToImageCopy {
-    pub graphics_queue: vk::Queue,
     pub source: vk::Buffer,
     pub destination: vk::Image,
     pub regions: Vec<vk::BufferImageCopy>,
@@ -173,7 +180,6 @@ pub struct BufferToImageCopy {
 
 #[derive(Builder)]
 pub struct ImageToImageCopy {
-    pub graphics_queue: vk::Queue,
     pub source: vk::Image,
     pub source_layout: vk::ImageLayout,
     pub destination: vk::Image,
@@ -183,7 +189,6 @@ pub struct ImageToImageCopy {
 
 #[derive(Builder)]
 pub struct PipelineBarrier {
-    pub graphics_queue: vk::Queue,
     pub src_stage_mask: vk::PipelineStageFlags,
     pub dst_stage_mask: vk::PipelineStageFlags,
     #[builder(default)]
@@ -197,7 +202,6 @@ pub struct PipelineBarrier {
 
 #[derive(Builder)]
 pub struct BlitImage {
-    pub graphics_queue: vk::Queue,
     pub src_image: vk::Image,
     pub src_image_layout: vk::ImageLayout,
     pub dst_image: vk::Image,

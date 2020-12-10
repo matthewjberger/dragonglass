@@ -39,7 +39,7 @@ impl SkyboxRendering {
         image_view: vk::ImageView,
         sampler: vk::Sampler,
     ) -> Result<Self> {
-        let cube = Cube::new(context, command_pool)?;
+        let cube = Cube::new(context.allocator.clone(), command_pool)?;
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(context.device.clone())?);
         let descriptor_pool = Self::descriptor_pool(context.device.clone())?;
         let descriptor_set =

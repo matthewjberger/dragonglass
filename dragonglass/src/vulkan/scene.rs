@@ -36,7 +36,8 @@ impl Scene {
     ) -> Result<Self> {
         let transient_command_pool = Self::transient_command_pool(
             context.device.clone(),
-            context.physical_device.graphics_queue_index,
+            context.graphics_queue(),
+            context.physical_device.graphics_queue_family_index,
         )?;
         let samples = context.max_usable_samples();
         let rendergraph =
@@ -116,11 +117,15 @@ impl Scene {
         Ok(())
     }
 
-    fn transient_command_pool(device: Arc<Device>, queue_index: u32) -> Result<CommandPool> {
+    fn transient_command_pool(
+        device: Arc<Device>,
+        queue: vk::Queue,
+        queue_index: u32,
+    ) -> Result<CommandPool> {
         let create_info = vk::CommandPoolCreateInfo::builder()
             .queue_family_index(queue_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
-        let command_pool = CommandPool::new(device, create_info)?;
+        let command_pool = CommandPool::new(device, queue, create_info)?;
         Ok(command_pool)
     }
 

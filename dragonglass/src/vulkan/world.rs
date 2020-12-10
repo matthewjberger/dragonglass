@@ -234,19 +234,16 @@ impl WorldPipelineData {
             index_buffer_size,
         )?;
 
-        geometry_buffer.vertex_buffer.upload_data(
-            &geometry.vertices,
-            0,
-            pool,
-            context.graphics_queue(),
-        )?;
+        geometry_buffer
+            .vertex_buffer
+            .upload_data(&geometry.vertices, 0, pool)?;
 
         if has_indices {
             geometry_buffer
                 .index_buffer
                 .as_ref()
                 .context("Failed to access index buffer!")?
-                .upload_data(&geometry.indices, 0, pool, context.graphics_queue())?;
+                .upload_data(&geometry.indices, 0, pool)?;
         }
 
         Ok(geometry_buffer)
@@ -401,7 +398,7 @@ pub struct WorldRender {
 impl WorldRender {
     pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
         let pipeline_data = WorldPipelineData::new(context, command_pool, world)?;
-        let cube = Cube::new(context, command_pool)?;
+        let cube = Cube::new(context.allocator.clone(), command_pool)?;
         let cube_render = CubeRender::new(context.device.clone(), cube);
         Ok(Self {
             cube_render,

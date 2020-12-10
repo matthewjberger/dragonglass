@@ -1,6 +1,8 @@
-use crate::vulkan::core::{CommandPool, Context, GeometryBuffer};
+use crate::vulkan::core::{CommandPool, GeometryBuffer};
 use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use std::sync::Arc;
+use vk_mem::Allocator;
 
 #[rustfmt::skip]
 pub const VERTICES: &[f32; 24] =
@@ -52,25 +54,22 @@ pub struct Cube {
 }
 
 impl Cube {
-    pub fn new(context: &Context, command_pool: &CommandPool) -> Result<Self> {
+    pub fn new(allocator: Arc<Allocator>, command_pool: &CommandPool) -> Result<Self> {
         let geometry_buffer = GeometryBuffer::new(
-            context.allocator.clone(),
+            allocator,
             (VERTICES.len() * std::mem::size_of::<f32>()) as _,
             Some((INDICES.len() * std::mem::size_of::<u32>()) as _),
         )?;
 
-        geometry_buffer.vertex_buffer.upload_data(
-            VERTICES,
-            0,
-            command_pool,
-            context.graphics_queue(),
-        )?;
+        geometry_buffer
+            .vertex_buffer
+            .upload_data(VERTICES, 0, command_pool)?;
 
         geometry_buffer
             .index_buffer
             .as_ref()
             .context("Failed to access cube index buffer!")?
-            .upload_data(INDICES, 0, command_pool, context.graphics_queue())?;
+            .upload_data(INDICES, 0, command_pool)?;
 
         Ok(Self { geometry_buffer })
     }

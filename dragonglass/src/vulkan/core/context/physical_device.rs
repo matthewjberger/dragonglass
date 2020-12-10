@@ -6,8 +6,8 @@ use std::ffi::CStr;
 
 pub struct PhysicalDevice {
     pub handle: vk::PhysicalDevice,
-    pub graphics_queue_index: u32,
-    pub presentation_queue_index: u32,
+    pub graphics_queue_family_index: u32,
+    pub presentation_queue_family_index: u32,
 }
 
 impl PhysicalDevice {
@@ -36,13 +36,13 @@ impl PhysicalDevice {
             return Ok(None);
         }
 
-        let (graphics_queue_index, presentation_queue_index) = queue_indices.unwrap();
+        let (graphics_queue_family_index, presentation_queue_family_index) = queue_indices.unwrap();
 
         info!("Selected physical device: {:?}", device_name);
         let physical_device = Self {
             handle: device,
-            graphics_queue_index,
-            presentation_queue_index,
+            graphics_queue_family_index,
+            presentation_queue_family_index,
         };
 
         Ok(Some(physical_device))
@@ -146,6 +146,9 @@ impl PhysicalDevice {
     }
 
     pub fn queue_indices(&self) -> Vec<u32> {
-        vec![self.graphics_queue_index, self.presentation_queue_index]
+        vec![
+            self.graphics_queue_family_index,
+            self.presentation_queue_family_index,
+        ]
     }
 }

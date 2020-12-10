@@ -16,7 +16,6 @@ use vk_mem::Allocator;
 
 #[derive(Builder)]
 pub struct ImageLayoutTransition {
-    pub graphics_queue: vk::Queue,
     #[builder(default)]
     pub base_mip_level: u32,
     #[builder(default = "1")]
@@ -239,7 +238,6 @@ pub fn transition_image(
         .dst_access_mask(info.dst_access_mask)
         .build();
     let pipeline_barrier_info = PipelineBarrierBuilder::default()
-        .graphics_queue(info.graphics_queue)
         .src_stage_mask(info.src_stage_mask)
         .dst_stage_mask(info.dst_stage_mask)
         .image_memory_barriers(vec![image_barrier])
@@ -304,23 +302,16 @@ impl AllocatedImage {
             self.allocation_info.get_size() as _,
         )?;
         buffer.upload_data(&description.pixels, 0)?;
-        let graphics_queue = context.graphics_queue();
-        self.transition_base_to_transfer_dst(graphics_queue, pool, description.mip_levels)?;
-        self.copy_to_gpu_buffer(graphics_queue, pool, buffer.handle(), description)?;
+        self.transition_base_to_transfer_dst(pool, description.mip_levels)?;
+        self.copy_to_gpu_buffer(pool, buffer.handle(), description)?;
         context.ensure_linear_blitting_supported(description.format)?;
-        self.generate_mipmaps(graphics_queue, pool, description)?;
-        self.transition_base_to_shader_read(graphics_queue, pool, description.mip_levels - 1)?;
+        self.generate_mipmaps(pool, description)?;
+        self.transition_base_to_shader_read(pool, description.mip_levels - 1)?;
         Ok(())
     }
 
-    fn transition_base_to_transfer_dst(
-        &self,
-        graphics_queue: vk::Queue,
-        pool: &CommandPool,
-        level_count: u32,
-    ) -> Result<()> {
+    fn transition_base_to_transfer_dst(&self, pool: &CommandPool, level_count: u32) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
-            .graphics_queue(graphics_queue)
             .level_count(level_count)
             .old_layout(vk::ImageLayout::UNDEFINED)
             .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
@@ -335,12 +326,10 @@ impl AllocatedImage {
 
     fn transition_base_to_shader_read(
         &self,
-        graphics_queue: vk::Queue,
         pool: &CommandPool,
         base_mip_level: u32,
     ) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
-            .graphics_queue(graphics_queue)
             .base_mip_level(base_mip_level)
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
@@ -355,12 +344,10 @@ impl AllocatedImage {
 
     fn transition_mip_transfer_dst_to_src(
         &self,
-        graphics_queue: vk::Queue,
         pool: &CommandPool,
         base_mip_level: u32,
     ) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
-            .graphics_queue(graphics_queue)
             .base_mip_level(base_mip_level)
             .level_count(1)
             .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
@@ -374,14 +361,8 @@ impl AllocatedImage {
         transition_image(self.handle, pool, &transition)
     }
 
-    fn transition_mip_to_shader_read(
-        &self,
-        graphics_queue: vk::Queue,
-        pool: &CommandPool,
-        base_mip_level: u32,
-    ) -> Result<()> {
+    fn transition_mip_to_shader_read(&self, pool: &CommandPool, base_mip_level: u32) -> Result<()> {
         let transition = ImageLayoutTransitionBuilder::default()
-            .graphics_queue(graphics_queue)
             .base_mip_level(base_mip_level)
             .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
@@ -396,7 +377,6 @@ impl AllocatedImage {
 
     fn copy_to_gpu_buffer(
         &self,
-        graphics_queue: vk::Queue,
         pool: &CommandPool,
         buffer: vk::Buffer,
         description: &ImageDescription,
@@ -419,7 +399,6 @@ impl AllocatedImage {
             .image_extent(extent)
             .build();
         let copy_info = BufferToImageCopyBuilder::default()
-            .graphics_queue(graphics_queue)
             .source(buffer)
             .destination(self.handle)
             .regions(vec![region])
@@ -431,17 +410,16 @@ impl AllocatedImage {
 
     pub fn generate_mipmaps(
         &self,
-        graphics_queue: vk::Queue,
         pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<()> {
         let mut width = description.width as i32;
         let mut height = description.height as i32;
         for level in 1..description.mip_levels {
-            self.transition_mip_transfer_dst_to_src(graphics_queue, pool, level - 1)?;
+            self.transition_mip_transfer_dst_to_src(pool, level - 1)?;
             let dimensions = MipmapBlitDimensions::new(width, height);
-            self.blit_mipmap(graphics_queue, pool, &dimensions, level)?;
-            self.transition_mip_to_shader_read(graphics_queue, pool, level - 1)?;
+            self.blit_mipmap(pool, &dimensions, level)?;
+            self.transition_mip_to_shader_read(pool, level - 1)?;
             width = dimensions.next_width;
             height = dimensions.next_height;
         }
@@ -450,7 +428,6 @@ impl AllocatedImage {
 
     fn blit_mipmap(
         &self,
-        graphics_queue: vk::Queue,
         pool: &CommandPool,
         dimensions: &MipmapBlitDimensions,
         level: u32,
@@ -475,7 +452,6 @@ impl AllocatedImage {
             .build();
 
         let blit_image_info = BlitImageBuilder::default()
-            .graphics_queue(graphics_queue)
             .src_image(self.handle)
             .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .dst_image(self.handle)

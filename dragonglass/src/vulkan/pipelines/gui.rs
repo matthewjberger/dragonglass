@@ -226,7 +226,6 @@ impl GuiRender {
     pub fn resize_geometry_buffer(
         &mut self,
         allocator: Arc<Allocator>,
-        graphics_queue: vk::Queue,
         command_pool: &CommandPool,
         draw_data: &DrawData,
     ) -> Result<()> {
@@ -250,13 +249,13 @@ impl GuiRender {
 
         geometry_buffer
             .vertex_buffer
-            .upload_data(&vertices, 0, command_pool, graphics_queue)?;
+            .upload_data(&vertices, 0, command_pool)?;
 
         geometry_buffer
             .index_buffer
             .as_ref()
             .context("Failed to access cube index buffer!")?
-            .upload_data(&indices, 0, command_pool, graphics_queue)?;
+            .upload_data(&indices, 0, command_pool)?;
 
         self.geometry_buffer = Some(geometry_buffer);
         Ok(())
