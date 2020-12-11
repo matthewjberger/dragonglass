@@ -3,9 +3,7 @@ use ash::{
     version::{EntryV1_0, InstanceV1_0},
     vk::{self, make_version},
 };
-use ash_window::enumerate_required_extensions;
 use log::info;
-use raw_window_handle::HasRawWindowHandle;
 use std::ffi::{CStr, CString};
 
 pub struct Instance {
@@ -19,15 +17,17 @@ impl Instance {
     const ENGINE_VERSION: u32 = make_version(1, 0, 0);
     const ENGINE_NAME: &'static str = "Dragonglass Engine";
 
-    pub fn new(entry: &ash::Entry, window_handle: &impl HasRawWindowHandle) -> Result<Self> {
+    pub fn new(
+        entry: &ash::Entry,
+        extensions: Vec<*const i8>,
+        layers: Vec<*const i8>,
+    ) -> Result<Self> {
         let application_create_info = Self::application_create_info()?;
-        let instance_extensions = Self::extensions(window_handle)?;
-        let layers = Self::layers()?;
         Self::check_layers_supported(entry, &layers)?;
 
         let instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&application_create_info)
-            .enabled_extension_names(&instance_extensions)
+            .enabled_extension_names(&extensions)
             .enabled_layer_names(&layers);
 
         let handle = unsafe { entry.create_instance(&instance_create_info, None) }?;
@@ -45,20 +45,6 @@ impl Instance {
             .engine_version(Self::ENGINE_VERSION)
             .build();
         Ok(app_info)
-    }
-
-    fn extensions(window_handle: &impl HasRawWindowHandle) -> Result<Vec<*const i8>> {
-        let extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
-            .iter()
-            .map(|extension| extension.as_ptr())
-            .collect();
-        Ok(extensions)
-    }
-
-    pub fn layers() -> Result<Vec<*const i8>> {
-        let layers = Vec::new();
-        // Add layers here
-        Ok(layers)
     }
 
     fn check_layers_supported(entry: &ash::Entry, layers: &[*const i8]) -> Result<()> {

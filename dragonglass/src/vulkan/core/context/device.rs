@@ -1,4 +1,4 @@
-use crate::vulkan::core::{Instance, PhysicalDevice};
+use crate::vulkan::core::{Context, PhysicalDevice};
 use anyhow::Result;
 use ash::{
     extensions::khr::Swapchain,
@@ -39,7 +39,7 @@ impl Device {
         // has been deprecated as of Vulkan 1.1, but the spec recommends stil
         // passing the layer name pointers here to maintain backwards compatibility
         // with older implementations.
-        let layers = Instance::layers()?;
+        let layers = Context::layers()?;
 
         let create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(queue_create_info_list.as_slice())

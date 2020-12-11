@@ -10,7 +10,7 @@ use ash::{
     version::{DeviceV1_0, InstanceV1_0},
     vk::{self, SurfaceKHR},
 };
-use ash_window::create_surface;
+use ash_window::{create_surface, enumerate_required_extensions};
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
@@ -30,7 +30,9 @@ pub struct Context {
 impl Context {
     pub fn new(window_handle: &impl HasRawWindowHandle) -> Result<Self> {
         let entry = ash::Entry::new()?;
-        let instance = Instance::new(&entry, window_handle)?;
+        let extensions = Self::extensions(window_handle)?;
+        let layers = Self::layers()?;
+        let instance = Instance::new(&entry, extensions, layers)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
         let device = Device::from_physical(&instance.handle, &physical_device)?;
@@ -53,6 +55,20 @@ impl Context {
             instance,
             entry,
         })
+    }
+
+    fn extensions(window_handle: &impl HasRawWindowHandle) -> Result<Vec<*const i8>> {
+        let extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
+            .iter()
+            .map(|extension| extension.as_ptr())
+            .collect();
+        Ok(extensions)
+    }
+
+    pub fn layers() -> Result<Vec<*const i8>> {
+        let layers = Vec::new();
+        // Add layers here
+        Ok(layers)
     }
 
     pub fn physical_device_surface_capabilities(&self) -> Result<vk::SurfaceCapabilitiesKHR> {
