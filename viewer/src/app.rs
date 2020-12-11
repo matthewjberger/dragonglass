@@ -121,7 +121,7 @@ impl App {
                         .render_frame(&window, |ui| {
                             imgui::Window::new(im_str!("Scene Information"))
                                 .size([300.0, 400.0], Condition::FirstUseEver)
-                                .build(&ui, || {
+                                .build(ui, || {
                                     let number_of_entities = world.ecs.iter().count();
                                     let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
                                     ui.text(im_str!("Number of entities: {}", number_of_entities));

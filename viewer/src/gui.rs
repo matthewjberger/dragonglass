@@ -25,14 +25,14 @@ impl Gui {
         }]);
         context.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
-        platform.attach_window(context.io_mut(), &window, HiDpiMode::Rounded);
+        platform.attach_window(context.io_mut(), window, HiDpiMode::Rounded);
 
         Self { context, platform }
     }
 
     pub fn handle_event<T>(&mut self, event: &Event<T>, window: &Window) {
         self.platform
-            .handle_event(self.context.io_mut(), &window, &event);
+            .handle_event(self.context.io_mut(), window, event);
     }
 
     pub fn render_frame(

@@ -131,7 +131,7 @@ impl GuiRender {
 
         let mut settings = GraphicsPipelineSettingsBuilder::default();
         settings
-            .render_pass(render_pass.clone())
+            .render_pass(render_pass)
             .vertex_inputs(Self::vertex_input_descriptions())
             .vertex_attributes(Self::vertex_attributes())
             .descriptor_set_layout(self.descriptor_set_layout.clone())

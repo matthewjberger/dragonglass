@@ -74,8 +74,6 @@ pub struct WorldUniformBuffer {
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec4,
     pub joint_matrices: [glm::Mat4; WorldPipelineData::MAX_NUMBER_OF_JOINTS],
-    pub morph_targets: [glm::Vec4; WorldPipelineData::MAX_NUMBER_OF_MORPH_TARGETS],
-    pub morph_target_weights: [f32; WorldPipelineData::MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -83,8 +81,7 @@ pub struct EntityDynamicUniformBuffer {
     pub model: glm::Mat4,
     // X is the joint count.
     // Y is the joint matrix offset.
-    // Z is the morph target weight count.
-    // W is the morph target weight offset.
+    // A vec4 is needed to meet shader uniform data layout requirements
     pub node_info: glm::Vec4,
 }
 
@@ -106,8 +103,6 @@ impl WorldPipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
     pub const MAX_NUMBER_OF_JOINTS: usize = 200;
-    pub const MAX_NUMBER_OF_MORPH_TARGETS: usize = 128;
-    pub const MAX_NUMBER_OF_MORPH_TARGET_WEIGHTS: usize = 128;
 
     // This does not need to be matched in the shader
     pub const MAX_NUMBER_OF_MESHES: usize = 500;

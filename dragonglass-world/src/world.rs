@@ -172,6 +172,7 @@ impl World {
         Ok(joint_matrices)
     }
 
+    #[allow(dead_code)]
     pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
         let number_of_morph_targets = self
             .ecs
@@ -214,6 +215,7 @@ impl World {
         Ok(morph_targets)
     }
 
+    #[allow(dead_code)]
     pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
         let number_of_morph_target_weights = self
             .ecs

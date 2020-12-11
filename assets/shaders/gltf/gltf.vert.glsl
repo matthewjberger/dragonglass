@@ -10,16 +10,12 @@ layout(location=5) in vec4 inWeight0;
 layout(location=6) in vec3 inColor0;
 
 #define MAX_NUMBER_OF_JOINTS 200
-#define MAX_NUMBER_OF_MORPH_TARGETS 128
-#define MAX_NUMBER_OF_MORPH_WEIGHTS 128
 
 layout(binding=0) uniform UboView{
   mat4 view;
   mat4 projection;
   vec4 cameraPosition;
   mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
-  vec4 morphTargets[MAX_NUMBER_OF_MORPH_TARGETS];
-  float morphTargetWeights[MAX_NUMBER_OF_MORPH_WEIGHTS];
 } uboView;
 
 layout(binding=1) uniform UboInstance{
@@ -37,8 +33,6 @@ void main()
 {
   float jointCount = uboInstance.node_info.x;
   float jointOffset = uboInstance.node_info.y;
-  float morphWeightCount = uboInstance.node_info.z;
-  float morphWeightOffset = uboInstance.node_info.w;
 
   mat4 skinMatrix = mat4(1.0);
   if (jointCount > 0.0) {

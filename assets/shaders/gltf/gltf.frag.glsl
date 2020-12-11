@@ -35,16 +35,12 @@ layout(push_constant) uniform Material{
 layout(location = 0) out vec4 outColor;
 
 #define MAX_NUMBER_OF_JOINTS 200
-#define MAX_NUMBER_OF_MORPH_TARGETS 128
-#define MAX_NUMBER_OF_MORPH_WEIGHTS 128
 
 layout(binding=0) uniform UboView{
   mat4 view;
   mat4 projection;
   vec4 cameraPosition;
   mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
-  vec4 morphTargets[MAX_NUMBER_OF_MORPH_TARGETS];
-  float morphTargetWeights[MAX_NUMBER_OF_MORPH_WEIGHTS];
 } uboView;
 
 vec4 srgb_to_linear(vec4 srgbIn)
