@@ -6,12 +6,13 @@ mod physical_device;
 
 use anyhow::{ensure, Context as AnyhowContext, Result};
 use ash::{
-    extensions::khr::Surface as AshSurface,
+    extensions::khr::{Surface as AshSurface, Swapchain},
     version::{DeviceV1_0, InstanceV1_0},
     vk::{self, SurfaceKHR},
 };
 use ash_window::{create_surface, enumerate_required_extensions};
 use raw_window_handle::HasRawWindowHandle;
+use std::os::raw::c_char;
 use std::sync::Arc;
 use vk_mem::{Allocator, AllocatorCreateInfo};
 
@@ -30,12 +31,41 @@ pub struct Context {
 impl Context {
     pub fn new(window_handle: &impl HasRawWindowHandle) -> Result<Self> {
         let entry = ash::Entry::new()?;
-        let extensions = Self::extensions(window_handle)?;
+        let instance_extensions = Self::instance_extensions(window_handle)?;
         let layers = Self::layers()?;
-        let instance = Instance::new(&entry, extensions, layers)?;
+        let instance = Instance::new(&entry, &instance_extensions, &layers)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
-        let device = Device::from_physical(&instance.handle, &physical_device)?;
+
+        let device_extensions = Self::device_extensions();
+        let features = Self::features();
+
+        let mut queue_indices = vec![
+            physical_device.graphics_queue_family_index,
+            physical_device.presentation_queue_family_index,
+        ];
+        queue_indices.dedup();
+        let queue_create_info_list = queue_indices
+            .iter()
+            .map(|index| {
+                vk::DeviceQueueCreateInfo::builder()
+                    .queue_family_index(*index)
+                    .queue_priorities(&[1.0f32])
+                    .build()
+            })
+            .collect::<Vec<_>>();
+
+        // Distinguishing between instance and device specific validation layers
+        // has been deprecated as of Vulkan 1.1, but the spec recommends stil
+        // passing the layer name pointers here to maintain backwards compatibility
+        // with older implementations.
+        let create_info = vk::DeviceCreateInfo::builder()
+            .queue_create_infos(queue_create_info_list.as_slice())
+            .enabled_extension_names(&device_extensions)
+            .enabled_features(&features)
+            .enabled_layer_names(&layers);
+
+        let device = Device::new(&instance.handle, physical_device.handle, create_info)?;
         let device = Arc::new(device);
 
         let allocator_create_info = AllocatorCreateInfo {
@@ -57,7 +87,7 @@ impl Context {
         })
     }
 
-    fn extensions(window_handle: &impl HasRawWindowHandle) -> Result<Vec<*const i8>> {
+    fn instance_extensions(window_handle: &impl HasRawWindowHandle) -> Result<Vec<*const i8>> {
         let extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
             .iter()
             .map(|extension| extension.as_ptr())
@@ -65,10 +95,22 @@ impl Context {
         Ok(extensions)
     }
 
-    pub fn layers() -> Result<Vec<*const i8>> {
+    fn layers() -> Result<Vec<*const i8>> {
         let layers = Vec::new();
         // Add layers here
         Ok(layers)
+    }
+
+    fn device_extensions() -> Vec<*const c_char> {
+        vec![Swapchain::name().as_ptr()]
+    }
+
+    fn features<'a>() -> vk::PhysicalDeviceFeaturesBuilder<'a> {
+        vk::PhysicalDeviceFeatures::builder()
+            .sample_rate_shading(true)
+            .sampler_anisotropy(true)
+            .fill_mode_non_solid(true)
+            .wide_lines(true)
     }
 
     pub fn physical_device_surface_capabilities(&self) -> Result<vk::SurfaceCapabilitiesKHR> {

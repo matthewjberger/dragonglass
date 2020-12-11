@@ -17,18 +17,14 @@ impl Instance {
     const ENGINE_VERSION: u32 = make_version(1, 0, 0);
     const ENGINE_NAME: &'static str = "Dragonglass Engine";
 
-    pub fn new(
-        entry: &ash::Entry,
-        extensions: Vec<*const i8>,
-        layers: Vec<*const i8>,
-    ) -> Result<Self> {
+    pub fn new(entry: &ash::Entry, extensions: &[*const i8], layers: &[*const i8]) -> Result<Self> {
         let application_create_info = Self::application_create_info()?;
         Self::check_layers_supported(entry, &layers)?;
 
         let instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&application_create_info)
-            .enabled_extension_names(&extensions)
-            .enabled_layer_names(&layers);
+            .enabled_extension_names(extensions)
+            .enabled_layer_names(layers);
 
         let handle = unsafe { entry.create_instance(&instance_create_info, None) }?;
         Ok(Self { handle })
