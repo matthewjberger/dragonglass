@@ -28,7 +28,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new<T: HasRawWindowHandle>(window_handle: &T) -> Result<Self> {
+    pub fn new(window_handle: &impl HasRawWindowHandle) -> Result<Self> {
         let entry = ash::Entry::new()?;
         let instance = Instance::new(&entry, window_handle)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
@@ -174,10 +174,10 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub fn new<T: HasRawWindowHandle>(
+    pub fn new(
         entry: &ash::Entry,
         instance: &ash::Instance,
-        window_handle: &T,
+        window_handle: &impl HasRawWindowHandle,
     ) -> Result<Self> {
         let handle_ash = AshSurface::new(entry, instance);
         let handle_khr = unsafe { create_surface(entry, instance, window_handle, None) }?;

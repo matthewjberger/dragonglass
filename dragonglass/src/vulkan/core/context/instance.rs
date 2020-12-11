@@ -19,7 +19,7 @@ impl Instance {
     const ENGINE_VERSION: u32 = make_version(1, 0, 0);
     const ENGINE_NAME: &'static str = "Dragonglass Engine";
 
-    pub fn new<T: HasRawWindowHandle>(entry: &ash::Entry, window_handle: &T) -> Result<Self> {
+    pub fn new(entry: &ash::Entry, window_handle: &impl HasRawWindowHandle) -> Result<Self> {
         let application_create_info = Self::application_create_info()?;
         let instance_extensions = Self::extensions(window_handle)?;
         let layers = Self::layers()?;
@@ -47,7 +47,7 @@ impl Instance {
         Ok(app_info)
     }
 
-    fn extensions<T: HasRawWindowHandle>(window_handle: &T) -> Result<Vec<*const i8>> {
+    fn extensions(window_handle: &impl HasRawWindowHandle) -> Result<Vec<*const i8>> {
         let extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
             .iter()
             .map(|extension| extension.as_ptr())

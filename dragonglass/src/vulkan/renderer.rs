@@ -25,8 +25,8 @@ pub struct VulkanRenderer {
 impl VulkanRenderer {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new<T: HasRawWindowHandle>(
-        window_handle: &T,
+    pub fn new(
+        window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
         imgui: &mut ImguiContext,
     ) -> Result<Self> {
