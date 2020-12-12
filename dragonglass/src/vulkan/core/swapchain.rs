@@ -154,8 +154,11 @@ pub fn create_swapchain(
     context: &Context,
     dimensions: &[u32; 2],
 ) -> Result<(Swapchain, SwapchainProperties)> {
-    let properties =
-        SwapchainProperties::new(dimensions, context.physical_device.handle, &context.surface)?;
+    let properties = SwapchainProperties::new(
+        dimensions,
+        context.physical_device.handle,
+        context.surface()?,
+    )?;
 
     let queue_indices = context.physical_device.queue_indices();
     let create_info = swapchain_create_info(context, &queue_indices, properties)?;
@@ -180,7 +183,7 @@ fn swapchain_create_info<'a>(
         capabilities.min_image_count + 1,
     );
     let builder = vk::SwapchainCreateInfoKHR::builder()
-        .surface(context.surface.handle_khr)
+        .surface(context.surface()?.handle_khr)
         .min_image_count(image_count)
         .image_format(properties.surface_format.format)
         .image_color_space(properties.surface_format.color_space)

@@ -23,7 +23,7 @@ pub struct Context {
     pub allocator: Arc<vk_mem::Allocator>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
-    pub surface: Surface,
+    pub surface: Option<Surface>,
     pub instance: Instance,
     pub entry: ash::Entry,
 }
@@ -81,7 +81,7 @@ impl Context {
             allocator,
             device,
             physical_device,
-            surface,
+            surface: Some(surface),
             instance,
             entry,
         })
@@ -113,14 +113,19 @@ impl Context {
             .wide_lines(true)
     }
 
+    pub fn surface(&self) -> Result<&Surface> {
+        self.surface.as_ref().context(
+            "Surface was requested from a context that was not constructed with a surface!",
+        )
+    }
+
     pub fn physical_device_surface_capabilities(&self) -> Result<vk::SurfaceCapabilitiesKHR> {
+        let surface = self.surface()?;
         let capabilities = unsafe {
-            self.surface
-                .handle_ash
-                .get_physical_device_surface_capabilities(
-                    self.physical_device.handle,
-                    self.surface.handle_khr,
-                )
+            surface.handle_ash.get_physical_device_surface_capabilities(
+                self.physical_device.handle,
+                surface.handle_khr,
+            )
         }?;
         Ok(capabilities)
     }
