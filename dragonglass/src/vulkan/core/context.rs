@@ -30,15 +30,15 @@ pub struct Context {
 
 impl Context {
     pub fn new(window_handle: &impl HasRawWindowHandle) -> Result<Self> {
-        let entry = ash::Entry::new()?;
         let instance_extensions = Self::instance_extensions(window_handle)?;
         let layers = Self::layers()?;
+        let device_extensions = Self::device_extensions();
+        let features = Self::features();
+
+        let entry = ash::Entry::new()?;
         let instance = Instance::new(&entry, &instance_extensions, &layers)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
-
-        let device_extensions = Self::device_extensions();
-        let features = Self::features();
 
         let mut queue_indices = vec![
             physical_device.graphics_queue_family_index,
