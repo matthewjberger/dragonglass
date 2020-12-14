@@ -383,10 +383,12 @@ pub struct WorldRender {
     pub cube_render: CubeRender,
     pub pipeline_data: WorldPipelineData,
     pub pipeline: Option<Pipeline>,
+    pub pipeline_picking: Option<Pipeline>,
     pub pipeline_blended: Option<Pipeline>,
     pub pipeline_wireframe: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub wireframe_enabled: bool,
+    pub picking_enabled: bool,
     device: Arc<Device>,
 }
 
@@ -399,10 +401,12 @@ impl WorldRender {
             cube_render,
             pipeline_data,
             pipeline: None,
+            pipeline_picking: None,
             pipeline_blended: None,
             pipeline_wireframe: None,
             pipeline_layout: None,
             wireframe_enabled: false,
+            picking_enabled: false,
             device: context.device.clone(),
         })
     }
@@ -411,6 +415,15 @@ impl WorldRender {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/gltf/gltf.vert.spv")
             .fragment("assets/shaders/gltf/gltf.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        Ok(shader_path_set)
+    }
+
+    fn picking_shader_paths() -> Result<ShaderPathSet> {
+        let shader_path_set = ShaderPathSetBuilder::default()
+            .vertex("assets/shaders/gltf/gltf_picking.vert.spv")
+            .fragment("assets/shaders/gltf/gltf_picking.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)
@@ -446,6 +459,12 @@ impl WorldRender {
             .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .push_constant_range(push_constant_range);
 
+        let mut picking_settings = settings.clone();
+        let picking_shader_paths = Self::picking_shader_paths()?;
+        let picking_shader_set =
+            shader_cache.create_shader_set(self.device.clone(), &picking_shader_paths)?;
+        picking_settings.shader_set(picking_shader_set);
+
         let mut blend_settings = settings.clone();
         blend_settings.blended(true);
 
@@ -454,11 +473,17 @@ impl WorldRender {
 
         self.pipeline = None;
         self.pipeline_blended = None;
+        self.pipeline_picking = None;
         self.pipeline_wireframe = None;
         self.pipeline_layout = None;
 
         // TODO: Reuse the pipeline layout across these pipelines since they are the same
         let (pipeline, pipeline_layout) = settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
+        let (pipeline_picking, _) = picking_settings
             .build()
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
@@ -474,6 +499,7 @@ impl WorldRender {
             .create_pipeline(self.device.clone())?;
 
         self.pipeline = Some(pipeline);
+        self.pipeline_picking = Some(pipeline_picking);
         self.pipeline_blended = Some(pipeline_blended);
         self.pipeline_wireframe = Some(pipeline_wireframe);
         self.pipeline_layout = Some(pipeline_layout);
@@ -492,6 +518,11 @@ impl WorldRender {
             .pipeline
             .as_ref()
             .context("Failed to get pipeline for rendering world!")?;
+
+        let pipeline_picking = self
+            .pipeline_picking
+            .as_ref()
+            .context("Failed to get picking pipeline for selected objects in the world!")?;
 
         let pipeline_blended = self
             .pipeline_blended
@@ -543,6 +574,10 @@ impl WorldRender {
                                     pipeline_blended.bind(&self.device.handle, command_buffer);
                                 }
                             }
+                        }
+
+                        if self.picking_enabled {
+                            pipeline_picking.bind(&self.device.handle, command_buffer);
                         }
 
                         self.pipeline_data

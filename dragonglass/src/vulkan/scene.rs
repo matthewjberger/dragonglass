@@ -15,6 +15,7 @@ use imgui::Context as ImguiContext;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {
+    pub pick_object: bool,
     pub world_render: Option<WorldRender>,
     pub skybox_rendering: SkyboxRendering,
     pub fullscreen_pipeline: Option<FullscreenPipeline>,
@@ -68,6 +69,7 @@ impl Scene {
         )?;
 
         let mut scene = Self {
+            pick_object: false,
             world_render: None,
             skybox_rendering,
             fullscreen_pipeline: None,
@@ -142,68 +144,87 @@ impl Scene {
         let fullscreen = "fullscreen";
         let color = "color";
         let color_resolve = "color_resolve";
+        let picking = "picking";
         let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
-        let mut rendergraph = RenderGraph::new(
-            &[offscreen, fullscreen],
-            vec![
-                ImageNode {
-                    name: color.to_string(),
-                    extent: offscreen_extent,
-                    format: vk::Format::R8G8B8A8_UNORM,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.39, 0.58, 0.92, 1.0],
-                        },
+
+        let mut images = vec![
+            ImageNode {
+                name: color.to_string(),
+                extent: offscreen_extent,
+                format: vk::Format::R8G8B8A8_UNORM,
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.39, 0.58, 0.92, 1.0],
                     },
-                    samples,
-                    force_store: false,
                 },
-                ImageNode {
-                    name: RenderGraph::DEPTH_STENCIL.to_owned(),
-                    extent: offscreen_extent,
-                    format: vk::Format::D24_UNORM_S8_UINT,
-                    clear_value: vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
+                samples,
+                force_store: false,
+            },
+            ImageNode {
+                name: RenderGraph::DEPTH_STENCIL.to_owned(),
+                extent: offscreen_extent,
+                format: vk::Format::D24_UNORM_S8_UINT,
+                clear_value: vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
                     },
-                    samples,
-                    force_store: false,
                 },
-                ImageNode {
-                    name: color_resolve.to_string(),
-                    extent: offscreen_extent,
-                    format: vk::Format::R8G8B8A8_UNORM,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [1.0, 1.0, 1.0, 1.0],
-                        },
+                samples,
+                force_store: false,
+            },
+            ImageNode {
+                name: color_resolve.to_string(),
+                extent: offscreen_extent,
+                format: vk::Format::R8G8B8A8_UNORM,
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [1.0, 1.0, 1.0, 1.0],
                     },
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    force_store: false,
                 },
-                ImageNode {
-                    name: RenderGraph::backbuffer_name(0),
-                    extent: swapchain_properties.extent,
-                    format: swapchain_properties.surface_format.format,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [1.0, 1.0, 1.0, 1.0],
-                        },
+                samples: vk::SampleCountFlags::TYPE_1,
+                force_store: false,
+            },
+            ImageNode {
+                name: RenderGraph::backbuffer_name(0),
+                extent: swapchain_properties.extent,
+                format: swapchain_properties.surface_format.format,
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [1.0, 1.0, 1.0, 1.0],
                     },
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    force_store: false,
                 },
-            ],
-            &[
-                (offscreen, color),
-                (offscreen, color_resolve),
-                (offscreen, RenderGraph::DEPTH_STENCIL),
-                (color_resolve, fullscreen),
-                (fullscreen, &RenderGraph::backbuffer_name(0)),
-            ],
-        )?;
+                samples: vk::SampleCountFlags::TYPE_1,
+                force_store: false,
+            },
+        ];
+
+        images.push(ImageNode {
+            name: picking.to_string(),
+            extent: offscreen_extent,
+            format: vk::Format::R8G8B8A8_UNORM,
+            clear_value: vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            },
+            samples,
+            force_store: false,
+        });
+
+        let backbuffer_0 = RenderGraph::backbuffer_name(0);
+
+        let mut edges = vec![
+            (offscreen, color),
+            (offscreen, color_resolve),
+            (offscreen, RenderGraph::DEPTH_STENCIL),
+            (color_resolve, fullscreen),
+            (fullscreen, &backbuffer_0),
+        ];
+
+        edges.push((offscreen, picking));
+
+        let mut rendergraph = RenderGraph::new(&[offscreen, fullscreen], images, &edges)?;
 
         rendergraph.build(device.clone(), allocator)?;
 
