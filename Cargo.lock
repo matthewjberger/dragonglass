@@ -508,6 +508,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dragonglass-physics"
+version = "0.1.0"
+
+[[package]]
 name = "dragonglass-world"
 version = "0.1.0"
 dependencies = [
