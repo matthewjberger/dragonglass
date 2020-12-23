@@ -721,6 +721,32 @@ impl SceneGraph {
         }
     }
 
+    pub fn global_translation(&self, index: NodeIndex, ecs: &Ecs) -> glm::Vec3 {
+        let entity = self[index];
+        let translation = match ecs.get::<Transform>(entity) {
+            Ok(transform) => transform.translation,
+            Err(_) => glm::Vec3::identity(),
+        };
+        let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
+        match incoming_walker.next_node(&self.0) {
+            Some(parent_index) => self.global_translation(parent_index, ecs) + translation,
+            None => translation,
+        }
+    }
+
+    pub fn global_rotation(&self, index: NodeIndex, ecs: &Ecs) -> glm::Quat {
+        let entity = self[index];
+        let rotation = match ecs.get::<Transform>(entity) {
+            Ok(transform) => transform.rotation,
+            Err(_) => glm::Quat::identity(),
+        };
+        let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
+        match incoming_walker.next_node(&self.0) {
+            Some(parent_index) => self.global_rotation(parent_index, ecs) * rotation,
+            None => rotation,
+        }
+    }
+
     pub fn find_node(&self, entity: Entity) -> Option<NodeIndex> {
         match self.0.node_indices().find(|i| self[*i] == entity) {
             Some(index) => Some(index),

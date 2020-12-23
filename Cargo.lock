@@ -987,9 +987,9 @@ dependencies = [
 
 [[package]]
 name = "nalgebra"
-version = "0.23.1"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a41c09fb7e71f683dbdd1b251c12e72699670e2d63c4622690423658810b2d9"
+checksum = "c9bd52e9c9922d5702d5c2a105ceacc3c1206e781d3d130f4d2b7ad5f43c144b"
 dependencies = [
  "approx",
  "generic-array",
@@ -1014,6 +1014,25 @@ dependencies = [
  "nalgebra",
  "num-traits 0.2.14",
  "simba",
+]
+
+[[package]]
+name = "ncollide3d"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fa86028ca1d3ac2ff5946c64e3f82fc6e9cdfaef2bef716f9fbf7e1559298ec"
+dependencies = [
+ "approx",
+ "bitflags",
+ "downcast-rs",
+ "either",
+ "nalgebra",
+ "num-traits 0.2.14",
+ "petgraph",
+ "simba",
+ "slab",
+ "slotmap",
+ "smallvec",
 ]
 
 [[package]]
@@ -1596,6 +1615,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
 
 [[package]]
+name = "slotmap"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c46a3482db8f247956e464d783693ece164ca056e6e67563ee5505bdb86452cd"
+
+[[package]]
 name = "smallvec"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1749,7 +1774,9 @@ dependencies = [
  "imgui",
  "imgui-winit-support",
  "log",
+ "nalgebra",
  "nalgebra-glm",
+ "ncollide3d",
  "serde 1.0.117",
  "simplelog",
  "toml",

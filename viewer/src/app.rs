@@ -1,10 +1,17 @@
 use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
 use dragonglass::{Backend, Renderer};
-use dragonglass_world::{load_gltf, BoundingBoxVisible, Mesh, World};
+use dragonglass_world::{load_gltf, BoundingBoxVisible, Mesh, Transform, World};
 use image::ImageFormat;
 use imgui::{im_str, Condition};
 use log::{error, info, warn};
+use na::{Isometry, Point3, Translation3, UnitQuaternion};
+use nalgebra as na;
+use nalgebra_glm as glm;
+use ncollide3d::{
+    query::{Ray, RayCast},
+    shape::Cuboid,
+};
 use winit::{
     dpi::PhysicalSize,
     event::ElementState,
@@ -113,6 +120,76 @@ impl App {
 
             match event {
                 Event::MainEventsCleared => {
+
+                    let window_size = window.inner_size();
+                    let aspect_ratio = window_size.width as f32 / window_size.height as f32;
+                    let projection =
+                        glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+                    let near_point = glm::vec3(input.mouse.position.x, input.mouse.position.y, 0.0);
+                    let far_point = glm::vec3(input.mouse.position.x, input.mouse.position.y, 1.0);
+                    let p_near = glm::unproject_zo(
+                        &near_point,
+                        &camera.view_matrix(),
+                        &projection,
+                        glm::vec4(0.0, 0.0, window_size.width as _, window_size.height as _),
+                        );
+                    let p_far = glm::unproject_zo(
+                        &far_point,
+                        &camera.view_matrix(),
+                        &projection,
+                        glm::vec4(0.0, 0.0, window_size.width as _, window_size.height as _),
+                        );
+                    let direction = (p_far - p_near).normalize();
+                    let ray = Ray::new(Point3::from(p_near), direction);
+
+                    let mut entity_map = std::collections::HashMap::new();
+                    for graph in world.scene.graphs.iter() {
+                        graph.walk(|node_index| {
+                            let entity = graph[node_index];
+
+                            let picked = {
+                                let mesh = 
+                                    match world.ecs.get::<Mesh>(entity) {
+                                        Ok(mesh) => mesh,
+                                        Err(_) => return Ok(()),
+                                    };
+
+                                let transform = 
+                                    match world.ecs.get::<Transform>(entity) {
+                                        Ok(transform) => transform,
+                                        Err(_) => return Ok(()),
+                                    };
+
+                                let bounding_box = mesh.bounding_box();
+                                // FIXME: BROOOOO
+                                // let translation = graph.global_translation(node_index, &world.ecs);
+                                // let rotation = graph.global_rotation(node_index, &world.ecs);
+
+                                let cuboid = Cuboid::new(bounding_box.half_extents());
+                                cuboid.intersects_ray(
+                                    &Isometry::from_parts(
+                                        Translation3::from(transform.translation),
+                                        UnitQuaternion::from_quaternion(transform.rotation),
+                                    ),
+                                    &ray,
+                                    f32::MAX,
+                                )
+                            };
+
+                            entity_map.insert(entity, picked);
+
+                            Ok(())
+                        }).unwrap();
+                    }
+                    for (entity, picked) in entity_map.into_iter() {
+                        if picked {
+                            let _ = world.ecs.insert_one(entity, BoundingBoxVisible {});
+                        } else {
+                            let _ = world.ecs.remove_one::<BoundingBoxVisible>(entity);
+                        }
+                    }
+
+
                     if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
                         *control_flow = ControlFlow::Exit;
                     }
@@ -145,9 +222,6 @@ impl App {
                                         .step(0.1)
                                         .step_fast(1.0).build();
                                     ui.separator();
-
-                                    let entities = world.ecs.query::<&Mesh>().iter().map(|(entity, _)| entity).collect::<Vec<_>>();
-                                    entities.into_iter().for_each(|entity| {let _ = world.ecs.insert_one(entity, BoundingBoxVisible {});});
 
                                     for (_entity, mesh) in world.ecs.query::<&Mesh>().iter() {
                                         ui.text(im_str!("Mesh: {}", mesh.name));

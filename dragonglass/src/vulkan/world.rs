@@ -348,7 +348,9 @@ impl WorldPipelineData {
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, ecs);
+                // FIXME: BROOOOOO
+                // let model = graph.global_transform(node_index, ecs);
+                let model = glm::Mat4::identity();
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -523,7 +525,9 @@ impl WorldRender {
                     if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
                         if world.ecs.get::<BoundingBoxVisible>(entity).is_ok() {
                             let bounding_box = mesh.bounding_box();
-                            let model = graph.global_transform(node_index, &world.ecs);
+                            // FIXME: BROOOOOO
+                            // let model = graph.global_transform(node_index, &world.ecs);
+                            let model = glm::Mat4::identity();
                             let offset = glm::translation(&bounding_box.center());
                             let scale = glm::scaling(&bounding_box.extents());
                             self.cube_render.issue_commands(
