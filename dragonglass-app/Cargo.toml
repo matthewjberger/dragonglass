@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.34"
 config = "0.10.1"
-dragonglass = { path = "../dragonglass" }
+dragonglass-render = { path = "../dragonglass-render" }
 dragonglass-world = { path = "../dragonglass-world" }
 image = "0.23.12"
 imgui = "0.6.0"

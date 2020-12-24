@@ -1,6 +1,6 @@
 use crate::{camera::OrbitalCamera, gui::Gui, input::Input, settings::Settings, system::System};
 use anyhow::Result;
-use dragonglass::{Backend, Renderer};
+use dragonglass_render::{Backend, Renderer};
 use dragonglass_world::{load_gltf, BoundingBoxVisible, Mesh, World};
 use image::ImageFormat;
 use imgui::{im_str, Condition};
