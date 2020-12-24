@@ -13,11 +13,11 @@ use winit::{
 };
 
 pub struct AppConfiguration {
-    width: u32,
-    height: u32,
-    is_fullscreen: bool,
-    title: String,
-    icon: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub is_fullscreen: bool,
+    pub title: String,
+    pub icon: Option<String>,
 }
 
 impl Default for AppConfiguration {

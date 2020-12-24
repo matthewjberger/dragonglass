@@ -97,5 +97,11 @@ impl App for Viewer {
 }
 
 fn main() -> Result<()> {
-    run_app(Viewer::default(), AppConfiguration::default())
+    run_app(
+        Viewer::default(),
+        AppConfiguration {
+            icon: Some("assets/icon/icon.png".to_string()),
+            ..Default::default()
+        },
+    )
 }
