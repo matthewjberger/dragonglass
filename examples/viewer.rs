@@ -1,16 +1,11 @@
 use anyhow::Result;
 use dragonglass::{
     app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
-    world::{BoundingBoxVisible, Mesh, World},
+    world::{load_gltf, BoundingBoxVisible, Mesh},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Icon, Window, WindowBuilder},
-};
+use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 
 pub struct CameraMultipliers {
     pub scroll: f32,
@@ -93,10 +88,9 @@ impl App for Viewer {
         ui.separator();
         ui.text(im_str!("Controls"));
 
-        // FIXME: Make renderer settings belong to world
-        // if ui.button(im_str!("Toggle Wireframe"), [200.0, 20.0]) {
-        //     renderer.toggle_wireframe();
-        // }
+        if ui.button(im_str!("Toggle Wireframe"), [200.0, 20.0]) {
+            state.renderer.toggle_wireframe();
+        }
 
         ui.text(im_str!("Multipliers"));
         let _ = ui
@@ -125,14 +119,67 @@ impl App for Viewer {
         self.update_camera(&state.input, &state.system);
         state.world.view = self.camera.view_matrix();
         state.world.camera_position = self.camera.position();
+
+        if !state.world.animations.is_empty() {
+            if let Err(error) = state
+                .world
+                .animate(0, 0.75 * state.system.delta_time as f32)
+            {
+                log::warn!("Failed to animate world: {}", error);
+            }
+        }
     }
 
     fn cleanup(&mut self) {}
 
-    fn on_key(&mut self, _state: &mut AppState, _keystate: ElementState, _keycode: VirtualKeyCode) {
+    fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {
+        match (keycode, keystate) {
+            (VirtualKeyCode::T, ElementState::Pressed) => state.renderer.toggle_wireframe(),
+            (VirtualKeyCode::C, ElementState::Pressed) => {
+                state.world.clear();
+                if let Err(error) = state.renderer.load_world(&state.world) {
+                    warn!("Failed to load gltf world: {}", error);
+                }
+            }
+            _ => {}
+        }
     }
 
-    fn handle_events(&mut self, _state: &mut AppState, _event: winit::event::Event<()>) {}
+    fn handle_events(&mut self, state: &mut AppState, event: winit::event::Event<()>) {
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::DroppedFile(path),
+                ..
+            } => {
+                if let Some(raw_path) = path.to_str() {
+                    if let Some(extension) = path.extension() {
+                        match extension.to_str() {
+                                Some("glb") | Some("gltf") => {
+                                    load_gltf(path.clone(), &mut state.world).unwrap();
+                                    // FIXME: Don't reload entire scene whenever something is added
+                                    if let Err(error) = state.renderer.load_world(&state.world) {
+                                        warn!("Failed to load gltf world: {}", error);
+                                    }
+                                    self.camera = OrbitalCamera::default();
+                                    info!("Loaded gltf world: '{}'", raw_path);
+                                }
+                                Some("hdr") => {
+                                    if let Err(error) = state.renderer.load_skybox(raw_path) {
+                                        error!("Viewer error: {}", error);
+                                    }
+                                    self.camera = OrbitalCamera::default();
+                                    info!("Loaded hdr cubemap: '{}'", raw_path);
+                                }
+                                _ => warn!(
+                                    "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
+                                    extension),
+                            }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -140,6 +187,7 @@ fn main() -> Result<()> {
         Viewer::default(),
         AppConfiguration {
             icon: Some("assets/icon/icon.png".to_string()),
+            title: "Dragonglass Gltf Viewer".to_string(),
             ..Default::default()
         },
     )
