@@ -27,6 +27,7 @@ impl Default for CameraMultipliers {
 pub struct Viewer {
     camera: OrbitalCamera,
     camera_multipliers: CameraMultipliers,
+    show_bounding_boxes: bool,
 }
 
 impl Viewer {
@@ -126,6 +127,23 @@ impl App for Viewer {
                     warn!("Failed to load gltf world: {}", error);
                 }
             }
+            (VirtualKeyCode::B, ElementState::Pressed) => {
+                self.show_bounding_boxes = !self.show_bounding_boxes;
+                let entities = state
+                    .world
+                    .ecs
+                    .query::<&Mesh>()
+                    .iter()
+                    .map(|(entity, _)| entity)
+                    .collect::<Vec<_>>();
+                entities.into_iter().for_each(|entity| {
+                    if self.show_bounding_boxes {
+                        let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
+                    } else {
+                        let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
+                    }
+                });
+            }
             _ => {}
         }
     }
@@ -160,17 +178,6 @@ impl App for Viewer {
                                     extension),
                             }
                     }
-
-                    let entities = state
-                        .world
-                        .ecs
-                        .query::<&Mesh>()
-                        .iter()
-                        .map(|(entity, _)| entity)
-                        .collect::<Vec<_>>();
-                    entities.into_iter().for_each(|entity| {
-                        let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
-                    });
                 }
             }
             _ => {}
