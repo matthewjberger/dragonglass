@@ -55,19 +55,6 @@ impl Viewer {
 }
 
 impl App for Viewer {
-    fn initialize(&mut self, state: &mut AppState) {
-        let entities = state
-            .world
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .collect::<Vec<_>>();
-        entities.into_iter().for_each(|entity| {
-            let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
-        });
-    }
-
     fn create_ui(&mut self, state: &mut AppState, ui: &Ui) {
         let number_of_entities = state.world.ecs.iter().count();
         let number_of_meshes = state.world.ecs.query::<&Mesh>().iter().count();
@@ -173,6 +160,17 @@ impl App for Viewer {
                                     extension),
                             }
                     }
+
+                    let entities = state
+                        .world
+                        .ecs
+                        .query::<&Mesh>()
+                        .iter()
+                        .map(|(entity, _)| entity)
+                        .collect::<Vec<_>>();
+                    entities.into_iter().for_each(|entity| {
+                        let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
+                    });
                 }
             }
             _ => {}
