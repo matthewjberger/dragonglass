@@ -1,5 +1,7 @@
 use nalgebra_glm as glm;
 
+// TODO: This can be moved out of the dragonglass_app crate
+
 #[derive(Clone, Copy)]
 pub struct OrbitalCamera {
     direction: glm::Vec2,
