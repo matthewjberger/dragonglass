@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{run_app, App, AppConfiguration},
+    app::{run_app, App, AppConfiguration, AppState},
     world::{BoundingBoxVisible, Mesh, World},
 };
 use imgui::{im_str, Ui};
@@ -14,9 +14,9 @@ use winit::{
 
 #[derive(Default)]
 struct CameraMultipliers {
-    scroll: f32,
-    rotation: f32,
-    drag: f32,
+    pub scroll: f32,
+    pub rotation: f32,
+    pub drag: f32,
 }
 
 #[derive(Default)]
@@ -25,25 +25,36 @@ pub struct Viewer {
 }
 
 impl App for Viewer {
-    fn initialize(&mut self, _window: &mut Window, world: &mut World) {
-        let entities = world
+    fn initialize(&mut self, state: &mut AppState) {
+        let entities = state
+            .world
             .ecs
             .query::<&Mesh>()
             .iter()
             .map(|(entity, _)| entity)
             .collect::<Vec<_>>();
         entities.into_iter().for_each(|entity| {
-            let _ = world.ecs.insert_one(entity, BoundingBoxVisible {});
+            let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
         });
     }
-    fn create_ui(&mut self, ui: &Ui, world: &mut World) {
-        let number_of_entities = world.ecs.iter().count();
-        let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
+
+    fn create_ui(&mut self, state: &mut AppState, ui: &Ui) {
+        let number_of_entities = state.world.ecs.iter().count();
+        let number_of_meshes = state.world.ecs.query::<&Mesh>().iter().count();
         ui.text(im_str!("Number of entities: {}", number_of_entities));
         ui.text(im_str!("Number of meshes: {}", number_of_meshes));
-        ui.text(im_str!("Number of animations: {}", world.animations.len()));
-        ui.text(im_str!("Number of textures: {}", world.textures.len()));
-        ui.text(im_str!("Number of materials: {}", world.materials.len()));
+        ui.text(im_str!(
+            "Number of animations: {}",
+            state.world.animations.len()
+        ));
+        ui.text(im_str!(
+            "Number of textures: {}",
+            state.world.textures.len()
+        ));
+        ui.text(im_str!(
+            "Number of materials: {}",
+            state.world.materials.len()
+        ));
         ui.separator();
         ui.text(im_str!("Controls"));
 
@@ -70,53 +81,19 @@ impl App for Viewer {
         //     .build();
         // ui.separator();
 
-        for (_entity, mesh) in world.ecs.query::<&Mesh>().iter() {
+        for (_entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
             ui.text(im_str!("Mesh: {}", mesh.name));
         }
     }
-    fn update(&mut self, _world: &mut World) {}
+
+    fn update(&mut self, _state: &mut AppState) {}
+
     fn cleanup(&mut self) {}
-    fn on_key(&mut self, state: ElementState, keycode: VirtualKeyCode) {
-        // match (keycode, state) {
-        //     (VirtualKeyCode::T, ElementState::Pressed) => renderer.toggle_wireframe(),
-        //     (VirtualKeyCode::C, ElementState::Pressed) => {
-        //         world.clear();
-        //         if let Err(error) = renderer.load_world(&world) {
-        //             warn!("Failed to load gltf world: {}", error);
-        //         }
-        //     }
-        //     _ => {}
-        // }
+
+    fn on_key(&mut self, _state: &mut AppState, _keystate: ElementState, _keycode: VirtualKeyCode) {
     }
 
-    fn handle_events(&mut self, event: winit::event::Event<()>, world: &mut World) {
-        // if let Some(raw_path) = path.to_str() {
-        //     if let Some(extension) = path.extension() {
-        //         match extension.to_str() {
-        //             Some("glb") | Some("gltf") => {
-        //                 load_gltf(path.clone(), &mut world).unwrap();
-        //                 // FIXME: Don't reload entire scene whenever something is added
-        //                 if let Err(error) = renderer.load_world(&world) {
-        //                     warn!("Failed to load gltf world: {}", error);
-        //                 }
-        //                 // camera = OrbitalCamera::default();
-        //                 info!("Loaded gltf world: '{}'", raw_path);
-        //             }
-        //             Some("hdr") => {
-        //                 if let Err(error) = renderer.load_skybox(raw_path) {
-        //                     error!("Viewer error: {}", error);
-        //                 }
-        //                 // camera = OrbitalCamera::default();
-        //                 info!("Loaded hdr cubemap: '{}'", raw_path);
-        //             }
-        //             _ => warn!(
-        //                 "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
-        //                 extension
-        //             ),
-        //         }
-        //     }
-        // }
-    }
+    fn handle_events(&mut self, _state: &mut AppState, _event: winit::event::Event<()>) {}
 }
 
 fn main() -> Result<()> {

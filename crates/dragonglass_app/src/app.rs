@@ -52,61 +52,83 @@ impl AppConfiguration {
     }
 }
 
+pub struct AppState {
+    pub world: World,
+    pub input: Input,
+    pub system: System,
+    pub renderer: Box<dyn Renderer>,
+}
+
 pub trait App {
-    fn initialize(&mut self, _window: &mut Window, _world: &mut World) {}
-    fn create_ui(&mut self, ui: &Ui, _world: &mut World) {
+    fn initialize(&mut self, _state: &mut AppState) {}
+    fn create_ui(&mut self, _state: &mut AppState, ui: &Ui) {
         ui.text(im_str!("Hello!"));
     }
-    fn update(&mut self, _world: &mut World) {}
+    fn update(&mut self, _state: &mut AppState) {}
     fn cleanup(&mut self) {}
-    fn on_key(&mut self, _state: ElementState, _keycode: VirtualKeyCode) {}
-    fn handle_events(&mut self, _event: winit::event::Event<()>, _world: &mut World) {}
+    fn on_key(&mut self, _state: &mut AppState, _keystate: ElementState, _keycode: VirtualKeyCode) {
+    }
+    fn handle_events(&mut self, _state: &mut AppState, _event: winit::event::Event<()>) {}
 }
 
 pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> Result<()> {
     create_logger()?;
 
-    let (event_loop, mut window) = configuration.create_window()?;
+    let (event_loop, window) = configuration.create_window()?;
     let mut gui = Gui::new(&window);
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let mut renderer = Box::new(Renderer::create_backend(
+    let renderer = Box::new(Renderer::create_backend(
         &Backend::Vulkan,
         &window,
         &window_dimensions,
         gui.context_mut(),
     )?);
 
-    let mut input = Input::default();
-    let mut system = System::new(window_dimensions);
-    let mut world = World::new();
+    let input = Input::default();
+    let system = System::new(window_dimensions);
+    let world = World::new();
 
-    app.initialize(&mut window, &mut world);
+    let mut state = AppState {
+        world,
+        input,
+        system,
+        renderer,
+    };
+
+    app.initialize(&mut state);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
-        system.handle_event(&event);
+        state.system.handle_event(&event);
         gui.handle_event(&event, &window);
-        input.handle_event(&event, system.window_center());
-        input.allowed = !gui.capturing_input();
+        state
+            .input
+            .handle_event(&event, state.system.window_center());
+        state.input.allowed = !gui.capturing_input();
 
         match event {
             Event::MainEventsCleared => {
-                if input.is_key_pressed(VirtualKeyCode::Escape) || system.exit_requested {
+                if state.input.is_key_pressed(VirtualKeyCode::Escape) || state.system.exit_requested
+                {
                     *control_flow = ControlFlow::Exit;
                 }
 
                 let draw_data = gui
                     .render_frame(&window, |ui| {
-                        app.create_ui(ui, &mut world);
+                        app.create_ui(&mut state, ui);
                     })
                     .expect("Failed to render gui frame!");
 
-                app.update(&mut world);
+                app.update(&mut state);
 
-                if let Err(error) = renderer.render(&system.window_dimensions, &world, draw_data) {
+                if let Err(error) =
+                    state
+                        .renderer
+                        .render(&state.system.window_dimensions, &state.world, draw_data)
+                {
                     error!("{}", error);
                 }
             }
@@ -115,7 +137,7 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
                     WindowEvent::KeyboardInput {
                         input:
                             KeyboardInput {
-                                state,
+                                state: keystate,
                                 virtual_keycode: Some(keycode),
                                 ..
                             },
@@ -123,7 +145,7 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
                     },
                 ..
             } => {
-                app.on_key(state, keycode);
+                app.on_key(&mut state, keystate, keycode);
             }
             Event::LoopDestroyed => {
                 app.cleanup();
@@ -131,6 +153,6 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
             _ => {}
         }
 
-        app.handle_events(event, &mut world);
+        app.handle_events(&mut state, event);
     });
 }
