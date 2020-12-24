@@ -7,9 +7,7 @@ use imgui::{im_str, Condition};
 use log::{error, info, warn};
 use winit::{
     dpi::PhysicalSize,
-    event::ElementState,
-    event::KeyboardInput,
-    event::{Event, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
