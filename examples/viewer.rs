@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{run_app, App, AppConfiguration, AppState},
+    app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
     world::{BoundingBoxVisible, Mesh, World},
 };
 use imgui::{im_str, Ui};
@@ -12,16 +12,51 @@ use winit::{
     window::{Icon, Window, WindowBuilder},
 };
 
-#[derive(Default)]
-struct CameraMultipliers {
+pub struct CameraMultipliers {
     pub scroll: f32,
     pub rotation: f32,
     pub drag: f32,
 }
 
+impl Default for CameraMultipliers {
+    fn default() -> Self {
+        Self {
+            scroll: 1.0,
+            rotation: 0.05,
+            drag: 0.001,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Viewer {
+    camera: OrbitalCamera,
     camera_multipliers: CameraMultipliers,
+}
+
+impl Viewer {
+    pub fn update_camera(&mut self, input: &Input, system: &System) {
+        if !input.allowed {
+            return;
+        }
+
+        self.camera
+            .forward(input.mouse.wheel_delta.y * self.camera_multipliers.scroll);
+
+        if input.is_key_pressed(VirtualKeyCode::R) {
+            self.camera = OrbitalCamera::default();
+        }
+
+        if input.mouse.is_left_clicked {
+            let delta = input.mouse.position_delta;
+            let rotation = delta * self.camera_multipliers.rotation * system.delta_time as f32;
+            self.camera.rotate(&rotation);
+        } else if input.mouse.is_right_clicked {
+            let delta = input.mouse.position_delta;
+            let pan = delta * self.camera_multipliers.drag;
+            self.camera.pan(&pan);
+        }
+    }
 }
 
 impl App for Viewer {
@@ -63,30 +98,34 @@ impl App for Viewer {
         //     renderer.toggle_wireframe();
         // }
 
-        // ui.text(im_str!("Multipliers"));
-        // let _ = ui
-        //     .input_float(im_str!("Scroll"), &mut camera_multipliers.scroll)
-        //     .step(0.1)
-        //     .step_fast(1.0)
-        //     .build();
-        // let _ = ui
-        //     .input_float(im_str!("Drag"), &mut camera_multipliers.drag)
-        //     .step(0.1)
-        //     .step_fast(1.0)
-        //     .build();
-        // let _ = ui
-        //     .input_float(im_str!("Rotation"), &mut camera_multipliers.rotation)
-        //     .step(0.1)
-        //     .step_fast(1.0)
-        //     .build();
-        // ui.separator();
+        ui.text(im_str!("Multipliers"));
+        let _ = ui
+            .input_float(im_str!("Scroll"), &mut self.camera_multipliers.scroll)
+            .step(0.1)
+            .step_fast(1.0)
+            .build();
+        let _ = ui
+            .input_float(im_str!("Drag"), &mut self.camera_multipliers.drag)
+            .step(0.1)
+            .step_fast(1.0)
+            .build();
+        let _ = ui
+            .input_float(im_str!("Rotation"), &mut self.camera_multipliers.rotation)
+            .step(0.1)
+            .step_fast(1.0)
+            .build();
+        ui.separator();
 
         for (_entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
             ui.text(im_str!("Mesh: {}", mesh.name));
         }
     }
 
-    fn update(&mut self, _state: &mut AppState) {}
+    fn update(&mut self, state: &mut AppState) {
+        self.update_camera(&state.input, &state.system);
+        state.world.view = self.camera.view_matrix();
+        state.world.camera_position = self.camera.position();
+    }
 
     fn cleanup(&mut self) {}
 
