@@ -15,8 +15,17 @@
     clippy::wildcard_imports
 )]
 
+mod app;
+mod camera;
+mod gui;
+mod input;
+mod logger;
+mod settings;
+mod system;
+
 use anyhow::Result;
-use dragonglass_app::*;
+use app::App;
+use logger::create_logger;
 
 fn main() -> Result<()> {
     create_logger()?;

@@ -508,6 +508,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "dragonglass-app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "config",
+ "dragonglass",
+ "dragonglass-world",
+ "image",
+ "imgui",
+ "imgui-winit-support",
+ "log",
+ "nalgebra-glm",
+ "serde 1.0.117",
+ "simplelog",
+ "toml",
+ "winit",
+]
+
+[[package]]
 name = "dragonglass-world"
 version = "0.1.0"
 dependencies = [
@@ -1744,6 +1763,7 @@ dependencies = [
  "anyhow",
  "config",
  "dragonglass",
+ "dragonglass-app",
  "dragonglass-world",
  "image",
  "imgui",
