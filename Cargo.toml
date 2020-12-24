@@ -1,8 +1,17 @@
+[package]
+name = "dragonglass"
+version = "0.1.0"
+authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
+edition = "2018"
+
 [workspace]
-members = [
-  "dragonglass-app",
-  "dragonglass-render",
-  "dragonglass-world",
-  "shader-compilation",
-  "viewer",
-]
+exclude = ["benches"]
+members = ["crates/*"]
+
+[dependencies]
+dragonglass_app = { path = "crates/dragonglass_app" }
+dragonglass_render = { path = "crates/dragonglass_render" }
+dragonglass_world = { path = "crates/dragonglass_world" }
+
+[dev-dependencies]
+anyhow = "1.0.36"

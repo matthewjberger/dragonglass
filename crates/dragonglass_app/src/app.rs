@@ -44,7 +44,7 @@ impl App {
         let settings = Settings::load_current_settings()?;
 
         let icon = Self::load_icon(
-            include_bytes!("../../assets/icon/icon.png"),
+            include_bytes!("../../../assets/icon/icon.png"),
             ImageFormat::Png,
         )?;
 
