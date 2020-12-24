@@ -60,7 +60,7 @@ pub trait App {
     fn update(&mut self, _world: &mut World) {}
     fn cleanup(&mut self) {}
     fn on_key(&mut self, _state: ElementState, _keycode: VirtualKeyCode) {}
-    fn handle_events(&mut self, _event: winit::event::Event<()>) {}
+    fn handle_events(&mut self, _event: winit::event::Event<()>, _world: &mut World) {}
 }
 
 pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> Result<()> {
@@ -131,6 +131,6 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
             _ => {}
         }
 
-        app.handle_events(event);
+        app.handle_events(event, &mut world);
     });
 }

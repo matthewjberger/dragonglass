@@ -4,6 +4,7 @@ use dragonglass::{
     world::{BoundingBoxVisible, Mesh, World},
 };
 use imgui::{im_str, Ui};
+use log::{error, info, warn};
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -87,7 +88,35 @@ impl App for Viewer {
         //     _ => {}
         // }
     }
-    fn handle_events(&mut self, _event: winit::event::Event<()>) {}
+
+    fn handle_events(&mut self, event: winit::event::Event<()>, world: &mut World) {
+        // if let Some(raw_path) = path.to_str() {
+        //     if let Some(extension) = path.extension() {
+        //         match extension.to_str() {
+        //             Some("glb") | Some("gltf") => {
+        //                 load_gltf(path.clone(), &mut world).unwrap();
+        //                 // FIXME: Don't reload entire scene whenever something is added
+        //                 if let Err(error) = renderer.load_world(&world) {
+        //                     warn!("Failed to load gltf world: {}", error);
+        //                 }
+        //                 // camera = OrbitalCamera::default();
+        //                 info!("Loaded gltf world: '{}'", raw_path);
+        //             }
+        //             Some("hdr") => {
+        //                 if let Err(error) = renderer.load_skybox(raw_path) {
+        //                     error!("Viewer error: {}", error);
+        //                 }
+        //                 // camera = OrbitalCamera::default();
+        //                 info!("Loaded hdr cubemap: '{}'", raw_path);
+        //             }
+        //             _ => warn!(
+        //                 "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
+        //                 extension
+        //             ),
+        //         }
+        //     }
+        // }
+    }
 }
 
 fn main() -> Result<()> {

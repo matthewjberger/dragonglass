@@ -486,6 +486,7 @@ dependencies = [
  "dragonglass_render",
  "dragonglass_world",
  "imgui",
+ "log",
  "winit",
 ]
 
