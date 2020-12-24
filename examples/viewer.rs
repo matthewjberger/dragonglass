@@ -130,8 +130,6 @@ impl App for Viewer {
         }
     }
 
-    fn cleanup(&mut self) {}
-
     fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {
         match (keycode, keystate) {
             (VirtualKeyCode::T, ElementState::Pressed) => state.renderer.toggle_wireframe(),
