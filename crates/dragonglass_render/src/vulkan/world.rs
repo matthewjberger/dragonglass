@@ -486,7 +486,6 @@ impl WorldRender {
         command_buffer: vk::CommandBuffer,
         world: &World,
         projection: glm::Mat4,
-        view: glm::Mat4,
     ) -> Result<()> {
         let pipeline = self
             .pipeline
@@ -528,7 +527,7 @@ impl WorldRender {
                             let scale = glm::scaling(&bounding_box.extents());
                             self.cube_render.issue_commands(
                                 command_buffer,
-                                projection * view * model * offset * scale,
+                                projection * world.view * model * offset * scale,
                             )?;
                         }
 

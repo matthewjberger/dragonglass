@@ -485,6 +485,8 @@ dependencies = [
  "dragonglass_app",
  "dragonglass_render",
  "dragonglass_world",
+ "imgui",
+ "winit",
 ]
 
 [[package]]

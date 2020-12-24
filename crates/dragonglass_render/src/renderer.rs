@@ -1,7 +1,6 @@
 use anyhow::Result;
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
-use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 
 #[cfg(feature = "vulkan")]
@@ -20,14 +19,7 @@ pub trait Renderer {
     fn toggle_wireframe(&mut self);
     fn load_skybox(&mut self, path: &str) -> Result<()>;
     fn load_world(&mut self, world: &World) -> Result<()>;
-    fn render(
-        &mut self,
-        dimensions: &[u32; 2],
-        view: glm::Mat4,
-        camera_position: glm::Vec3,
-        world: &World,
-        draw_data: &DrawData,
-    ) -> Result<()>;
+    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;
 }
 
 impl dyn Renderer {

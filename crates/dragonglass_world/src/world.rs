@@ -20,9 +20,24 @@ pub struct World {
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub geometry: Geometry,
+
+    // FIXME: Remove these properties in favor of an active camera component
+    pub view: glm::Mat4,
+    pub camera_position: glm::Vec3,
 }
 
 impl World {
+    pub fn new() -> World {
+        let mut world = World::default();
+        world.view = glm::look_at(
+            &glm::vec3(10.0, 10.0, 10.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::vec3(0.0, 1.0, 0.0),
+        );
+        world.camera_position = glm::vec3(10.0, 10.0, 10.0);
+        world
+    }
+
     pub fn clear(&mut self) {
         self.ecs.clear();
         self.scene.graphs.clear();

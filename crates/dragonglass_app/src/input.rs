@@ -10,11 +10,20 @@ use winit::{
 
 pub type KeyMap = HashMap<VirtualKeyCode, ElementState>;
 
-#[derive(Default)]
 pub struct Input {
     pub keystates: KeyMap,
     pub mouse: Mouse,
     pub allowed: bool,
+}
+
+impl Default for Input {
+    fn default() -> Self {
+        Self {
+            keystates: KeyMap::default(),
+            mouse: Mouse::default(),
+            allowed: true,
+        }
+    }
 }
 
 impl Input {

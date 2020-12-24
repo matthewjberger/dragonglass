@@ -66,14 +66,7 @@ impl Renderer for VulkanRenderer {
         Ok(())
     }
 
-    fn render(
-        &mut self,
-        dimensions: &[u32; 2],
-        view: glm::Mat4,
-        camera_position: glm::Vec3,
-        world: &World,
-        draw_data: &DrawData,
-    ) -> Result<()> {
+    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
@@ -93,7 +86,7 @@ impl Renderer for VulkanRenderer {
             if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world)?;
 
-                let mut camera_position = glm::vec3_to_vec4(&camera_position);
+                let mut camera_position = glm::vec3_to_vec4(&world.camera_position);
                 camera_position.w = 1.0;
 
                 let mut joint_matrices =
@@ -104,7 +97,7 @@ impl Renderer for VulkanRenderer {
                     .for_each(|(a, b)| *a = b);
 
                 let ubo = WorldUniformBuffer {
-                    view,
+                    view: world.view,
                     projection,
                     camera_position,
                     joint_matrices,
@@ -116,7 +109,7 @@ impl Renderer for VulkanRenderer {
             }
 
             scene.skybox_rendering.projection = projection;
-            scene.skybox_rendering.view = view;
+            scene.skybox_rendering.view = world.view;
 
             scene.rendergraph.execute_pass(
                 command_buffer,
@@ -126,7 +119,7 @@ impl Renderer for VulkanRenderer {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
                     if let Some(world_render) = scene.world_render.as_ref() {
-                        world_render.issue_commands(command_buffer, world, projection, view)?;
+                        world_render.issue_commands(command_buffer, world, projection)?;
                     }
                     Ok(())
                 },

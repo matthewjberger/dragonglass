@@ -15,3 +15,5 @@ dragonglass_world = { path = "crates/dragonglass_world" }
 
 [dev-dependencies]
 anyhow = "1.0.36"
+imgui = "0.6.1"
+winit = "0.24.0"
