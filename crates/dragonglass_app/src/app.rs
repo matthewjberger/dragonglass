@@ -1,8 +1,8 @@
 use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
-use dragonglass_physics::PhysicsWorld;
+use dragonglass_physics::{Physics, PhysicsWorld};
 use dragonglass_render::{Backend, Renderer};
-use dragonglass_world::World;
+use dragonglass_world::{Transform, World};
 use image::io::Reader;
 use imgui::{im_str, Ui};
 use log::error;
@@ -124,6 +124,17 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
                 app.update(&mut state);
 
                 state.physics_world.step();
+
+                // Sync transforms affected by physics with the physics world
+                for (_entity, (transform, physics)) in
+                    state.world.ecs.query_mut::<(&mut Transform, &Physics)>()
+                {
+                    if let Some(body) = state.physics_world.bodies.get(physics.handle) {
+                        let position = body.position();
+                        transform.translation = position.translation.vector;
+                        transform.rotation = *position.rotation.quaternion();
+                    }
+                }
 
                 if let Err(error) =
                     state
