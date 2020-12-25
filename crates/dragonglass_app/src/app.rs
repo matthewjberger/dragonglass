@@ -123,6 +123,8 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
 
                 app.update(&mut state);
 
+                state.physics_world.step();
+
                 if let Err(error) =
                     state
                         .renderer
