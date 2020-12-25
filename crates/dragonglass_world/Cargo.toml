@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.34"
+dragonglass_physics = { path = "../dragonglass_physics" }
 gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual", "KHR_materials_unlit"] }
 hecs = "0.3.1"
 image = "0.23.12"

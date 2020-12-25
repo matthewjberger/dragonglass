@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use dragonglass_physics::PhysicsComponent;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -254,6 +255,22 @@ impl World {
             })?;
         }
         Ok(morph_target_weights)
+    }
+
+    pub fn entity_global_transform(&self, entity: Entity) -> glm::Mat4 {
+        let mut transform = glm::Mat4::identity();
+        for graph in self.scene.graphs.iter() {
+            graph
+                .walk(|node_index| {
+                    if entity != graph[node_index] {
+                        return Ok(());
+                    }
+                    transform = graph.global_transform(node_index, &self.ecs);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        transform
     }
 }
 
@@ -729,6 +746,13 @@ impl SceneGraph {
             Ok(transform) => transform.matrix(),
             Err(_) => glm::Mat4::identity(),
         };
+
+        // FIXME_PHYSICS: There is probably a better spot for this..
+        // Don't walk scene graph if the entity has a physics component
+        if ecs.get::<PhysicsComponent>(entity).is_ok() {
+            return transform;
+        }
+
         let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
         match incoming_walker.next_node(&self.0) {
             Some(parent_index) => self.global_transform(parent_index, ecs) * transform,
