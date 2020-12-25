@@ -511,6 +511,7 @@ dependencies = [
  "dragonglass_world",
  "imgui",
  "log",
+ "rapier3d",
  "winit",
 ]
 
@@ -536,6 +537,7 @@ dependencies = [
 name = "dragonglass_physics"
 version = "0.1.0"
 dependencies = [
+ "nalgebra-glm",
  "rapier3d",
 ]
 

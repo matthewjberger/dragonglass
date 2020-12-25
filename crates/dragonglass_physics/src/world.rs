@@ -1,4 +1,5 @@
 use crate::Handle;
+use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::{IntegrationParameters, JointSet, RigidBodySet},
     geometry::{BroadPhase, ColliderSet, NarrowPhase},
@@ -6,8 +7,20 @@ use rapier3d::{
     pipeline::PhysicsPipeline,
 };
 
-pub struct Physics {
+pub struct RigidBody {
     pub handle: Handle,
+    pub translation: glm::Vec3,
+    pub rotation: glm::Quat,
+}
+
+impl RigidBody {
+    pub fn new(handle: Handle) -> Self {
+        Self {
+            handle,
+            translation: glm::Vec3::identity(),
+            rotation: glm::Quat::identity(),
+        }
+    }
 }
 
 pub struct PhysicsWorld {

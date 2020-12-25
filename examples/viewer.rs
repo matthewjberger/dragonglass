@@ -163,14 +163,12 @@ impl App for Viewer {
                                     if let Err(error) = state.renderer.load_world(&state.world) {
                                         warn!("Failed to load gltf world: {}", error);
                                     }
-                                    self.camera = OrbitalCamera::default();
                                     info!("Loaded gltf world: '{}'", raw_path);
                                 }
                                 Some("hdr") => {
                                     if let Err(error) = state.renderer.load_skybox(raw_path) {
                                         error!("Viewer error: {}", error);
                                     }
-                                    self.camera = OrbitalCamera::default();
                                     info!("Loaded hdr cubemap: '{}'", raw_path);
                                 }
                                 _ => warn!(

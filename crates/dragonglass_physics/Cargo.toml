@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 rapier3d = "0.4.2"
-
+nalgebra-glm = "0.9.0"
