@@ -7,6 +7,7 @@ use dragonglass::{
 use dragonglass_world::Entity;
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
+use nalgebra as na;
 use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::RigidBodyBuilder, geometry::ColliderBuilder, geometry::InteractionGroups,
@@ -17,59 +18,17 @@ use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 /// Decomposes a 4x4 augmented rotation matrix without shear into translation, rotation, and scaling components
 /// rotation is given as euler angles in radians
 /// Output is returned as (translation, rotation, scaling)
-fn decompose_matrix(mut transform: glm::Mat4) -> (glm::Vec3, glm::Vec3, glm::Vec3) {
-    // Extract translation
-    let translation = glm::vec3(transform[12], transform[13], transform[14]);
+fn decompose_matrix(transform: glm::Mat4) -> (glm::Vec3, glm::Vec3, glm::Vec3) {
+    let translation = glm::vec3(transform.m14, transform.m24, transform.m34);
 
-    // Extract scaling, considering uniform scale factor (last matrix element)
-    let mut scaling = transform[15]
+    let rotation = glm::to_quat(&na::QR::new(transform).r()).as_vector().xyz();
+
+    let scaling = transform.m44
         * glm::vec3(
-            (transform[0].powi(2) + transform[1].powi(2) + transform[3].powi(2)).sqrt(),
-            (transform[4].powi(2) + transform[5].powi(2) + transform[6].powi(2)).sqrt(),
-            (transform[8].powi(2) + transform[9].powi(2) + transform[10].powi(2)).sqrt(),
+            (transform.m11.powi(2) + transform.m21.powi(2) + transform.m31.powi(2)).sqrt(),
+            (transform.m12.powi(2) + transform.m22.powi(2) + transform.m32.powi(2)).sqrt(),
+            (transform.m13.powi(2) + transform.m23.powi(2) + transform.m33.powi(2)).sqrt(),
         );
-
-    // Remove scaling to prepare for extraction of rotation
-    if scaling.x != 0.0 {
-        [0, 1, 2]
-            .iter()
-            .for_each(|index| transform[*index] /= scaling.x);
-    }
-    if scaling.y != 0.0 {
-        [4, 5, 6]
-            .iter()
-            .for_each(|index| transform[*index] /= scaling.y);
-    }
-    if scaling.z != 0.0 {
-        [8, 9, 10]
-            .iter()
-            .for_each(|index| transform[*index] /= scaling.z);
-    }
-
-    // Verify orientation, inverting it if necessary
-    let temp_z_axis = glm::vec3(transform[0], transform[1], transform[2]).cross(&glm::vec3(
-        transform[4],
-        transform[5],
-        transform[6],
-    ));
-    if temp_z_axis.dot(&glm::vec3(transform[8], transform[9], transform[10])) < 0.0 {
-        scaling.x *= -1.0;
-        transform[0] = -transform[0];
-        transform[1] = -transform[1];
-        transform[2] = -transform[2];
-    }
-
-    // Extract rotation
-    // Source: Extracting Euler Angles from a Rotation Matrix, Mike Day, Insomniac Games
-    //  http://www.insomniacgames.com/mike-day-extracting-euler-angles-from-a-rotation-matrix/
-    let theta_1 = (transform[6] / transform[10]).atan();
-    let c2 = (transform[0].powi(2) + transform[1].powi(2)).sqrt();
-    let theta_2 = (-transform[2] / c2).atan();
-    let s1 = theta_1.sin();
-    let c1 = theta_1.cos();
-    let theta_3 =
-        ((s1 * transform[8] - c1 * transform[4]) / (c1 * transform[5] - s1 * transform[9])).atan();
-    let rotation = glm::vec3(-theta_1, -theta_2, -theta_3);
 
     (translation, rotation, scaling)
 }
