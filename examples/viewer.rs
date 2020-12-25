@@ -84,10 +84,13 @@ impl Viewer {
         // Add rigid bodies with colliders for all meshes that do not have one yet
         let mut entity_map = std::collections::HashMap::new();
         for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
-            if let Ok(entity) = state.world.ecs.entity(entity) {
-                if entity.get::<RigidBody>().is_some() {
-                    continue;
+            match state.world.ecs.entity(entity) {
+                Ok(entity) => {
+                    if entity.get::<RigidBody>().is_some() {
+                        continue;
+                    }
                 }
+                Err(_) => continue,
             }
 
             // TODO: This has a bug, because models aren't displaying properly after the collider's initial translation and rotation are assigned
