@@ -255,6 +255,25 @@ impl World {
         }
         Ok(morph_target_weights)
     }
+
+    pub fn entity_global_transform(&self, entity: Entity) -> Result<glm::Mat4> {
+        let mut transform = glm::Mat4::identity();
+        let mut found = false;
+        for graph in self.scene.graphs.iter() {
+            graph.walk(|node_index| {
+                if entity != graph[node_index] {
+                    return Ok(());
+                }
+                transform = graph.global_transform(node_index, &self.ecs);
+                found = true;
+                Ok(())
+            })?;
+            if found {
+                break;
+            }
+        }
+        Ok(transform)
+    }
 }
 
 #[derive(Default, Debug)]
