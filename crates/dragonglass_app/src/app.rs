@@ -125,7 +125,7 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
 
                 state.physics_world.step();
 
-                for (_entity, rigid_body) in state.world.ecs.query_mut::<(&mut RigidBody)>() {
+                for (_entity, rigid_body) in state.world.ecs.query_mut::<&mut RigidBody>() {
                     if let Some(body) = state.physics_world.bodies.get(rigid_body.handle) {
                         let position = body.position();
                         rigid_body.translation = position.translation.vector;

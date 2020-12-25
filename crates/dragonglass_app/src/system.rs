@@ -1,12 +1,12 @@
 use nalgebra_glm as glm;
-use std::time::Instant;
+use std::{cmp, time::Instant};
 use winit::{
     dpi::PhysicalSize,
     event::{Event, WindowEvent},
 };
 
 pub struct System {
-    pub window_dimensions: [u32; 2],
+    pub window_dimensions: [u32; 2], // TODO: Change this to a glm::Vec2
     pub delta_time: f64,
     pub last_frame: Instant,
     pub exit_requested: bool,
@@ -20,6 +20,12 @@ impl System {
             delta_time: 0.01,
             exit_requested: false,
         }
+    }
+
+    pub fn aspect_ratio(&self) -> f32 {
+        let width = self.window_dimensions[0];
+        let height = cmp::max(self.window_dimensions[1], 0);
+        width as f32 / height as f32
     }
 
     pub fn window_center(&self) -> glm::Vec2 {

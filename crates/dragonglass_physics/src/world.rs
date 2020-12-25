@@ -3,7 +3,8 @@ use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::{IntegrationParameters, JointSet, RigidBodySet},
     geometry::{BroadPhase, ColliderSet, NarrowPhase},
-    na::Vector3,
+    math::Isometry,
+    na::{Translation3, UnitQuaternion, Vector3},
     pipeline::PhysicsPipeline,
 };
 
@@ -20,6 +21,13 @@ impl RigidBody {
             translation: glm::Vec3::identity(),
             rotation: glm::Quat::identity(),
         }
+    }
+
+    pub fn as_isometry(&self) -> Isometry<f32> {
+        Isometry::from_parts(
+            Translation3::from(self.translation),
+            UnitQuaternion::from_quaternion(self.rotation),
+        )
     }
 }
 

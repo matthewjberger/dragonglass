@@ -511,6 +511,7 @@ dependencies = [
  "dragonglass_world",
  "imgui",
  "log",
+ "nalgebra-glm",
  "rapier3d",
  "winit",
 ]
