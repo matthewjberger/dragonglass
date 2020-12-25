@@ -6,9 +6,66 @@ use dragonglass::{
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use rapier3d::{dynamics::RigidBodyBuilder, geometry::ColliderBuilder};
+use rapier3d::{dynamics::RigidBodyBuilder, geometry::ColliderBuilder, na::Matrix4, na::Vector3};
 use std::collections::HashMap;
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
+
+fn decompose_matrix4(mut transform: Matrix4<f32>) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    // Extract translation
+    let translation = Vector3::new(transform[12], transform[13], transform[14]);
+
+    // Extract scaling, considering uniform scale factor (last matrix element)
+    let mut scaling = transform[15]
+        * Vector3::new(
+            (transform[0].powi(2) + transform[1].powi(2) + transform[3].powi(2)).sqrt(),
+            (transform[4].powi(2) + transform[5].powi(2) + transform[6].powi(2)).sqrt(),
+            (transform[8].powi(2) + transform[9].powi(2) + transform[10].powi(2)).sqrt(),
+        );
+
+    // Remove scaling to prepare for extraction of rotation
+    if scaling.x != 0.0 {
+        [0, 1, 2]
+            .iter()
+            .for_each(|index| transform[*index] /= scaling.x);
+    }
+    if scaling.y != 0.0 {
+        [4, 5, 6]
+            .iter()
+            .for_each(|index| transform[*index] /= scaling.y);
+    }
+    if scaling.z != 0.0 {
+        [8, 9, 10]
+            .iter()
+            .for_each(|index| transform[*index] /= scaling.z);
+    }
+
+    // Verify orientation, inverting it if necessary
+    let temp_z_axis = Vector3::new(transform[0], transform[1], transform[2]).cross(&Vector3::new(
+        transform[4],
+        transform[5],
+        transform[6],
+    ));
+    if temp_z_axis.dot(&Vector3::new(transform[8], transform[9], transform[10])) < 0.0 {
+        scaling.x *= -1.0;
+        transform[0] = -transform[0];
+        transform[1] = -transform[1];
+        transform[2] = -transform[2];
+    }
+
+    // Extract rotation
+    // Source: Extracting Euler Angles from a Rotation Matrix, Mike Day, Insomniac Games
+    //  http://www.insomniacgames.com/mike-day-extracting-euler-angles-from-a-rotation-matrix/
+    let theta_1 = (transform[6] / transform[10]).atan();
+    let c2 = (transform[0].powi(2) + transform[1].powi(2)).sqrt();
+    let theta_2 = (-transform[2] / c2).atan();
+    let s1 = theta_1.sin();
+    let c1 = theta_1.cos();
+    let theta_3 =
+        ((s1 * transform[8] - c1 * transform[4]) / (c1 * transform[5] - s1 * transform[9])).atan();
+    let rotation = Vector3::new(-theta_1, -theta_2, -theta_3);
+
+    (translation, rotation, scaling)
+}
 
 pub struct CameraMultipliers {
     pub scroll: f32,
@@ -79,25 +136,21 @@ impl App for Viewer {
 
         let mut entity_map = HashMap::new();
         for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
-            // FIXME_PHYSICS: This transform needs to come from the scene graph when first setting it
             let transform = state.world.entity_global_transform(entity);
+
+            let (translation, rotation, scaling) = decompose_matrix4(transform);
 
             // Insert a corresponding rigid body
             let rigid_body = RigidBodyBuilder::new_static()
-                .translation(
-                    transform.translation.x,
-                    transform.translation.y,
-                    transform.translation.z,
-                )
-                .rotation(transform.rotation.as_vector().xyz())
+                .translation(translation.x, translation.y, translation.z)
+                .rotation(rotation)
                 .build();
             let handle = self.physics_world.bodies.insert(rigid_body);
 
             // Insert a collider
             let bounding_box = mesh.bounding_box();
             let half_extents = bounding_box.half_extents();
-            let collider =
-                ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
+            let collider = ColliderBuilder::cuboid(half_extents.x * scaling.x, half_extents.y * scaling.y, half_extents.z * scaling.z).build();
 
             self.physics_world
                 .colliders
@@ -237,22 +290,23 @@ impl App for Viewer {
                                     info!("Loaded gltf world: '{}'", raw_path);
 
                                     let mut entity_map = HashMap::new();
-                                    for (entity, (mesh, transform)) in state.world.ecs.query::<(&Mesh, &Transform)>().iter() {
+                                    for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
+                                        if mesh.name == "Plane" { continue; }
+
+                                        let transform = state.world.entity_global_transform(entity);
+                                        let (translation, rotation, scaling) = decompose_matrix4(transform);
+
                                         // Insert a corresponding rigid body
                                         let rigid_body = RigidBodyBuilder::new_dynamic()
-                                            .translation(
-                                                transform.translation.x,
-                                                transform.translation.y,
-                                                transform.translation.z,
-                                            )
-                                            .rotation(transform.rotation.as_vector().xyz())
+                                            .translation(translation.x, translation.y, translation.z)
+                                            .rotation(rotation)
                                             .build();
                                         let handle = self.physics_world.bodies.insert(rigid_body);
                                         // Insert a collider
                                         let bounding_box = mesh.bounding_box();
                                         let half_extents = bounding_box.half_extents();
                                         let collider =
-                                            ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
+                                            ColliderBuilder::cuboid(half_extents.x * scaling.x, half_extents.y * scaling.y, half_extents.z * scaling.z).build();
                                         self.physics_world
                                             .colliders
                                             .insert(collider, handle, &mut self.physics_world.bodies);
