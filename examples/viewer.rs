@@ -4,10 +4,14 @@ use dragonglass::{
     physics::RigidBody,
     world::{load_gltf, BoundingBoxVisible, Mesh},
 };
+use dragonglass_world::Entity;
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
 use nalgebra_glm as glm;
-use rapier3d::{dynamics::RigidBodyBuilder, geometry::ColliderBuilder, geometry::Ray, na::Point3};
+use rapier3d::{
+    dynamics::RigidBodyBuilder, geometry::ColliderBuilder, geometry::InteractionGroups,
+    geometry::Ray, na::Point3,
+};
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 
 /// Decomposes a 4x4 augmented rotation matrix without shear into translation, rotation, and scaling components
@@ -127,7 +131,7 @@ impl Viewer {
                 }
             }
 
-            // FIXME: When rendering meshes with a rigid body component, use the rigid body transform
+            // TODO: This has a bug, because models aren't displaying properly after the collider's initial translation and rotation are assigned
 
             let transform = state.world.entity_global_transform(entity)?;
             let (translation, rotation, scaling) = decompose_matrix(transform);
@@ -141,8 +145,9 @@ impl Viewer {
 
             // Insert a collider
             let bounding_box = mesh.bounding_box();
-            let extents = bounding_box.half_extents().component_mul(&scaling);
-            let collider = ColliderBuilder::cuboid(extents.x, extents.y, extents.z).build();
+            let half_extents = bounding_box.half_extents().component_mul(&scaling);
+            let collider =
+                ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
             state
                 .physics_world
                 .colliders
@@ -151,12 +156,56 @@ impl Viewer {
             entity_map.insert(entity, handle);
         }
         for (entity, handle) in entity_map.into_iter() {
-            let _ = state.world.ecs.insert_one(entity, RigidBody::new(handle));
+            let _ = state.world.ecs.insert_one(entity, RigidBody { handle });
         }
         Ok(())
     }
 
-    fn mouse_pick_ray(&self, state: &mut AppState) -> Ray {
+    fn highlight_hovered_object(&self, state: &mut AppState) {
+        self.clear_bounding_boxes(state);
+        if let Some(entity) = self.pick_object(state) {
+            let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
+        }
+    }
+
+    fn clear_bounding_boxes(&self, state: &mut AppState) {
+        let entities = state
+            .world
+            .ecs
+            .query::<&Mesh>()
+            .iter()
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
+        }
+    }
+
+    fn pick_object(&self, state: &mut AppState) -> Option<Entity> {
+        let ray = self.mouse_ray(state);
+
+        match state.physics_world.query.cast_ray(
+            &state.physics_world.colliders,
+            &ray,
+            f32::MAX,
+            InteractionGroups::all(),
+        ) {
+            Some((collider_handle, _collider, _intersection)) => {
+                let handle = state.physics_world.colliders[collider_handle].parent();
+                let mut picked_entity = None;
+                for (entity, rigid_body) in state.world.ecs.query::<&RigidBody>().iter() {
+                    if rigid_body.handle == handle {
+                        picked_entity = Some(entity);
+                        break;
+                    }
+                }
+                picked_entity
+            }
+            None => None,
+        }
+    }
+
+    fn mouse_ray(&self, state: &mut AppState) -> Ray {
         let (width, height) = (
             state.system.window_dimensions[0] as f32,
             state.system.window_dimensions[1] as f32,
@@ -180,31 +229,6 @@ impl Viewer {
         );
         let direction = (p_far - p_near).normalize();
         Ray::new(Point3::from(p_near), direction)
-    }
-
-    fn pick_object(&self, state: &mut AppState) {
-        let ray = self.mouse_pick_ray(state);
-
-        let mut pick_results = Vec::new();
-        for (entity, rigid_body) in state.world.ecs.query::<&RigidBody>().iter() {
-            let collided = match state.physics_world.colliders.get(rigid_body.handle) {
-                Some(collider) => {
-                    collider
-                        .shape()
-                        .intersects_ray(&rigid_body.as_isometry(), &ray, f32::MAX)
-                }
-                None => false, // The body can't be picked if it doesn't have a collider
-            };
-            pick_results.push((entity, collided));
-        }
-
-        for (entity, picked) in pick_results {
-            if picked {
-                let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
-            } else {
-                let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
-            }
-        }
     }
 }
 
@@ -270,8 +294,7 @@ impl App for Viewer {
             }
         }
 
-        // TODO: 3D picking
-        // self.pick_object(state);
+        self.highlight_hovered_object(state);
     }
 
     fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {
@@ -319,8 +342,7 @@ impl App for Viewer {
                                     if let Err(error) = state.renderer.load_world(&state.world) {
                                         warn!("Failed to load gltf world: {}", error);
                                     }
-                                    // TODO: Update rigid bodies for meshes
-                                    // self.update_bodies(state).unwrap();
+                                    self.update_bodies(state).unwrap();
                                     info!("Loaded gltf world: '{}'", raw_path);
                                 }
                                 Some("hdr") => {

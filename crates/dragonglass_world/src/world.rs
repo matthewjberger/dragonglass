@@ -1,4 +1,6 @@
 use anyhow::{Context, Result};
+use na::{Isometry3, Translation3, UnitQuaternion};
+use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -312,6 +314,13 @@ impl Transform {
         glm::translation(&self.translation)
             * glm::quat_to_mat4(&self.rotation)
             * glm::scaling(&self.scale)
+    }
+
+    pub fn as_isometry(&self) -> Isometry3<f32> {
+        Isometry3::from_parts(
+            Translation3::from(self.translation),
+            UnitQuaternion::from_quaternion(self.rotation),
+        )
     }
 }
 

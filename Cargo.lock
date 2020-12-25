@@ -572,6 +572,7 @@ dependencies = [
  "hecs",
  "image",
  "log",
+ "nalgebra",
  "nalgebra-glm",
  "petgraph",
  "serde",
