@@ -4,7 +4,7 @@ use dragonglass::{
     physics::RigidBody,
     world::{load_gltf, BoundingBoxVisible, Mesh},
 };
-use dragonglass_world::Entity;
+use dragonglass_world::{Entity, Transform};
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
 use nalgebra as na;
@@ -196,50 +196,13 @@ impl Viewer {
 
 impl App for Viewer {
     fn create_ui(&mut self, state: &mut AppState, ui: &Ui) {
-        let number_of_entities = state.world.ecs.iter().count();
-        let number_of_meshes = state.world.ecs.query::<&Mesh>().iter().count();
-        ui.text(im_str!("Number of entities: {}", number_of_entities));
+        let world = &state.world;
+        ui.text(im_str!("Number of entities: {}", world.ecs.iter().count()));
+        let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
         ui.text(im_str!("Number of meshes: {}", number_of_meshes));
-        ui.text(im_str!(
-            "Number of animations: {}",
-            state.world.animations.len()
-        ));
-        ui.text(im_str!(
-            "Number of textures: {}",
-            state.world.textures.len()
-        ));
-        ui.text(im_str!(
-            "Number of materials: {}",
-            state.world.materials.len()
-        ));
-        ui.separator();
-        ui.text(im_str!("Controls"));
-
-        if ui.button(im_str!("Toggle Wireframe"), [200.0, 20.0]) {
-            state.renderer.toggle_wireframe();
-        }
-
-        ui.text(im_str!("Multipliers"));
-        let _ = ui
-            .input_float(im_str!("Scroll"), &mut self.camera_multipliers.scroll)
-            .step(0.1)
-            .step_fast(1.0)
-            .build();
-        let _ = ui
-            .input_float(im_str!("Drag"), &mut self.camera_multipliers.drag)
-            .step(0.1)
-            .step_fast(1.0)
-            .build();
-        let _ = ui
-            .input_float(im_str!("Rotation"), &mut self.camera_multipliers.rotation)
-            .step(0.1)
-            .step_fast(1.0)
-            .build();
-        ui.separator();
-
-        for (_entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
-            ui.text(im_str!("Mesh: {}", mesh.name));
-        }
+        ui.text(im_str!("Number of animations: {}", world.animations.len()));
+        ui.text(im_str!("Number of textures: {}", world.textures.len()));
+        ui.text(im_str!("Number of materials: {}", world.materials.len()));
     }
 
     fn update(&mut self, state: &mut AppState) {
@@ -257,6 +220,21 @@ impl App for Viewer {
         }
 
         self.highlight_hovered_object(state);
+    }
+
+    fn update_after_physics(&mut self, state: &mut AppState) {
+        // FIXME: This assignment causes the entity's transform to become its rigid body's transform
+        //        which is causing it to render incorrectly (at the wrong place) because the scene graph
+        //        transformations are still applied
+        for (_entity, (rigid_body, transform)) in
+            state.world.ecs.query_mut::<(&RigidBody, &mut Transform)>()
+        {
+            if let Some(body) = state.physics_world.bodies.get(rigid_body.handle) {
+                let position = body.position();
+                transform.translation = position.translation.vector;
+                transform.rotation = *position.rotation.quaternion();
+            }
+        }
     }
 
     fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {

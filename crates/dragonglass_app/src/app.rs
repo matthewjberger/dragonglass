@@ -1,8 +1,8 @@
 use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
-use dragonglass_physics::{PhysicsWorld, RigidBody};
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
-use dragonglass_world::{Transform, World};
+use dragonglass_world::World;
 use image::io::Reader;
 use imgui::{im_str, Ui};
 use log::error;
@@ -67,6 +67,7 @@ pub trait App {
         ui.text(im_str!("Hello!"));
     }
     fn update(&mut self, _state: &mut AppState) {}
+    fn update_after_physics(&mut self, _state: &mut AppState) {}
     fn cleanup(&mut self) {}
     fn on_key(&mut self, _state: &mut AppState, _keystate: ElementState, _keycode: VirtualKeyCode) {
     }
@@ -125,15 +126,7 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
 
                 state.physics_world.step();
 
-                for (_entity, (rigid_body, transform)) in
-                    state.world.ecs.query_mut::<(&RigidBody, &mut Transform)>()
-                {
-                    if let Some(body) = state.physics_world.bodies.get(rigid_body.handle) {
-                        let position = body.position();
-                        transform.translation = position.translation.vector;
-                        transform.rotation = *position.rotation.quaternion();
-                    }
-                }
+                app.update_after_physics(&mut state);
 
                 if let Err(error) =
                     state
