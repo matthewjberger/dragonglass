@@ -1,37 +1,11 @@
 use anyhow::Result;
 use dragonglass::{
     app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
-    physics::RigidBody,
     world::{load_gltf, BoundingBoxVisible, Mesh},
 };
-use dragonglass_world::{Entity, Transform};
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use nalgebra as na;
-use nalgebra_glm as glm;
-use rapier3d::{
-    dynamics::RigidBodyBuilder, geometry::ColliderBuilder, geometry::InteractionGroups,
-    geometry::Ray, na::Point3,
-};
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
-
-/// Decomposes a 4x4 augmented rotation matrix without shear into translation, rotation, and scaling components
-/// rotation is given as euler angles in radians
-/// Output is returned as (translation, rotation, scaling)
-fn decompose_matrix(transform: glm::Mat4) -> (glm::Vec3, glm::Vec3, glm::Vec3) {
-    let translation = glm::vec3(transform.m14, transform.m24, transform.m34);
-
-    let rotation = glm::to_quat(&na::QR::new(transform).r()).as_vector().xyz();
-
-    let scaling = transform.m44
-        * glm::vec3(
-            (transform.m11.powi(2) + transform.m21.powi(2) + transform.m31.powi(2)).sqrt(),
-            (transform.m12.powi(2) + transform.m22.powi(2) + transform.m32.powi(2)).sqrt(),
-            (transform.m13.powi(2) + transform.m23.powi(2) + transform.m33.powi(2)).sqrt(),
-        );
-
-    (translation, rotation, scaling)
-}
 
 pub struct CameraMultipliers {
     pub scroll: f32,
@@ -79,119 +53,6 @@ impl Viewer {
             self.camera.pan(&pan);
         }
     }
-
-    fn update_bodies(&mut self, state: &mut AppState) -> Result<()> {
-        // Add rigid bodies with colliders for all meshes that do not have one yet
-        let mut entity_map = std::collections::HashMap::new();
-        for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
-            match state.world.ecs.entity(entity) {
-                Ok(entity) => {
-                    if entity.get::<RigidBody>().is_some() {
-                        continue;
-                    }
-                }
-                Err(_) => continue,
-            }
-
-            // TODO: This has a bug, because models aren't displaying properly after the collider's initial translation and rotation are assigned
-
-            let transform = state.world.entity_global_transform(entity)?;
-            let (translation, rotation, scaling) = decompose_matrix(transform);
-
-            // Insert a corresponding rigid body
-            let rigid_body = RigidBodyBuilder::new_static()
-                .translation(translation.x, translation.y, translation.z)
-                .rotation(rotation)
-                .build();
-            let handle = state.physics_world.bodies.insert(rigid_body);
-
-            // Insert a collider
-            let bounding_box = mesh.bounding_box();
-            let half_extents = bounding_box.half_extents().component_mul(&scaling);
-            let collider =
-                ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
-            state
-                .physics_world
-                .colliders
-                .insert(collider, handle, &mut state.physics_world.bodies);
-
-            entity_map.insert(entity, handle);
-        }
-        for (entity, handle) in entity_map.into_iter() {
-            let _ = state.world.ecs.insert_one(entity, RigidBody { handle });
-        }
-        Ok(())
-    }
-
-    fn highlight_hovered_object(&self, state: &mut AppState) {
-        self.clear_bounding_boxes(state);
-        if let Some(entity) = self.pick_object(state) {
-            let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
-        }
-    }
-
-    fn clear_bounding_boxes(&self, state: &mut AppState) {
-        let entities = state
-            .world
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
-        }
-    }
-
-    fn pick_object(&self, state: &mut AppState) -> Option<Entity> {
-        let ray = self.mouse_ray(state);
-
-        match state.physics_world.query.cast_ray(
-            &state.physics_world.colliders,
-            &ray,
-            f32::MAX,
-            InteractionGroups::all(),
-        ) {
-            Some((collider_handle, _collider, _intersection)) => {
-                let handle = state.physics_world.colliders[collider_handle].parent();
-                let mut picked_entity = None;
-                for (entity, rigid_body) in state.world.ecs.query::<&RigidBody>().iter() {
-                    if rigid_body.handle == handle {
-                        picked_entity = Some(entity);
-                        break;
-                    }
-                }
-                picked_entity
-            }
-            None => None,
-        }
-    }
-
-    fn mouse_ray(&self, state: &mut AppState) -> Ray {
-        let (width, height) = (
-            state.system.window_dimensions[0] as f32,
-            state.system.window_dimensions[1] as f32,
-        );
-        let aspect_ratio = state.system.aspect_ratio();
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-        let near_point = glm::vec2_to_vec3(&state.input.mouse.position);
-        let mut far_point = near_point;
-        far_point.z = 1.0;
-        let p_near = glm::unproject_zo(
-            &near_point,
-            &state.world.view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let p_far = glm::unproject_zo(
-            &far_point,
-            &state.world.view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let direction = (p_far - p_near).normalize();
-        Ray::new(Point3::from(p_near), direction)
-    }
 }
 
 impl App for Viewer {
@@ -216,23 +77,6 @@ impl App for Viewer {
                 .animate(0, 0.75 * state.system.delta_time as f32)
             {
                 log::warn!("Failed to animate world: {}", error);
-            }
-        }
-
-        self.highlight_hovered_object(state);
-    }
-
-    fn update_after_physics(&mut self, state: &mut AppState) {
-        // FIXME: This assignment causes the entity's transform to become its rigid body's transform
-        //        which is causing it to render incorrectly (at the wrong place) because the scene graph
-        //        transformations are still applied
-        for (_entity, (rigid_body, transform)) in
-            state.world.ecs.query_mut::<(&RigidBody, &mut Transform)>()
-        {
-            if let Some(body) = state.physics_world.bodies.get(rigid_body.handle) {
-                let position = body.position();
-                transform.translation = position.translation.vector;
-                transform.rotation = *position.rotation.quaternion();
             }
         }
     }
@@ -282,7 +126,6 @@ impl App for Viewer {
                                     if let Err(error) = state.renderer.load_world(&state.world) {
                                         warn!("Failed to load gltf world: {}", error);
                                     }
-                                    self.update_bodies(state).unwrap();
                                     info!("Loaded gltf world: '{}'", raw_path);
                                 }
                                 Some("hdr") => {
