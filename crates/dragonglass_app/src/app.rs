@@ -16,7 +16,7 @@ use winit::{
 pub struct AppConfiguration {
     pub width: u32,
     pub height: u32,
-    pub is_fullscreen: bool,
+    pub is_fullscreen: bool, // TODO: This isn't respected yet
     pub title: String,
     pub icon: Option<String>,
 }
