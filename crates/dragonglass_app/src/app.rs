@@ -1,6 +1,5 @@
 use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
-use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
 use dragonglass_world::World;
 use image::io::Reader;
@@ -55,7 +54,6 @@ impl AppConfiguration {
 
 pub struct AppState {
     pub world: World,
-    pub physics_world: PhysicsWorld,
     pub input: Input,
     pub system: System,
     pub renderer: Box<dyn Renderer>,
@@ -67,7 +65,6 @@ pub trait App {
         ui.text(im_str!("Hello!"));
     }
     fn update(&mut self, _state: &mut AppState) {}
-    fn update_after_physics(&mut self, _state: &mut AppState) {}
     fn cleanup(&mut self) {}
     fn on_key(&mut self, _state: &mut AppState, _keystate: ElementState, _keycode: VirtualKeyCode) {
     }
@@ -91,7 +88,6 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
 
     let mut state = AppState {
         world: World::new(),
-        physics_world: PhysicsWorld::default(),
         input: Input::default(),
         system: System::new(window_dimensions),
         renderer,
@@ -123,10 +119,6 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
                     .expect("Failed to render gui frame!");
 
                 app.update(&mut state);
-
-                state.physics_world.step();
-
-                app.update_after_physics(&mut state);
 
                 if let Err(error) =
                     state

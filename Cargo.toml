@@ -10,7 +10,6 @@ members = ["crates/*"]
 
 [dependencies]
 dragonglass_app = { path = "crates/dragonglass_app" }
-dragonglass_physics = { path = "crates/dragonglass_physics" }
 dragonglass_render = { path = "crates/dragonglass_render" }
 dragonglass_world = { path = "crates/dragonglass_world" }
 
@@ -20,5 +19,4 @@ log = "0.4.11"
 nalgebra = "0.23.2"
 nalgebra-glm = "0.9.0"
 imgui = "0.6.1"
-rapier3d = "0.4.2"
 winit = "0.24.0"

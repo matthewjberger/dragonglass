@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.34"
-dragonglass_physics = { path = "../dragonglass_physics" }
 dragonglass_render = { path = "../dragonglass_render" }
 dragonglass_world = { path = "../dragonglass_world" }
 image = "0.23.12"
