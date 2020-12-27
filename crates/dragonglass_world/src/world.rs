@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use na::linalg::QR;
 use na::{Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
@@ -321,6 +322,34 @@ impl Transform {
             Translation3::from(self.translation),
             UnitQuaternion::from_quaternion(self.rotation),
         )
+    }
+
+    /// Decomposes a 4x4 augmented rotation matrix without shear into translation, rotation, and scaling components
+    fn decompose_matrix(transform: glm::Mat4) -> (glm::Vec3, glm::Quat, glm::Vec3) {
+        let translation = glm::vec3(transform.m14, transform.m24, transform.m34);
+
+        let qr_decomposition = QR::new(transform);
+        let rotation = glm::to_quat(&qr_decomposition.q());
+
+        let scale = transform.m44
+            * glm::vec3(
+                (transform.m11.powi(2) + transform.m21.powi(2) + transform.m31.powi(2)).sqrt(),
+                (transform.m12.powi(2) + transform.m22.powi(2) + transform.m32.powi(2)).sqrt(),
+                (transform.m13.powi(2) + transform.m23.powi(2) + transform.m33.powi(2)).sqrt(),
+            );
+
+        (translation, rotation, scale)
+    }
+}
+
+impl From<glm::Mat4> for Transform {
+    fn from(matrix: glm::Mat4) -> Self {
+        let (translation, rotation, scale) = Self::decompose_matrix(matrix);
+        Self {
+            translation,
+            rotation,
+            scale,
+        }
     }
 }
 

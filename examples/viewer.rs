@@ -1,11 +1,11 @@
 use anyhow::Result;
 use dragonglass::{
     app::{run_app, App, AppConfiguration, AppState, Collider, Input, OrbitalCamera, System},
-    world::{load_gltf, BoundingBoxVisible, Entity, Mesh},
+    world::{load_gltf, BoundingBoxVisible, Entity, Mesh, Transform},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use na::{Isometry3, Point3, Translation3, UnitQuaternion};
+use na::Point3;
 use nalgebra as na;
 use nalgebra_glm as glm;
 use ncollide3d::{
@@ -82,19 +82,22 @@ impl Viewer {
 
             let bounding_box = mesh.bounding_box();
             let translation = glm::translation(&bounding_box.center());
-            let transform = state.world.entity_global_transform(entity)? * translation;
-            let (isometry, scaling) = Self::matrix_to_isometry(transform);
+            let transform_matrix = state.world.entity_global_transform(entity)? * translation;
+            let transform = Transform::from(transform_matrix);
 
             // Insert a collider
-            let half_extents = bounding_box.half_extents().component_mul(&scaling);
+            let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
             let collider_shape = Cuboid::new(half_extents);
 
             let shape_handle = ShapeHandle::new(collider_shape);
 
-            let (handle, _collision_object) =
-                state
-                    .collision_world
-                    .add(isometry, shape_handle, collision_group, query_type, ());
+            let (handle, _collision_object) = state.collision_world.add(
+                transform.as_isometry(),
+                shape_handle,
+                collision_group,
+                query_type,
+                (),
+            );
 
             entity_map.insert(entity, handle);
         }
@@ -102,48 +105,6 @@ impl Viewer {
             let _ = state.world.ecs.insert_one(entity, Collider { handle });
         }
         Ok(())
-    }
-
-    fn matrix_to_isometry(mut transform: glm::Mat4) -> (Isometry3<f32>, glm::Vec3) {
-        let mut scaling = transform.m44
-            * glm::vec3(
-                (transform.m11.powi(2) + transform.m21.powi(2) + transform.m31.powi(2)).sqrt(),
-                (transform.m12.powi(2) + transform.m22.powi(2) + transform.m32.powi(2)).sqrt(),
-                (transform.m13.powi(2) + transform.m23.powi(2) + transform.m33.powi(2)).sqrt(),
-            );
-
-        if scaling.x != 0.0 {
-            [0, 1, 2]
-                .iter()
-                .for_each(|index| transform[*index] /= scaling.x);
-        }
-        if scaling.y != 0.0 {
-            [4, 5, 6]
-                .iter()
-                .for_each(|index| transform[*index] /= scaling.y);
-        }
-        if scaling.z != 0.0 {
-            [8, 9, 10]
-                .iter()
-                .for_each(|index| transform[*index] /= scaling.z);
-        }
-
-        // Verify orientation, inverting it if necessary
-        let temp_z_axis = glm::vec3(transform[0], transform[1], transform[2]).cross(&glm::vec3(
-            transform[4],
-            transform[5],
-            transform[6],
-        ));
-        if temp_z_axis.dot(&glm::vec3(transform[8], transform[9], transform[10])) < 0.0 {
-            scaling.x *= -1.0;
-            transform[0] = -transform[0];
-            transform[1] = -transform[1];
-            transform[2] = -transform[2];
-        }
-
-        let isometry: Isometry3<f32> = nalgebra::convert_unchecked(transform);
-
-        (isometry, scaling)
     }
 
     fn highlight_hovered_object(&self, state: &mut AppState) {
@@ -233,6 +194,29 @@ impl App for Viewer {
             "Number of collision_objects: {}",
             state.collision_world.collision_objects().count()
         ));
+
+        ui.text(im_str!("Multipliers"));
+        let _ = ui
+            .input_float(im_str!("Scroll"), &mut self.camera_multipliers.scroll)
+            .step(0.1)
+            .step_fast(1.0)
+            .build();
+        let _ = ui
+            .input_float(im_str!("Drag"), &mut self.camera_multipliers.drag)
+            .step(0.1)
+            .step_fast(1.0)
+            .build();
+        let _ = ui
+            .input_float(im_str!("Rotation"), &mut self.camera_multipliers.rotation)
+            .step(0.1)
+            .step_fast(1.0)
+            .build();
+        ui.separator();
+
+        ui.text(im_str!("Meshes"));
+        for (_entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
+            ui.text(im_str!("{}", mesh.name));
+        }
     }
 
     fn update(&mut self, state: &mut AppState) {
