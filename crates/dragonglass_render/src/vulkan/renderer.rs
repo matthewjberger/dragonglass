@@ -126,7 +126,12 @@ impl Renderer for VulkanRenderer {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_rendering.issue_commands(command_buffer)?;
                     if let Some(world_render) = scene.world_render.as_ref() {
-                        world_render.issue_commands(command_buffer, world, projection)?;
+                        world_render.issue_commands(
+                            command_buffer,
+                            world,
+                            collision_world,
+                            projection,
+                        )?;
                     }
                     Ok(())
                 },

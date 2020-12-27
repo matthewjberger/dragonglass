@@ -17,7 +17,9 @@ use dragonglass_world::{
     AlphaMode, BoundingBoxVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene, Skin,
     Vertex, World, WrappingMode,
 };
+use log::warn;
 use nalgebra_glm as glm;
+use ncollide3d::{shape::Cuboid, world::CollisionWorld};
 use std::{mem, sync::Arc};
 
 pub struct PushConstantMaterial {
@@ -485,6 +487,7 @@ impl WorldRender {
         &self,
         command_buffer: vk::CommandBuffer,
         world: &World,
+        collision_world: &CollisionWorld<f32, ()>,
         projection: glm::Mat4,
     ) -> Result<()> {
         let pipeline = self
@@ -506,6 +509,28 @@ impl WorldRender {
             .pipeline_layout
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
+
+        // FIXME_COLLISION: Make collision objects a different color like red
+        // Visualize collision objects
+        for (_handle, collision_object) in collision_world.collision_objects() {
+            let position = collision_object.position();
+            let translation = position.translation;
+            let rotation = position.rotation;
+            let cuboid = if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
+                cuboid
+            } else {
+                warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
+                continue;
+            };
+
+            let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
+            let rotation = glm::quat_to_mat4(&rotation);
+            let scale = glm::scaling(&(cuboid.half_extents * 2.0));
+            self.cube_render.issue_commands(
+                command_buffer,
+                projection * world.view * offset * rotation * scale,
+            )?;
+        }
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
