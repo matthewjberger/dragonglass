@@ -231,11 +231,6 @@ impl App for Viewer {
         for (entity, _) in state.world.ecs.query::<&Selected>().iter() {
             ui.text(im_str!("{:#?}", entity));
         }
-
-        ui.text(im_str!("Meshes"));
-        for (_entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
-            ui.text(im_str!("{}", mesh.name));
-        }
     }
 
     fn update(&mut self, state: &mut AppState) {
@@ -339,9 +334,14 @@ impl App for Viewer {
                 if let (MouseButton::Left, ElementState::Pressed) = (button, button_state) {
                     if let Some(entity) = self.pick_object(state) {
                         let already_selected = state.world.ecs.get::<Selected>(entity).is_ok();
-                        self.clear_selections(state);
+                        let shift_active = state.input.is_key_pressed(VirtualKeyCode::LShift);
+                        if !shift_active {
+                            self.clear_selections(state);
+                        }
                         if !already_selected {
                             let _ = state.world.ecs.insert_one(entity, Selected {});
+                        } else if shift_active {
+                            let _ = state.world.ecs.remove_one::<Selected>(entity);
                         }
                     }
                 }
