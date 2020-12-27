@@ -514,7 +514,7 @@ impl WorldRender {
         // Visualize collision objects
         for (_handle, collision_object) in collision_world.collision_objects() {
             // TODO: lookup entity and render bounding box via the collision object's transform
-            let position = collision_object.position(); fs sc
+            let position = collision_object.position();
             let translation = position.translation;
             let rotation = position.rotation;
             let cuboid = if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
