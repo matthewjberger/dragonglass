@@ -67,6 +67,8 @@ impl Viewer {
         // TODO: sync collider position for meshes that have one already
 
         // Add colliders for all meshes that do not have one yet
+        let collision_group = CollisionGroups::new();
+        let query_type = GeometricQueryType::Contacts(0.0, 0.0);
         let mut entity_map = HashMap::new();
         for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
             match state.world.ecs.entity(entity) {
@@ -78,20 +80,15 @@ impl Viewer {
                 Err(_) => continue,
             }
 
-            let transform = state.world.entity_global_transform(entity)?;
-            let (translation, rotation, scaling) = Self::decompose_matrix(transform);
+            let bounding_box = mesh.bounding_box();
+            let translation = glm::translation(&bounding_box.center());
+            let transform = state.world.entity_global_transform(entity)? * translation;
+            let (isometry, scaling) = Self::matrix_to_isometry(transform);
 
             // Insert a collider
-            let bounding_box = mesh.bounding_box();
             let half_extents = bounding_box.half_extents().component_mul(&scaling);
             let collider_shape = Cuboid::new(half_extents);
 
-            let isometry = Isometry3::from_parts(
-                Translation3::from(translation),
-                UnitQuaternion::from_quaternion(rotation),
-            );
-            let collision_group = CollisionGroups::new();
-            let query_type = GeometricQueryType::Contacts(0.0, 0.0);
             let shape_handle = ShapeHandle::new(collider_shape);
 
             let (handle, _collision_object) =
@@ -107,22 +104,46 @@ impl Viewer {
         Ok(())
     }
 
-    /// Decomposes a 4x4 augmented rotation matrix without shear into translation, rotation, and scaling components
-    /// rotation is given as euler angles in radians
-    /// Output is returned as (translation, rotation, scaling)
-    fn decompose_matrix(transform: glm::Mat4) -> (glm::Vec3, glm::Quat, glm::Vec3) {
-        let translation = glm::vec3(transform.m14, transform.m24, transform.m34);
-
-        let rotation = glm::to_quat(&na::QR::new(transform).q());
-
-        let scaling = transform.m44
+    fn matrix_to_isometry(mut transform: glm::Mat4) -> (Isometry3<f32>, glm::Vec3) {
+        let mut scaling = transform.m44
             * glm::vec3(
                 (transform.m11.powi(2) + transform.m21.powi(2) + transform.m31.powi(2)).sqrt(),
                 (transform.m12.powi(2) + transform.m22.powi(2) + transform.m32.powi(2)).sqrt(),
                 (transform.m13.powi(2) + transform.m23.powi(2) + transform.m33.powi(2)).sqrt(),
             );
 
-        (translation, rotation, scaling)
+        if scaling.x != 0.0 {
+            [0, 1, 2]
+                .iter()
+                .for_each(|index| transform[*index] /= scaling.x);
+        }
+        if scaling.y != 0.0 {
+            [4, 5, 6]
+                .iter()
+                .for_each(|index| transform[*index] /= scaling.y);
+        }
+        if scaling.z != 0.0 {
+            [8, 9, 10]
+                .iter()
+                .for_each(|index| transform[*index] /= scaling.z);
+        }
+
+        // Verify orientation, inverting it if necessary
+        let temp_z_axis = glm::vec3(transform[0], transform[1], transform[2]).cross(&glm::vec3(
+            transform[4],
+            transform[5],
+            transform[6],
+        ));
+        if temp_z_axis.dot(&glm::vec3(transform[8], transform[9], transform[10])) < 0.0 {
+            scaling.x *= -1.0;
+            transform[0] = -transform[0];
+            transform[1] = -transform[1];
+            transform[2] = -transform[2];
+        }
+
+        let isometry: Isometry3<f32> = nalgebra::convert_unchecked(transform);
+
+        (isometry, scaling)
     }
 
     fn highlight_hovered_object(&self, state: &mut AppState) {
