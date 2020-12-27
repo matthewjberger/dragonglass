@@ -513,6 +513,7 @@ dependencies = [
  "log",
  "nalgebra",
  "nalgebra-glm",
+ "ncollide3d",
  "petgraph",
  "serde",
 ]

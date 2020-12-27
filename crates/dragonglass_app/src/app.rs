@@ -5,18 +5,13 @@ use dragonglass_world::World;
 use image::io::Reader;
 use imgui::{im_str, Ui};
 use log::error;
-use ncollide3d::{pipeline::CollisionObjectSlabHandle, world::CollisionWorld};
+use ncollide3d::world::CollisionWorld;
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
-
-// TODO: Move collision code to separate module
-pub struct Collider {
-    pub handle: CollisionObjectSlabHandle,
-}
 
 pub struct AppConfiguration {
     pub width: u32,

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{run_app, App, AppConfiguration, AppState, Collider, Input, OrbitalCamera, System},
-    world::{load_gltf, BoundingBoxVisible, Entity, Mesh, Transform},
+    app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
+    world::{load_gltf, BoundingBoxVisible, Collider, Entity, Mesh, Transform},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};

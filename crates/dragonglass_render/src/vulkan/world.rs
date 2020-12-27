@@ -14,8 +14,8 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{
-    AlphaMode, BoundingBoxVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene, Skin,
-    Vertex, World, WrappingMode,
+    AlphaMode, BoundingBoxVisible, Collider, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene,
+    Skin, Vertex, World, WrappingMode,
 };
 use log::warn;
 use nalgebra_glm as glm;
@@ -510,29 +510,6 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        // Visualize collision objects
-        for (_handle, collision_object) in collision_world.collision_objects() {
-            // TODO: lookup entity and render bounding box via the collision object's transform
-            let position = collision_object.position();
-            let translation = position.translation;
-            let rotation = position.rotation;
-            let cuboid = if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
-                cuboid
-            } else {
-                warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
-                continue;
-            };
-
-            let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
-            let rotation = glm::quat_to_mat4(&rotation);
-            let scale = glm::scaling(&(cuboid.half_extents * 2.0));
-            self.cube_render.issue_commands(
-                command_buffer,
-                projection * world.view * offset * rotation * scale,
-                glm::vec4(0.0, 0.0, 1.0, 1.0),
-            )?;
-        }
-
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
             let mut ubo_offset = -1;
@@ -556,6 +533,25 @@ impl WorldRender {
                                 projection * world.view * model * offset * scale,
                                 glm::vec4(0.0, 1.0, 0.0, 1.0),
                             )?;
+                        } else if let Ok(collider) = world.ecs.get::<Collider>(entity) {
+                            // Only render the collider if the bounding box is not visible
+                            if let Some(collision_object) = collision_world.collision_object(collider.handle) {
+                                let position = collision_object.position();
+                                let translation = position.translation;
+                                let rotation = position.rotation;
+                                if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
+                                    let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
+                                    let rotation = glm::quat_to_mat4(&rotation);
+                                    let scale = glm::scaling(&(cuboid.half_extents * 2.0));
+                                    self.cube_render.issue_commands(
+                                        command_buffer,
+                                        projection * world.view * offset * rotation * scale,
+                                        glm::vec4(0.0, 0.0, 1.0, 1.0),
+                                    )?;
+                                } else {
+                                    warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
+                                };
+                            }
                         }
 
                         if self.wireframe_enabled {
