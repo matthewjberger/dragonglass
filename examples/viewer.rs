@@ -196,7 +196,7 @@ impl Viewer {
 }
 
 impl App for Viewer {
-    fn create_ui(&mut self, state: &mut AppState, ui: &Ui) {
+    fn create_ui(&mut self, state: &mut AppState, ui: &Ui) -> Result<()> {
         let world = &state.world;
         ui.text(im_str!("Number of entities: {}", world.ecs.iter().count()));
         let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
@@ -231,9 +231,10 @@ impl App for Viewer {
         for (entity, _) in state.world.ecs.query::<&Selected>().iter() {
             ui.text(im_str!("{:#?}", entity));
         }
+        Ok(())
     }
 
-    fn update(&mut self, state: &mut AppState) {
+    fn update(&mut self, state: &mut AppState) -> Result<()> {
         self.update_camera(&state.input, &state.system);
         state.world.view = self.camera.view_matrix();
         state.world.camera_position = self.camera.position();
@@ -251,9 +252,16 @@ impl App for Viewer {
             .expect("Failed to update colliders");
 
         self.show_hovered_object_collider(state);
+
+        Ok(())
     }
 
-    fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {
+    fn on_key(
+        &mut self,
+        state: &mut AppState,
+        keystate: ElementState,
+        keycode: VirtualKeyCode,
+    ) -> Result<()> {
         match (keycode, keystate) {
             (VirtualKeyCode::T, ElementState::Pressed) => state.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
@@ -290,9 +298,14 @@ impl App for Viewer {
             }
             _ => {}
         }
+        Ok(())
     }
 
-    fn handle_events(&mut self, state: &mut AppState, event: winit::event::Event<()>) {
+    fn handle_events(
+        &mut self,
+        state: &mut AppState,
+        event: winit::event::Event<()>,
+    ) -> Result<()> {
         match event {
             Event::WindowEvent {
                 event: WindowEvent::DroppedFile(path),
@@ -348,6 +361,7 @@ impl App for Viewer {
             }
             _ => {}
         }
+        Ok(())
     }
 }
 

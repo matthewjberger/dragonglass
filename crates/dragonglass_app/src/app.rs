@@ -62,15 +62,34 @@ pub struct AppState {
 }
 
 pub trait App {
-    fn initialize(&mut self, _state: &mut AppState) {}
-    fn create_ui(&mut self, _state: &mut AppState, ui: &Ui) {
+    fn initialize(&mut self, _state: &mut AppState) -> Result<()> {
+        Ok(())
+    }
+    fn create_ui(&mut self, _state: &mut AppState, ui: &Ui) -> Result<()> {
         ui.text(im_str!("Hello!"));
+        Ok(())
     }
-    fn update(&mut self, _state: &mut AppState) {}
-    fn cleanup(&mut self) {}
-    fn on_key(&mut self, _state: &mut AppState, _keystate: ElementState, _keycode: VirtualKeyCode) {
+    fn update(&mut self, _state: &mut AppState) -> Result<()> {
+        Ok(())
     }
-    fn handle_events(&mut self, _state: &mut AppState, _event: winit::event::Event<()>) {}
+    fn cleanup(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn on_key(
+        &mut self,
+        _state: &mut AppState,
+        _keystate: ElementState,
+        _keycode: VirtualKeyCode,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn handle_events(
+        &mut self,
+        _state: &mut AppState,
+        _event: winit::event::Event<()>,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> Result<()> {
@@ -96,65 +115,74 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
         renderer,
     };
 
-    app.initialize(&mut state);
+    app.initialize(&mut state)?;
 
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
-        state.system.handle_event(&event);
-        gui.handle_event(&event, &window);
-        state
-            .input
-            .handle_event(&event, state.system.window_center());
-        state.input.allowed = !gui.capturing_input();
-
-        match event {
-            Event::MainEventsCleared => {
-                if state.input.is_key_pressed(VirtualKeyCode::Escape) || state.system.exit_requested
-                {
-                    *control_flow = ControlFlow::Exit;
-                }
-
-                let draw_data = gui
-                    .render_frame(&window, |ui| {
-                        app.create_ui(&mut state, ui);
-                    })
-                    .expect("Failed to render gui frame!");
-
-                app.update(&mut state);
-
-                state.collision_world.update();
-
-                if let Err(error) = state.renderer.render(
-                    &state.system.window_dimensions,
-                    &state.world,
-                    &state.collision_world,
-                    draw_data,
-                ) {
-                    error!("{}", error);
-                }
-            }
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: keystate,
-                                virtual_keycode: Some(keycode),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                app.on_key(&mut state, keystate, keycode);
-            }
-            Event::LoopDestroyed => {
-                app.cleanup();
-            }
-            _ => {}
+        if let Err(error) = run_loop(&mut app, &window, &mut state, &mut gui, event, control_flow) {
+            error!("Application Error: {}", error);
         }
-
-        app.handle_events(&mut state, event);
     });
+}
+
+fn run_loop(
+    app: &mut impl App,
+    window: &Window,
+    state: &mut AppState,
+    gui: &mut Gui,
+    event: Event<()>,
+    control_flow: &mut ControlFlow,
+) -> Result<()> {
+    *control_flow = ControlFlow::Poll;
+
+    state.system.handle_event(&event);
+    gui.handle_event(&event, &window);
+    state
+        .input
+        .handle_event(&event, state.system.window_center());
+    state.input.allowed = !gui.capturing_input();
+
+    match event {
+        Event::MainEventsCleared => {
+            if state.input.is_key_pressed(VirtualKeyCode::Escape) || state.system.exit_requested {
+                *control_flow = ControlFlow::Exit;
+            }
+
+            let draw_data = gui.render_frame(&window, |ui| app.create_ui(state, ui))?;
+
+            app.update(state)?;
+
+            state.collision_world.update();
+
+            state.renderer.render(
+                &state.system.window_dimensions,
+                &state.world,
+                &state.collision_world,
+                draw_data,
+            )?;
+        }
+        Event::WindowEvent {
+            event:
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state: keystate,
+                            virtual_keycode: Some(keycode),
+                            ..
+                        },
+                    ..
+                },
+            ..
+        } => {
+            if let Err(error) = app.on_key(state, keystate, keycode) {
+                error!("{}", error);
+            }
+        }
+        Event::LoopDestroyed => {
+            app.cleanup()?;
+        }
+        _ => {}
+    }
+
+    app.handle_events(state, event)?;
+    Ok(())
 }

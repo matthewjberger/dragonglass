@@ -38,13 +38,13 @@ impl Gui {
     pub fn render_frame(
         &mut self,
         window: &Window,
-        mut action: impl FnMut(&Ui),
+        mut action: impl FnMut(&Ui) -> Result<()>,
     ) -> Result<&DrawData> {
         self.platform.prepare_frame(self.context.io_mut(), window)?;
 
         let ui = self.context.frame();
 
-        action(&ui);
+        action(&ui)?;
 
         self.platform.prepare_render(&ui, window);
 
