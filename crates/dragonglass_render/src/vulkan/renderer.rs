@@ -12,6 +12,7 @@ use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
 use log::error;
 use nalgebra_glm as glm;
+use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -66,7 +67,13 @@ impl Renderer for VulkanRenderer {
         Ok(())
     }
 
-    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()> {
+    fn render(
+        &mut self,
+        dimensions: &[u32; 2],
+        world: &World,
+        collision_world: &CollisionWorld<f32, ()>,
+        draw_data: &DrawData,
+    ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();

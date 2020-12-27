@@ -494,6 +494,7 @@ dependencies = [
  "imgui",
  "log",
  "nalgebra-glm",
+ "ncollide3d",
  "petgraph",
  "raw-window-handle",
  "shader-compilation",

@@ -130,11 +130,12 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
 
                 state.collision_world.update();
 
-                if let Err(error) =
-                    state
-                        .renderer
-                        .render(&state.system.window_dimensions, &state.world, draw_data)
-                {
+                if let Err(error) = state.renderer.render(
+                    &state.system.window_dimensions,
+                    &state.world,
+                    &state.collision_world,
+                    draw_data,
+                ) {
                     error!("{}", error);
                 }
             }

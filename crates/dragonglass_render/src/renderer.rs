@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
+use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 
 #[cfg(feature = "vulkan")]
@@ -20,7 +21,13 @@ pub trait Renderer {
     // TODO: Make this part of the world
     fn load_skybox(&mut self, path: &str) -> Result<()>;
     fn load_world(&mut self, world: &World) -> Result<()>;
-    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;
+    fn render(
+        &mut self,
+        dimensions: &[u32; 2],
+        world: &World,
+        collision_world: &CollisionWorld<f32, ()>,
+        draw_data: &DrawData,
+    ) -> Result<()>;
 }
 
 impl dyn Renderer {
