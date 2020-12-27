@@ -14,8 +14,8 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{
-    AlphaMode, BoundingBoxVisible, Collider, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene,
-    Skin, Vertex, World, WrappingMode,
+    AlphaMode, Collider, ColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene,
+    Selected, Skin, Vertex, World, WrappingMode,
 };
 use log::warn;
 use nalgebra_glm as glm;
@@ -523,34 +523,35 @@ impl WorldRender {
                     }
 
                     if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
-                        if world.ecs.get::<BoundingBoxVisible>(entity).is_ok() {
-                            let bounding_box = mesh.bounding_box();
-                            let model = graph.global_transform(node_index, &world.ecs);
-                            let offset = glm::translation(&bounding_box.center());
-                            let scale = glm::scaling(&bounding_box.extents());
-                            self.cube_render.issue_commands(
-                                command_buffer,
-                                projection * world.view * model * offset * scale,
-                                glm::vec4(0.0, 1.0, 0.0, 1.0),
-                            )?;
-                        } else if let Ok(collider) = world.ecs.get::<Collider>(entity) {
-                            // Only render the collider if the bounding box is not visible
-                            if let Some(collision_object) = collision_world.collision_object(collider.handle) {
-                                let position = collision_object.position();
-                                let translation = position.translation;
-                                let rotation = position.rotation;
-                                if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
-                                    let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
-                                    let rotation = glm::quat_to_mat4(&rotation);
-                                    let scale = glm::scaling(&(cuboid.half_extents * 2.0));
-                                    self.cube_render.issue_commands(
-                                        command_buffer,
-                                        projection * world.view * offset * rotation * scale,
-                                        glm::vec4(0.0, 0.0, 1.0, 1.0),
-                                    )?;
-                                } else {
-                                    warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
-                                };
+
+                        let bounding_box_color =
+                        if world.ecs.get::<Selected>(entity).is_ok() {
+                            Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
+                        } else if world.ecs.get::<ColliderVisible>(entity).is_ok() {
+                            Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
+                        } else {
+                            None
+                        };
+
+                        if let Some(display_color) = bounding_box_color {
+                            if let Ok(collider) = world.ecs.get::<Collider>(entity) {
+                                if let Some(collision_object) = collision_world.collision_object(collider.handle) {
+                                    let position = collision_object.position();
+                                    let translation = position.translation;
+                                    let rotation = position.rotation;
+                                    if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
+                                        let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
+                                        let rotation = glm::quat_to_mat4(&rotation);
+                                        let scale = glm::scaling(&(cuboid.half_extents * 2.0));
+                                        self.cube_render.issue_commands(
+                                            command_buffer,
+                                            projection * world.view * offset * rotation * scale,
+                                            display_color,
+                                        )?;
+                                    } else {
+                                        warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
+                                    };
+                                }
                             }
                         }
 

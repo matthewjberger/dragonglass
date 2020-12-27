@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
-    world::{load_gltf, BoundingBoxVisible, Collider, Entity, Mesh, Transform},
+    world::{load_gltf, Collider, ColliderVisible, Entity, Mesh, Selected, Transform},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
@@ -14,7 +14,7 @@ use ncollide3d::{
     shape::{Cuboid, ShapeHandle},
 };
 use std::collections::HashMap;
-use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
+use winit::event::{ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent};
 
 pub struct CameraMultipliers {
     pub scroll: f32,
@@ -108,14 +108,7 @@ impl Viewer {
         Ok(())
     }
 
-    fn highlight_hovered_object(&self, state: &mut AppState) {
-        self.clear_bounding_boxes(state);
-        if let Some(entity) = self.pick_object(state) {
-            let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
-        }
-    }
-
-    fn clear_bounding_boxes(&self, state: &mut AppState) {
+    fn clear_selections(&self, state: &mut AppState) {
         let entities = state
             .world
             .ecs
@@ -124,7 +117,27 @@ impl Viewer {
             .map(|(entity, _)| entity)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
+            let _ = state.world.ecs.remove_one::<Selected>(entity);
+        }
+    }
+
+    fn show_hovered_object_collider(&self, state: &mut AppState) {
+        self.hide_colliders(state);
+        if let Some(entity) = self.pick_object(state) {
+            let _ = state.world.ecs.insert_one(entity, ColliderVisible {});
+        }
+    }
+
+    fn hide_colliders(&self, state: &mut AppState) {
+        let entities = state
+            .world
+            .ecs
+            .query::<&Mesh>()
+            .iter()
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            let _ = state.world.ecs.remove_one::<ColliderVisible>(entity);
         }
     }
 
@@ -214,6 +227,11 @@ impl App for Viewer {
             .build();
         ui.separator();
 
+        ui.text(im_str!("Selected Entities"));
+        for (entity, _) in state.world.ecs.query::<&Selected>().iter() {
+            ui.text(im_str!("{:#?}", entity));
+        }
+
         ui.text(im_str!("Meshes"));
         for (_entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
             ui.text(im_str!("{}", mesh.name));
@@ -237,7 +255,7 @@ impl App for Viewer {
         self.update_colliders(state)
             .expect("Failed to update colliders");
 
-        self.highlight_hovered_object(state);
+        self.show_hovered_object_collider(state);
     }
 
     fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {
@@ -269,9 +287,9 @@ impl App for Viewer {
                     .collect::<Vec<_>>();
                 entities.into_iter().for_each(|entity| {
                     if self.show_bounding_boxes {
-                        let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
+                        let _ = state.world.ecs.insert_one(entity, ColliderVisible {});
                     } else {
-                        let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
+                        let _ = state.world.ecs.remove_one::<ColliderVisible>(entity);
                     }
                 });
             }
@@ -306,6 +324,25 @@ impl App for Viewer {
                                     "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
                                     extension),
                             }
+                    }
+                }
+            }
+            Event::WindowEvent {
+                event:
+                    WindowEvent::MouseInput {
+                        button,
+                        state: button_state,
+                        ..
+                    },
+                ..
+            } => {
+                if let (MouseButton::Left, ElementState::Pressed) = (button, button_state) {
+                    if let Some(entity) = self.pick_object(state) {
+                        let already_selected = state.world.ecs.get::<Selected>(entity).is_ok();
+                        self.clear_selections(state);
+                        if !already_selected {
+                            let _ = state.world.ecs.insert_one(entity, Selected {});
+                        }
                     }
                 }
             }

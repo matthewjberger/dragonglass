@@ -9,3 +9,8 @@ pub use self::{gltf::*, world::*};
 pub struct Collider {
     pub handle: CollisionObjectSlabHandle,
 }
+
+pub struct Selected;
+pub struct Hidden;
+pub struct ColliderVisible;
+pub struct Name(pub String);

@@ -10,11 +10,6 @@ use std::ops::{Index, IndexMut};
 pub type Ecs = hecs::World;
 pub type Entity = hecs::Entity;
 
-pub struct Hidden;
-pub struct BoundingBoxVisible;
-pub struct Parent(pub Entity);
-pub struct Name(pub String);
-
 #[derive(Default)]
 pub struct World {
     pub ecs: Ecs,
