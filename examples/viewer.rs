@@ -64,42 +64,43 @@ impl Viewer {
     }
 
     fn update_colliders(&mut self, state: &mut AppState) -> Result<()> {
-        // TODO: sync collider position for meshes that have one already
-
         // Add colliders for all meshes that do not have one yet
         let collision_group = CollisionGroups::new();
         let query_type = GeometricQueryType::Contacts(0.0, 0.0);
         let mut entity_map = HashMap::new();
         for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
-            match state.world.ecs.entity(entity) {
-                Ok(entity) => {
-                    if entity.get::<Collider>().is_some() {
-                        continue;
-                    }
-                }
-                Err(_) => continue,
-            }
-
             let bounding_box = mesh.bounding_box();
             let translation = glm::translation(&bounding_box.center());
             let transform_matrix = state.world.entity_global_transform(entity)? * translation;
             let transform = Transform::from(transform_matrix);
-
-            // Insert a collider
             let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
             let collider_shape = Cuboid::new(half_extents);
-
             let shape_handle = ShapeHandle::new(collider_shape);
 
-            let (handle, _collision_object) = state.collision_world.add(
-                transform.as_isometry(),
-                shape_handle,
-                collision_group,
-                query_type,
-                (),
-            );
-
-            entity_map.insert(entity, handle);
+            match state.world.ecs.entity(entity) {
+                Ok(entity_ref) => match entity_ref.get::<Collider>() {
+                    // collider exists already, sync it
+                    Some(collider) => {
+                        if let Some(collision_object) =
+                            state.collision_world.get_mut(collider.handle)
+                        {
+                            collision_object.set_position(transform.as_isometry());
+                            collision_object.set_shape(shape_handle);
+                        }
+                    }
+                    None => {
+                        let (handle, _collision_object) = state.collision_world.add(
+                            transform.as_isometry(),
+                            shape_handle,
+                            collision_group,
+                            query_type,
+                            (),
+                        );
+                        entity_map.insert(entity, handle);
+                    }
+                },
+                Err(_) => continue,
+            }
         }
         for (entity, handle) in entity_map.into_iter() {
             let _ = state.world.ecs.insert_one(entity, Collider { handle });
