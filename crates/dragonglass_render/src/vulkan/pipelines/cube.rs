@@ -16,6 +16,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct CubePushConstantBlock {
     pub mvp: glm::Mat4,
+    pub color: glm::Vec4,
 }
 
 pub struct CubeRender {
@@ -107,7 +108,12 @@ impl CubeRender {
         Ok(())
     }
 
-    pub fn issue_commands(&self, command_buffer: vk::CommandBuffer, mvp: glm::Mat4) -> Result<()> {
+    pub fn issue_commands(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        mvp: glm::Mat4,
+        color: glm::Vec4,
+    ) -> Result<()> {
         let pipeline = self
             .pipeline
             .as_ref()
@@ -120,7 +126,7 @@ impl CubeRender {
 
         pipeline.bind(&self.device.handle, command_buffer);
 
-        let push_constants = CubePushConstantBlock { mvp };
+        let push_constants = CubePushConstantBlock { mvp, color };
 
         unsafe {
             self.device.handle.cmd_push_constants(

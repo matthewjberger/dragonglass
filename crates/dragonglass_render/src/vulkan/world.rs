@@ -510,7 +510,6 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        // FIXME_COLLISION: Make collision objects a different color like red
         // Visualize collision objects
         for (_handle, collision_object) in collision_world.collision_objects() {
             // TODO: lookup entity and render bounding box via the collision object's transform
@@ -530,6 +529,7 @@ impl WorldRender {
             self.cube_render.issue_commands(
                 command_buffer,
                 projection * world.view * offset * rotation * scale,
+                glm::vec4(0.0, 0.0, 1.0, 1.0),
             )?;
         }
 
@@ -554,6 +554,7 @@ impl WorldRender {
                             self.cube_render.issue_commands(
                                 command_buffer,
                                 projection * world.view * model * offset * scale,
+                                glm::vec4(0.0, 1.0, 0.0, 1.0),
                             )?;
                         }
 
