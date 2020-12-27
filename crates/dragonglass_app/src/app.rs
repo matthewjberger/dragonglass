@@ -5,12 +5,18 @@ use dragonglass_world::World;
 use image::io::Reader;
 use imgui::{im_str, Ui};
 use log::error;
+use ncollide3d::{pipeline::CollisionObjectSlabHandle, world::CollisionWorld};
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
+
+// TODO: Move collision code to separate module
+pub struct Collider {
+    pub handle: CollisionObjectSlabHandle,
+}
 
 pub struct AppConfiguration {
     pub width: u32,
@@ -54,6 +60,7 @@ impl AppConfiguration {
 
 pub struct AppState {
     pub world: World,
+    pub collision_world: CollisionWorld<f32, ()>,
     pub input: Input,
     pub system: System,
     pub renderer: Box<dyn Renderer>,
@@ -88,6 +95,7 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
 
     let mut state = AppState {
         world: World::new(),
+        collision_world: CollisionWorld::new(0.02f32),
         input: Input::default(),
         system: System::new(window_dimensions),
         renderer,
@@ -119,6 +127,8 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
                     .expect("Failed to render gui frame!");
 
                 app.update(&mut state);
+
+                state.collision_world.update();
 
                 if let Err(error) =
                     state

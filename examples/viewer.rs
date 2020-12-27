@@ -1,10 +1,19 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
-    world::{load_gltf, BoundingBoxVisible, Mesh},
+    app::{run_app, App, AppConfiguration, AppState, Collider, Input, OrbitalCamera, System},
+    world::{load_gltf, BoundingBoxVisible, Entity, Mesh},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
+use na::{Isometry3, Point3, Translation3, UnitQuaternion};
+use nalgebra as na;
+use nalgebra_glm as glm;
+use ncollide3d::{
+    pipeline::{CollisionGroups, GeometricQueryType},
+    query::Ray,
+    shape::{Cuboid, ShapeHandle},
+};
+use std::collections::HashMap;
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 
 pub struct CameraMultipliers {
@@ -53,6 +62,141 @@ impl Viewer {
             self.camera.pan(&pan);
         }
     }
+
+    fn update_colliders(&mut self, state: &mut AppState) -> Result<()> {
+        // TODO: sync collider position for meshes that have one already
+
+        // Add colliders for all meshes that do not have one yet
+        let mut entity_map = HashMap::new();
+        for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
+            match state.world.ecs.entity(entity) {
+                Ok(entity) => {
+                    if entity.get::<Collider>().is_some() {
+                        continue;
+                    }
+                }
+                Err(_) => continue,
+            }
+
+            let transform = state.world.entity_global_transform(entity)?;
+            let (translation, rotation, scaling) = Self::decompose_matrix(transform);
+
+            // Insert a collider
+            let bounding_box = mesh.bounding_box();
+            let half_extents = bounding_box.half_extents().component_mul(&scaling);
+            let collider_shape = Cuboid::new(half_extents);
+
+            let isometry = Isometry3::from_parts(
+                Translation3::from(translation),
+                UnitQuaternion::from_quaternion(rotation),
+            );
+            let collision_group = CollisionGroups::new();
+            let query_type = GeometricQueryType::Contacts(0.0, 0.0);
+            let shape_handle = ShapeHandle::new(collider_shape);
+
+            let (handle, _collision_object) =
+                state
+                    .collision_world
+                    .add(isometry, shape_handle, collision_group, query_type, ());
+
+            entity_map.insert(entity, handle);
+        }
+        for (entity, handle) in entity_map.into_iter() {
+            let _ = state.world.ecs.insert_one(entity, Collider { handle });
+        }
+        Ok(())
+    }
+
+    /// Decomposes a 4x4 augmented rotation matrix without shear into translation, rotation, and scaling components
+    /// rotation is given as euler angles in radians
+    /// Output is returned as (translation, rotation, scaling)
+    fn decompose_matrix(transform: glm::Mat4) -> (glm::Vec3, glm::Quat, glm::Vec3) {
+        let translation = glm::vec3(transform.m14, transform.m24, transform.m34);
+
+        let rotation = glm::to_quat(&na::QR::new(transform).q());
+
+        let scaling = transform.m44
+            * glm::vec3(
+                (transform.m11.powi(2) + transform.m21.powi(2) + transform.m31.powi(2)).sqrt(),
+                (transform.m12.powi(2) + transform.m22.powi(2) + transform.m32.powi(2)).sqrt(),
+                (transform.m13.powi(2) + transform.m23.powi(2) + transform.m33.powi(2)).sqrt(),
+            );
+
+        (translation, rotation, scaling)
+    }
+
+    fn highlight_hovered_object(&self, state: &mut AppState) {
+        self.clear_bounding_boxes(state);
+        if let Some(entity) = self.pick_object(state) {
+            let _ = state.world.ecs.insert_one(entity, BoundingBoxVisible {});
+        }
+    }
+
+    fn clear_bounding_boxes(&self, state: &mut AppState) {
+        let entities = state
+            .world
+            .ecs
+            .query::<&Mesh>()
+            .iter()
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            let _ = state.world.ecs.remove_one::<BoundingBoxVisible>(entity);
+        }
+    }
+
+    fn pick_object(&self, state: &mut AppState) -> Option<Entity> {
+        let ray = self.mouse_ray(state);
+
+        let collision_group = CollisionGroups::new();
+        let raycast_result =
+            state
+                .collision_world
+                .first_interference_with_ray(&ray, f32::MAX, &collision_group);
+
+        match raycast_result {
+            Some(result) => {
+                let handle = result.handle;
+                let mut picked_entity = None;
+                for (entity, collider) in state.world.ecs.query::<&Collider>().iter() {
+                    if collider.handle == handle {
+                        picked_entity = Some(entity);
+                        break;
+                    }
+                }
+                picked_entity
+            }
+            None => None,
+        }
+    }
+
+    fn mouse_ray(&self, state: &mut AppState) -> Ray<f32> {
+        let (width, height) = (
+            state.system.window_dimensions[0] as f32,
+            state.system.window_dimensions[1] as f32,
+        );
+        let aspect_ratio = state.system.aspect_ratio();
+        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+        let mut position = state.input.mouse.position;
+        position.y = height - position.y;
+        let near_point = glm::vec2_to_vec3(&position);
+        let mut far_point = near_point;
+        far_point.z = 1.0;
+        let p_near = glm::unproject_zo(
+            &near_point,
+            &state.world.view,
+            &projection,
+            glm::vec4(0.0, 0.0, width, height),
+        );
+        let p_far = glm::unproject_zo(
+            &far_point,
+            &state.world.view,
+            &projection,
+            glm::vec4(0.0, 0.0, width, height),
+        );
+        let direction = (p_far - p_near).normalize();
+        Ray::new(Point3::from(p_near), direction)
+    }
 }
 
 impl App for Viewer {
@@ -64,6 +208,10 @@ impl App for Viewer {
         ui.text(im_str!("Number of animations: {}", world.animations.len()));
         ui.text(im_str!("Number of textures: {}", world.textures.len()));
         ui.text(im_str!("Number of materials: {}", world.materials.len()));
+        ui.text(im_str!(
+            "Number of collision_objects: {}",
+            state.collision_world.collision_objects().count()
+        ));
     }
 
     fn update(&mut self, state: &mut AppState) {
@@ -79,12 +227,26 @@ impl App for Viewer {
                 log::warn!("Failed to animate world: {}", error);
             }
         }
+
+        self.update_colliders(state)
+            .expect("Failed to update colliders");
+
+        self.highlight_hovered_object(state);
     }
 
     fn on_key(&mut self, state: &mut AppState, keystate: ElementState, keycode: VirtualKeyCode) {
         match (keycode, keystate) {
             (VirtualKeyCode::T, ElementState::Pressed) => state.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
+                let colliders = state
+                    .world
+                    .ecs
+                    .query::<&Collider>()
+                    .iter()
+                    .map(|(_entity, collider)| collider.handle)
+                    .collect::<Vec<_>>();
+                state.collision_world.remove(&colliders);
+
                 state.world.clear();
                 if let Err(error) = state.renderer.load_world(&state.world) {
                     warn!("Failed to load gltf world: {}", error);

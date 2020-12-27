@@ -13,6 +13,7 @@ imgui = "0.6.1"
 imgui-winit-support = "0.6.0"
 log = "0.4.11"
 nalgebra-glm = "0.9.0"
+ncollide3d = "0.26.1"
 serde = { version = "1.0.117", features = ["derive"] }
 simplelog = { version = "0.9.0", features = ["termcolor"] }
 winit = "0.24.0"
