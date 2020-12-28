@@ -2,10 +2,16 @@ use anyhow::Result;
 use camera::OrbitalCamera;
 use dragonglass::{
     app::{run_application, AppConfig, Application, ApplicationRunner},
-    world::{load_gltf, BoxCollider, BoxColliderVisible, Mesh, Selected},
+    physics::RigidBody,
+    world::{
+        load_gltf, BoxCollider, BoxColliderVisible, Mesh, Selected, Transform,
+        UseLocalTransformOnly,
+    },
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
+use nalgebra_glm as glm;
+use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::ColliderBuilder};
 use std::path::PathBuf;
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
@@ -57,9 +63,86 @@ impl Viewer {
             .collect::<Vec<_>>();
         application.collision_world.remove(&colliders);
     }
+
+    fn update_bodies(&mut self, application: &mut Application) -> Result<()> {
+        // Add/sync rigid bodies with colliders for all meshes that do not have one yet
+        let mut entity_map = std::collections::HashMap::new();
+        for (entity, mesh) in application.world.ecs.query::<&Mesh>().iter() {
+            match application.world.ecs.entity(entity) {
+                Ok(entity) => {
+                    if entity.get::<RigidBody>().is_some() {
+                        continue;
+                    }
+                }
+                Err(_) => continue,
+            }
+
+            let bounding_box = mesh.bounding_box();
+            let translation = glm::translation(&bounding_box.center());
+            let transform_matrix = application.world.entity_global_transform(entity)? * translation;
+            let transform = Transform::from(transform_matrix);
+
+            // Insert a corresponding rigid body
+            let translation = transform.translation;
+            let rigid_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+                .translation(translation.x, translation.y, translation.z)
+                .rotation(transform.rotation.as_vector().xyz())
+                .build();
+            let handle = application.physics_world.bodies.insert(rigid_body);
+
+            // Insert a collider
+            let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+            let collider =
+                ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
+            application.physics_world.colliders.insert(
+                collider,
+                handle,
+                &mut application.physics_world.bodies,
+            );
+
+            entity_map.insert(entity, handle);
+        }
+        for (entity, handle) in entity_map.into_iter() {
+            let _ = application
+                .world
+                .ecs
+                .insert(entity, (RigidBody { handle }, UseLocalTransformOnly {}));
+        }
+
+        // Sync transforms
+        for (_entity, (rigid_body, transform)) in application
+            .world
+            .ecs
+            .query_mut::<(&RigidBody, &mut Transform)>()
+        {
+            if let Some(body) = application.physics_world.bodies.get(rigid_body.handle) {
+                let position = body.position();
+                transform.translation = position.translation.vector;
+                transform.rotation = *position.rotation.quaternion();
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl ApplicationRunner for Viewer {
+    fn initialize(&mut self, application: &mut Application) -> Result<()> {
+        // Add an invisible ground plane
+        let rigid_body = RigidBodyBuilder::new_static()
+            .translation(0.0, -10.0, 0.0)
+            .rotation(glm::vec3(0.0, 0.0, 0.0))
+            .build();
+        let handle = application.physics_world.bodies.insert(rigid_body);
+        let collider = ColliderBuilder::cuboid(5.0, 2.0, 5.0).build();
+        application.physics_world.colliders.insert(
+            collider,
+            handle,
+            &mut application.physics_world.bodies,
+        );
+        Ok(())
+    }
+
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
         let world = &application.world;
         ui.text(im_str!("Number of entities: {}", world.ecs.iter().count()));
@@ -119,6 +202,8 @@ impl ApplicationRunner for Viewer {
         }
 
         self.show_hovered_object_collider(application);
+
+        self.update_bodies(application)?;
 
         Ok(())
     }

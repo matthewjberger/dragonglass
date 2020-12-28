@@ -9,7 +9,7 @@ pub use self::{gltf::*, world::*};
 pub struct BoxCollider {
     pub handle: CollisionObjectSlabHandle,
 }
-
+pub struct UseLocalTransformOnly;
 pub struct Selected;
 pub struct Hidden;
 pub struct BoxColliderVisible;

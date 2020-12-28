@@ -11,11 +11,11 @@ use crate::{
         pipelines::CubeRender,
     },
 };
-use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
+use anyhow::{anyhow, bail, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{
     AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh,
-    Scene, Selected, Skin, Vertex, World, WrappingMode,
+    Scene, Selected, Skin, Transform, UseLocalTransformOnly, Vertex, World, WrappingMode,
 };
 use log::warn;
 use nalgebra_glm as glm;
@@ -350,7 +350,14 @@ impl WorldPipelineData {
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, ecs);
+                let model = if ecs.get::<UseLocalTransformOnly>(entity).is_ok() {
+                    match ecs.get::<Transform>(entity) {
+                        Ok(transform) => transform.matrix(),
+                        Err(_) => bail!("An entity was missing a transform component. All entities must have a transform component"),
+                    }
+                } else {
+                    graph.global_transform(node_index, ecs)
+                };
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -523,7 +530,6 @@ impl WorldRender {
                     }
 
                     if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
-
                         let bounding_box_color =
                         if world.ecs.get::<Selected>(entity).is_ok() {
                             Some(glm::vec4(0.0, 1.0, 0.0, 1.0))

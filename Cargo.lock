@@ -586,6 +586,7 @@ dependencies = [
  "nalgebra",
  "nalgebra-glm",
  "ncollide3d",
+ "rapier3d",
  "winit",
 ]
 
