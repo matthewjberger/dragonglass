@@ -13,7 +13,7 @@ use winit::{
     window::{Icon, Window, WindowBuilder},
 };
 
-pub struct AppConfiguration {
+pub struct AppConfig {
     pub width: u32,
     pub height: u32,
     pub is_fullscreen: bool, // TODO: This isn't respected yet
@@ -21,7 +21,7 @@ pub struct AppConfiguration {
     pub icon: Option<String>,
 }
 
-impl Default for AppConfiguration {
+impl Default for AppConfig {
     fn default() -> Self {
         Self {
             width: 800,
@@ -33,7 +33,7 @@ impl Default for AppConfiguration {
     }
 }
 
-impl AppConfiguration {
+impl AppConfig {
     pub fn create_window(&self) -> Result<(EventLoop<()>, Window)> {
         let event_loop = EventLoop::new();
 
@@ -53,7 +53,7 @@ impl AppConfiguration {
     }
 }
 
-pub struct AppState {
+pub struct Application {
     pub world: World,
     pub collision_world: CollisionWorld<f32, ()>,
     pub input: Input,
@@ -61,38 +61,46 @@ pub struct AppState {
     pub renderer: Box<dyn Renderer>,
 }
 
-pub trait App {
-    fn initialize(&mut self, _state: &mut AppState) -> Result<()> {
+pub trait ApplicationRunner {
+    fn initialize(&mut self, _application: &mut Application) -> Result<()> {
         Ok(())
     }
-    fn create_ui(&mut self, _state: &mut AppState, ui: &Ui) -> Result<()> {
+
+    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
         ui.text(im_str!("Hello!"));
         Ok(())
     }
-    fn update(&mut self, _state: &mut AppState) -> Result<()> {
+
+    fn update(&mut self, _application: &mut Application) -> Result<()> {
         Ok(())
     }
+
     fn cleanup(&mut self) -> Result<()> {
         Ok(())
     }
+
     fn on_key(
         &mut self,
-        _state: &mut AppState,
+        _application: &mut Application,
         _keystate: ElementState,
         _keycode: VirtualKeyCode,
     ) -> Result<()> {
         Ok(())
     }
+
     fn handle_events(
         &mut self,
-        _state: &mut AppState,
+        _application: &mut Application,
         _event: winit::event::Event<()>,
     ) -> Result<()> {
         Ok(())
     }
 }
 
-pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> Result<()> {
+pub fn run_application(
+    mut runner: impl ApplicationRunner + 'static,
+    configuration: AppConfig,
+) -> Result<()> {
     create_logger()?;
 
     let (event_loop, window) = configuration.create_window()?;
@@ -107,7 +115,7 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
         gui.context_mut(),
     )?);
 
-    let mut state = AppState {
+    let mut state = Application {
         world: World::new(),
         collision_world: CollisionWorld::new(0.02f32),
         input: Input::default(),
@@ -115,48 +123,57 @@ pub fn run_app(mut app: impl App + 'static, configuration: AppConfiguration) -> 
         renderer,
     };
 
-    app.initialize(&mut state)?;
+    runner.initialize(&mut state)?;
 
     event_loop.run(move |event, _, control_flow| {
-        if let Err(error) = run_loop(&mut app, &window, &mut state, &mut gui, event, control_flow) {
+        if let Err(error) = run_loop(
+            &mut runner,
+            &window,
+            &mut state,
+            &mut gui,
+            event,
+            control_flow,
+        ) {
             error!("Application Error: {}", error);
         }
     });
 }
 
 fn run_loop(
-    app: &mut impl App,
+    runner: &mut impl ApplicationRunner,
     window: &Window,
-    state: &mut AppState,
+    application: &mut Application,
     gui: &mut Gui,
     event: Event<()>,
     control_flow: &mut ControlFlow,
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
-    state.system.handle_event(&event);
+    application.system.handle_event(&event);
     gui.handle_event(&event, &window);
-    state
+    application
         .input
-        .handle_event(&event, state.system.window_center());
-    state.input.allowed = !gui.capturing_input();
+        .handle_event(&event, application.system.window_center());
+    application.input.allowed = !gui.capturing_input();
 
     match event {
         Event::MainEventsCleared => {
-            if state.input.is_key_pressed(VirtualKeyCode::Escape) || state.system.exit_requested {
+            if application.input.is_key_pressed(VirtualKeyCode::Escape)
+                || application.system.exit_requested
+            {
                 *control_flow = ControlFlow::Exit;
             }
 
-            let draw_data = gui.render_frame(&window, |ui| app.create_ui(state, ui))?;
+            let draw_data = gui.render_frame(&window, |ui| runner.create_ui(application, ui))?;
 
-            app.update(state)?;
+            runner.update(application)?;
 
-            state.collision_world.update();
+            application.collision_world.update();
 
-            state.renderer.render(
-                &state.system.window_dimensions,
-                &state.world,
-                &state.collision_world,
+            application.renderer.render(
+                &application.system.window_dimensions,
+                &application.world,
+                &application.collision_world,
                 draw_data,
             )?;
         }
@@ -173,16 +190,16 @@ fn run_loop(
                 },
             ..
         } => {
-            if let Err(error) = app.on_key(state, keystate, keycode) {
+            if let Err(error) = runner.on_key(application, keystate, keycode) {
                 error!("{}", error);
             }
         }
         Event::LoopDestroyed => {
-            app.cleanup()?;
+            runner.cleanup()?;
         }
         _ => {}
     }
 
-    app.handle_events(state, event)?;
+    runner.handle_events(application, event)?;
     Ok(())
 }

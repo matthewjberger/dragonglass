@@ -1,6 +1,8 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{run_app, App, AppConfiguration, AppState, Input, OrbitalCamera, System},
+    app::{
+        run_application, AppConfig, Application, ApplicationRunner, Input, OrbitalCamera, System,
+    },
     world::{load_gltf, Collider, ColliderVisible, Entity, Mesh, Selected, Transform},
 };
 use imgui::{im_str, Ui};
@@ -63,33 +65,33 @@ impl Viewer {
         }
     }
 
-    fn update_colliders(&mut self, state: &mut AppState) -> Result<()> {
+    fn update_colliders(&mut self, application: &mut Application) -> Result<()> {
         // Add colliders for all meshes that do not have one yet
         let collision_group = CollisionGroups::new();
         let query_type = GeometricQueryType::Contacts(0.0, 0.0);
         let mut entity_map = HashMap::new();
-        for (entity, mesh) in state.world.ecs.query::<&Mesh>().iter() {
+        for (entity, mesh) in application.world.ecs.query::<&Mesh>().iter() {
             let bounding_box = mesh.bounding_box();
             let translation = glm::translation(&bounding_box.center());
-            let transform_matrix = state.world.entity_global_transform(entity)? * translation;
+            let transform_matrix = application.world.entity_global_transform(entity)? * translation;
             let transform = Transform::from(transform_matrix);
             let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
             let collider_shape = Cuboid::new(half_extents);
             let shape_handle = ShapeHandle::new(collider_shape);
 
-            match state.world.ecs.entity(entity) {
+            match application.world.ecs.entity(entity) {
                 Ok(entity_ref) => match entity_ref.get::<Collider>() {
                     // collider exists already, sync it
                     Some(collider) => {
                         if let Some(collision_object) =
-                            state.collision_world.get_mut(collider.handle)
+                            application.collision_world.get_mut(collider.handle)
                         {
                             collision_object.set_position(transform.as_isometry());
                             collision_object.set_shape(shape_handle);
                         }
                     }
                     None => {
-                        let (handle, _collision_object) = state.collision_world.add(
+                        let (handle, _collision_object) = application.collision_world.add(
                             transform.as_isometry(),
                             shape_handle,
                             collision_group,
@@ -103,13 +105,16 @@ impl Viewer {
             }
         }
         for (entity, handle) in entity_map.into_iter() {
-            let _ = state.world.ecs.insert_one(entity, Collider { handle });
+            let _ = application
+                .world
+                .ecs
+                .insert_one(entity, Collider { handle });
         }
         Ok(())
     }
 
-    fn clear_selections(&self, state: &mut AppState) {
-        let entities = state
+    fn clear_selections(&self, application: &mut Application) {
+        let entities = application
             .world
             .ecs
             .query::<&Mesh>()
@@ -117,19 +122,19 @@ impl Viewer {
             .map(|(entity, _)| entity)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            let _ = state.world.ecs.remove_one::<Selected>(entity);
+            let _ = application.world.ecs.remove_one::<Selected>(entity);
         }
     }
 
-    fn show_hovered_object_collider(&self, state: &mut AppState) {
-        self.hide_colliders(state);
-        if let Some(entity) = self.pick_object(state) {
-            let _ = state.world.ecs.insert_one(entity, ColliderVisible {});
+    fn show_hovered_object_collider(&self, application: &mut Application) {
+        self.hide_colliders(application);
+        if let Some(entity) = self.pick_object(application) {
+            let _ = application.world.ecs.insert_one(entity, ColliderVisible {});
         }
     }
 
-    fn hide_colliders(&self, state: &mut AppState) {
-        let entities = state
+    fn hide_colliders(&self, application: &mut Application) {
+        let entities = application
             .world
             .ecs
             .query::<&Mesh>()
@@ -137,24 +142,25 @@ impl Viewer {
             .map(|(entity, _)| entity)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            let _ = state.world.ecs.remove_one::<ColliderVisible>(entity);
+            let _ = application.world.ecs.remove_one::<ColliderVisible>(entity);
         }
     }
 
-    fn pick_object(&self, state: &mut AppState) -> Option<Entity> {
-        let ray = self.mouse_ray(state);
+    fn pick_object(&self, application: &mut Application) -> Option<Entity> {
+        let ray = self.mouse_ray(application);
 
         let collision_group = CollisionGroups::new();
-        let raycast_result =
-            state
-                .collision_world
-                .first_interference_with_ray(&ray, f32::MAX, &collision_group);
+        let raycast_result = application.collision_world.first_interference_with_ray(
+            &ray,
+            f32::MAX,
+            &collision_group,
+        );
 
         match raycast_result {
             Some(result) => {
                 let handle = result.handle;
                 let mut picked_entity = None;
-                for (entity, collider) in state.world.ecs.query::<&Collider>().iter() {
+                for (entity, collider) in application.world.ecs.query::<&Collider>().iter() {
                     if collider.handle == handle {
                         picked_entity = Some(entity);
                         break;
@@ -166,27 +172,27 @@ impl Viewer {
         }
     }
 
-    fn mouse_ray(&self, state: &mut AppState) -> Ray<f32> {
+    fn mouse_ray(&self, application: &mut Application) -> Ray<f32> {
         let (width, height) = (
-            state.system.window_dimensions[0] as f32,
-            state.system.window_dimensions[1] as f32,
+            application.system.window_dimensions[0] as f32,
+            application.system.window_dimensions[1] as f32,
         );
-        let aspect_ratio = state.system.aspect_ratio();
+        let aspect_ratio = application.system.aspect_ratio();
         let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-        let mut position = state.input.mouse.position;
+        let mut position = application.input.mouse.position;
         position.y = height - position.y;
         let near_point = glm::vec2_to_vec3(&position);
         let mut far_point = near_point;
         far_point.z = 1.0;
         let p_near = glm::unproject_zo(
             &near_point,
-            &state.world.view,
+            &application.world.view,
             &projection,
             glm::vec4(0.0, 0.0, width, height),
         );
         let p_far = glm::unproject_zo(
             &far_point,
-            &state.world.view,
+            &application.world.view,
             &projection,
             glm::vec4(0.0, 0.0, width, height),
         );
@@ -195,9 +201,9 @@ impl Viewer {
     }
 }
 
-impl App for Viewer {
-    fn create_ui(&mut self, state: &mut AppState, ui: &Ui) -> Result<()> {
-        let world = &state.world;
+impl ApplicationRunner for Viewer {
+    fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
+        let world = &application.world;
         ui.text(im_str!("Number of entities: {}", world.ecs.iter().count()));
         let number_of_meshes = world.ecs.query::<&Mesh>().iter().count();
         ui.text(im_str!("Number of meshes: {}", number_of_meshes));
@@ -206,7 +212,7 @@ impl App for Viewer {
         ui.text(im_str!("Number of materials: {}", world.materials.len()));
         ui.text(im_str!(
             "Number of collision_objects: {}",
-            state.collision_world.collision_objects().count()
+            application.collision_world.collision_objects().count()
         ));
 
         ui.separator();
@@ -229,55 +235,55 @@ impl App for Viewer {
         ui.separator();
 
         ui.text(im_str!("Selected Entities"));
-        for (entity, _) in state.world.ecs.query::<&Selected>().iter() {
+        for (entity, _) in application.world.ecs.query::<&Selected>().iter() {
             ui.text(im_str!("{:#?}", entity));
         }
         Ok(())
     }
 
-    fn update(&mut self, state: &mut AppState) -> Result<()> {
-        self.update_camera(&state.input, &state.system);
-        state.world.view = self.camera.view_matrix();
-        state.world.camera_position = self.camera.position();
+    fn update(&mut self, application: &mut Application) -> Result<()> {
+        self.update_camera(&application.input, &application.system);
+        application.world.view = self.camera.view_matrix();
+        application.world.camera_position = self.camera.position();
 
-        if !state.world.animations.is_empty() {
-            state
+        if !application.world.animations.is_empty() {
+            application
                 .world
-                .animate(0, 0.75 * state.system.delta_time as f32)?;
+                .animate(0, 0.75 * application.system.delta_time as f32)?;
         }
 
-        self.update_colliders(state)?;
-        self.show_hovered_object_collider(state);
+        self.update_colliders(application)?;
+        self.show_hovered_object_collider(application);
 
         Ok(())
     }
 
     fn on_key(
         &mut self,
-        state: &mut AppState,
+        application: &mut Application,
         keystate: ElementState,
         keycode: VirtualKeyCode,
     ) -> Result<()> {
         match (keycode, keystate) {
-            (VirtualKeyCode::T, ElementState::Pressed) => state.renderer.toggle_wireframe(),
+            (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
-                let colliders = state
+                let colliders = application
                     .world
                     .ecs
                     .query::<&Collider>()
                     .iter()
                     .map(|(_entity, collider)| collider.handle)
                     .collect::<Vec<_>>();
-                state.collision_world.remove(&colliders);
+                application.collision_world.remove(&colliders);
 
-                state.world.clear();
-                if let Err(error) = state.renderer.load_world(&state.world) {
+                application.world.clear();
+                if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
             }
             (VirtualKeyCode::B, ElementState::Pressed) => {
                 self.show_bounding_boxes = !self.show_bounding_boxes;
-                let entities = state
+                let entities = application
                     .world
                     .ecs
                     .query::<&Mesh>()
@@ -286,9 +292,9 @@ impl App for Viewer {
                     .collect::<Vec<_>>();
                 entities.into_iter().for_each(|entity| {
                     if self.show_bounding_boxes {
-                        let _ = state.world.ecs.insert_one(entity, ColliderVisible {});
+                        let _ = application.world.ecs.insert_one(entity, ColliderVisible {});
                     } else {
-                        let _ = state.world.ecs.remove_one::<ColliderVisible>(entity);
+                        let _ = application.world.ecs.remove_one::<ColliderVisible>(entity);
                     }
                 });
             }
@@ -299,7 +305,7 @@ impl App for Viewer {
 
     fn handle_events(
         &mut self,
-        state: &mut AppState,
+        application: &mut Application,
         event: winit::event::Event<()>,
     ) -> Result<()> {
         match event {
@@ -311,15 +317,15 @@ impl App for Viewer {
                     if let Some(extension) = path.extension() {
                         match extension.to_str() {
                                 Some("glb") | Some("gltf") => {
-                                    load_gltf(path.clone(), &mut state.world).unwrap();
+                                    load_gltf(path.clone(), &mut application.world).unwrap();
                                     // FIXME: Don't reload entire scene whenever something is added
-                                    if let Err(error) = state.renderer.load_world(&state.world) {
+                                    if let Err(error) = application.renderer.load_world(&application.world) {
                                         warn!("Failed to load gltf world: {}", error);
                                     }
                                     info!("Loaded gltf world: '{}'", raw_path);
                                 }
                                 Some("hdr") => {
-                                    if let Err(error) = state.renderer.load_skybox(raw_path) {
+                                    if let Err(error) = application.renderer.load_skybox(raw_path) {
                                         error!("Viewer error: {}", error);
                                     }
                                     info!("Loaded hdr cubemap: '{}'", raw_path);
@@ -341,16 +347,17 @@ impl App for Viewer {
                 ..
             } => {
                 if let (MouseButton::Left, ElementState::Pressed) = (button, button_state) {
-                    if let Some(entity) = self.pick_object(state) {
-                        let already_selected = state.world.ecs.get::<Selected>(entity).is_ok();
-                        let shift_active = state.input.is_key_pressed(VirtualKeyCode::LShift);
+                    if let Some(entity) = self.pick_object(application) {
+                        let already_selected =
+                            application.world.ecs.get::<Selected>(entity).is_ok();
+                        let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
                         if !shift_active {
-                            self.clear_selections(state);
+                            self.clear_selections(application);
                         }
                         if !already_selected {
-                            let _ = state.world.ecs.insert_one(entity, Selected {});
+                            let _ = application.world.ecs.insert_one(entity, Selected {});
                         } else if shift_active {
-                            let _ = state.world.ecs.remove_one::<Selected>(entity);
+                            let _ = application.world.ecs.remove_one::<Selected>(entity);
                         }
                     }
                 }
@@ -362,9 +369,9 @@ impl App for Viewer {
 }
 
 fn main() -> Result<()> {
-    run_app(
+    run_application(
         Viewer::default(),
-        AppConfiguration {
+        AppConfig {
             icon: Some("assets/icon/icon.png".to_string()),
             title: "Dragonglass Gltf Viewer".to_string(),
             ..Default::default()
