@@ -38,7 +38,7 @@ impl Viewer {
     }
 
     fn show_hovered_object_collider(&self, application: &mut Application) {
-        application.world.remove_component::<BoxColliderVisible>();
+        application.world.remove_all::<BoxColliderVisible>();
         if let Some(entity) = application.pick_object(f32::MAX) {
             let _ = application
                 .world
@@ -178,7 +178,7 @@ impl ApplicationRunner for Viewer {
             let already_selected = application.world.ecs.get::<Selected>(entity).is_ok();
             let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
             if !shift_active {
-                application.world.remove_component::<Selected>();
+                application.world.remove_all::<Selected>();
             }
             if !already_selected {
                 let _ = application.world.ecs.insert_one(entity, Selected {});
