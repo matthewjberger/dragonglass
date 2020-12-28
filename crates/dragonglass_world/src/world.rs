@@ -5,7 +5,10 @@ use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::ops::{Index, IndexMut};
+use std::{
+    marker::{Send, Sync},
+    ops::{Index, IndexMut},
+};
 
 pub type Ecs = hecs::World;
 pub type Entity = hecs::Entity;
@@ -271,6 +274,18 @@ impl World {
             }
         }
         Ok(transform)
+    }
+
+    pub fn remove_component<T: Send + Sync + 'static>(&mut self) {
+        let entities = self
+            .ecs
+            .query::<&T>()
+            .iter()
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            let _ = self.ecs.remove_one::<T>(entity);
+        }
     }
 }
 

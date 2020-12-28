@@ -37,42 +37,13 @@ impl Viewer {
         info!("Loaded hdr cubemap: '{}'", path);
     }
 
-    fn clear_selections(&self, application: &mut Application) {
-        let entities = application
-            .world
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            let _ = application.world.ecs.remove_one::<Selected>(entity);
-        }
-    }
-
     fn show_hovered_object_collider(&self, application: &mut Application) {
-        self.hide_colliders(application);
+        application.world.remove_component::<BoxColliderVisible>();
         if let Some(entity) = application.pick_object(f32::MAX) {
             let _ = application
                 .world
                 .ecs
                 .insert_one(entity, BoxColliderVisible {});
-        }
-    }
-
-    fn hide_colliders(&self, application: &mut Application) {
-        let entities = application
-            .world
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            let _ = application
-                .world
-                .ecs
-                .remove_one::<BoxColliderVisible>(entity);
         }
     }
 
@@ -207,7 +178,7 @@ impl ApplicationRunner for Viewer {
             let already_selected = application.world.ecs.get::<Selected>(entity).is_ok();
             let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
             if !shift_active {
-                self.clear_selections(application);
+                application.world.remove_component::<Selected>();
             }
             if !already_selected {
                 let _ = application.world.ecs.insert_one(entity, Selected {});
