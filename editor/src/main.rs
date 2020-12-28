@@ -374,7 +374,7 @@ fn main() -> Result<()> {
         Viewer::default(),
         AppConfig {
             icon: Some("assets/icon/icon.png".to_string()),
-            title: "Dragonglass Gltf Viewer".to_string(),
+            title: "Dragonglass Editor".to_string(),
             ..Default::default()
         },
     )
