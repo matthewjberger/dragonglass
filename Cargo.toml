@@ -11,5 +11,6 @@ default-members = ["editor"]
 
 [dependencies]
 dragonglass_app = { path = "crates/dragonglass_app" }
+dragonglass_physics = { path = "crates/dragonglass_physics" }
 dragonglass_render = { path = "crates/dragonglass_render" }
 dragonglass_world = { path = "crates/dragonglass_world" }
