@@ -43,7 +43,7 @@ impl PhysicsWorld {
         }
     }
 
-    pub fn step(&mut self) {
+    pub fn update(&mut self) {
         // We ignore contact events for now.
         let event_handler = ();
 

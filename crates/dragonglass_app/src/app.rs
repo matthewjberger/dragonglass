@@ -1,5 +1,6 @@
 use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
 use dragonglass_world::World;
 use image::io::Reader;
@@ -56,6 +57,7 @@ impl AppConfig {
 pub struct Application {
     pub world: World,
     pub collision_world: CollisionWorld<f32, ()>,
+    pub physics_world: PhysicsWorld,
     pub input: Input,
     pub system: System,
     pub renderer: Box<dyn Renderer>,
@@ -118,6 +120,7 @@ pub fn run_application(
     let mut state = Application {
         world: World::new(),
         collision_world: CollisionWorld::new(0.02f32),
+        physics_world: PhysicsWorld::new(),
         input: Input::default(),
         system: System::new(window_dimensions),
         renderer,
@@ -169,6 +172,7 @@ fn run_loop(
             runner.update(application)?;
 
             application.collision_world.update();
+            application.physics_world.update();
 
             application.renderer.render(
                 &application.system.window_dimensions,
