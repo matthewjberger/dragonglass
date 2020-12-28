@@ -1,7 +1,7 @@
 use anyhow::Result;
 use camera::OrbitalCamera;
 use dragonglass::{
-    app::{run_application, AppConfig, Application, ApplicationRunner, Input, System},
+    app::{run_application, AppConfig, Application, ApplicationRunner},
     world::{load_gltf, Collider, ColliderVisible, Entity, Mesh, Selected, Transform},
 };
 use imgui::{im_str, Ui};
@@ -14,56 +14,36 @@ use ncollide3d::{
     query::Ray,
     shape::{Cuboid, ShapeHandle},
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 use winit::event::{ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent};
 
 mod camera;
 
-pub struct CameraMultipliers {
-    pub scroll: f32,
-    pub rotation: f32,
-    pub drag: f32,
-}
-
-impl Default for CameraMultipliers {
-    fn default() -> Self {
-        Self {
-            scroll: 1.0,
-            rotation: 0.05,
-            drag: 0.001,
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct Viewer {
     camera: OrbitalCamera,
-    camera_multipliers: CameraMultipliers,
     show_bounding_boxes: bool,
 }
 
 impl Viewer {
-    fn update_camera(&mut self, input: &Input, system: &System) {
-        if !input.allowed {
-            return;
+    fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
+        load_gltf(path.clone(), &mut application.world)?;
+
+        // FIXME: Don't reload entire scene whenever something is added
+        if let Err(error) = application.renderer.load_world(&application.world) {
+            warn!("Failed to load gltf world: {}", error);
         }
 
-        self.camera
-            .forward(input.mouse.wheel_delta.y * self.camera_multipliers.scroll);
+        info!("Loaded gltf world: '{}'", path);
 
-        if input.is_key_pressed(VirtualKeyCode::R) {
-            self.camera = OrbitalCamera::default();
-        }
+        Ok(())
+    }
 
-        if input.mouse.is_left_clicked {
-            let delta = input.mouse.position_delta;
-            let rotation = delta * self.camera_multipliers.rotation * system.delta_time as f32;
-            self.camera.rotate(&rotation);
-        } else if input.mouse.is_right_clicked {
-            let delta = input.mouse.position_delta;
-            let pan = delta * self.camera_multipliers.drag;
-            self.camera.pan(&pan);
+    fn load_hdr(path: &str, application: &mut Application) {
+        if let Err(error) = application.renderer.load_skybox(path) {
+            error!("Viewer error: {}", error);
         }
+        info!("Loaded hdr cubemap: '{}'", path);
     }
 
     fn update_colliders(&mut self, application: &mut Application) -> Result<()> {
@@ -200,6 +180,17 @@ impl Viewer {
         let direction = (p_far - p_near).normalize();
         Ray::new(Point3::from(p_near), direction)
     }
+
+    fn clear_colliders(application: &mut Application) {
+        let colliders = application
+            .world
+            .ecs
+            .query::<&Collider>()
+            .iter()
+            .map(|(_entity, collider)| collider.handle)
+            .collect::<Vec<_>>();
+        application.collision_world.remove(&colliders);
+    }
 }
 
 impl ApplicationRunner for Viewer {
@@ -219,17 +210,17 @@ impl ApplicationRunner for Viewer {
         ui.separator();
         ui.text(im_str!("Multipliers"));
         let _ = ui
-            .input_float(im_str!("Scroll"), &mut self.camera_multipliers.scroll)
+            .input_float(im_str!("Scroll"), &mut self.camera.scroll)
             .step(0.1)
             .step_fast(1.0)
             .build();
         let _ = ui
-            .input_float(im_str!("Drag"), &mut self.camera_multipliers.drag)
+            .input_float(im_str!("Drag"), &mut self.camera.drag)
             .step(0.1)
             .step_fast(1.0)
             .build();
         let _ = ui
-            .input_float(im_str!("Rotation"), &mut self.camera_multipliers.rotation)
+            .input_float(im_str!("Rotation"), &mut self.camera.rotation)
             .step(0.1)
             .step_fast(1.0)
             .build();
@@ -243,7 +234,15 @@ impl ApplicationRunner for Viewer {
     }
 
     fn update(&mut self, application: &mut Application) -> Result<()> {
-        self.update_camera(&application.input, &application.system);
+        if application.input.is_key_pressed(VirtualKeyCode::Escape) {
+            application.system.exit_requested = true;
+        }
+
+        self.camera.update(&application.input, &application.system);
+        if application.input.is_key_pressed(VirtualKeyCode::R) {
+            self.camera = OrbitalCamera::default();
+        }
+
         application.world.view = self.camera.view_matrix();
         application.world.camera_position = self.camera.position();
 
@@ -268,39 +267,34 @@ impl ApplicationRunner for Viewer {
         match (keycode, keystate) {
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
-                let colliders = application
-                    .world
-                    .ecs
-                    .query::<&Collider>()
-                    .iter()
-                    .map(|(_entity, collider)| collider.handle)
-                    .collect::<Vec<_>>();
-                application.collision_world.remove(&colliders);
-
+                Self::clear_colliders(application);
                 application.world.clear();
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
             }
-            (VirtualKeyCode::B, ElementState::Pressed) => {
-                self.show_bounding_boxes = !self.show_bounding_boxes;
-                let entities = application
-                    .world
-                    .ecs
-                    .query::<&Mesh>()
-                    .iter()
-                    .map(|(entity, _)| entity)
-                    .collect::<Vec<_>>();
-                entities.into_iter().for_each(|entity| {
-                    if self.show_bounding_boxes {
-                        let _ = application.world.ecs.insert_one(entity, ColliderVisible {});
-                    } else {
-                        let _ = application.world.ecs.remove_one::<ColliderVisible>(entity);
-                    }
-                });
-            }
             _ => {}
         }
+        Ok(())
+    }
+
+    fn on_file_dropped(&mut self, application: &mut Application, path: &PathBuf) -> Result<()> {
+        let raw_path = match path.to_str() {
+            Some(raw_path) => raw_path,
+            None => return Ok(()),
+        };
+
+        if let Some(extension) = path.extension() {
+            match extension.to_str() {
+                Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
+                Some("hdr") => Self::load_hdr(raw_path, application),
+                _ => warn!(
+                    "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
+                    extension
+                ),
+            }
+        }
+
         Ok(())
     }
 
@@ -310,34 +304,6 @@ impl ApplicationRunner for Viewer {
         event: winit::event::Event<()>,
     ) -> Result<()> {
         match event {
-            Event::WindowEvent {
-                event: WindowEvent::DroppedFile(path),
-                ..
-            } => {
-                if let Some(raw_path) = path.to_str() {
-                    if let Some(extension) = path.extension() {
-                        match extension.to_str() {
-                                Some("glb") | Some("gltf") => {
-                                    load_gltf(path.clone(), &mut application.world).unwrap();
-                                    // FIXME: Don't reload entire scene whenever something is added
-                                    if let Err(error) = application.renderer.load_world(&application.world) {
-                                        warn!("Failed to load gltf world: {}", error);
-                                    }
-                                    info!("Loaded gltf world: '{}'", raw_path);
-                                }
-                                Some("hdr") => {
-                                    if let Err(error) = application.renderer.load_skybox(raw_path) {
-                                        error!("Viewer error: {}", error);
-                                    }
-                                    info!("Loaded hdr cubemap: '{}'", raw_path);
-                                }
-                                _ => warn!(
-                                    "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
-                                    extension),
-                            }
-                    }
-                }
-            }
             Event::WindowEvent {
                 event:
                     WindowEvent::MouseInput {

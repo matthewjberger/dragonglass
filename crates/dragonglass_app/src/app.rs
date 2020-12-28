@@ -7,6 +7,7 @@ use image::io::Reader;
 use imgui::{im_str, Ui};
 use log::error;
 use ncollide3d::world::CollisionWorld;
+use std::path::PathBuf;
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -90,6 +91,10 @@ pub trait ApplicationRunner {
         Ok(())
     }
 
+    fn on_file_dropped(&mut self, _application: &mut Application, _path: &PathBuf) -> Result<()> {
+        Ok(())
+    }
+
     fn handle_events(
         &mut self,
         _application: &mut Application,
@@ -161,12 +166,6 @@ fn run_loop(
 
     match event {
         Event::MainEventsCleared => {
-            if application.input.is_key_pressed(VirtualKeyCode::Escape)
-                || application.system.exit_requested
-            {
-                *control_flow = ControlFlow::Exit;
-            }
-
             let draw_data = gui.render_frame(&window, |ui| runner.create_ui(application, ui))?;
 
             runner.update(application)?;
@@ -174,12 +173,22 @@ fn run_loop(
             application.collision_world.update();
             application.physics_world.update();
 
+            if application.system.exit_requested {
+                *control_flow = ControlFlow::Exit;
+            }
+
             application.renderer.render(
                 &application.system.window_dimensions,
                 &application.world,
                 &application.collision_world,
                 draw_data,
             )?;
+        }
+        Event::WindowEvent {
+            event: WindowEvent::DroppedFile(ref path),
+            ..
+        } => {
+            runner.on_file_dropped(application, path)?;
         }
         Event::WindowEvent {
             event:

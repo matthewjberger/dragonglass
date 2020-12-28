@@ -1,6 +1,5 @@
+use dragonglass::app::{Input, System};
 use nalgebra_glm as glm;
-
-// TODO: This can be moved out of the dragonglass_app crate
 
 #[derive(Clone, Copy)]
 pub struct OrbitalCamera {
@@ -10,6 +9,9 @@ pub struct OrbitalCamera {
     max: f32,
     offset: glm::Vec3,
     world_up: glm::Vec3,
+    pub scroll: f32,
+    pub rotation: f32,
+    pub drag: f32,
 }
 
 impl OrbitalCamera {
@@ -60,6 +62,24 @@ impl OrbitalCamera {
     pub fn view_matrix(&self) -> glm::Mat4 {
         glm::look_at(&self.position(), &self.offset, &self.world_up)
     }
+
+    pub fn update(&mut self, input: &Input, system: &System) {
+        if !input.allowed {
+            return;
+        }
+
+        self.forward(input.mouse.wheel_delta.y * self.scroll);
+
+        if input.mouse.is_left_clicked {
+            let delta = input.mouse.position_delta;
+            let rotation = delta * self.rotation * system.delta_time as f32;
+            self.rotate(&rotation);
+        } else if input.mouse.is_right_clicked {
+            let delta = input.mouse.position_delta;
+            let pan = delta * self.drag;
+            self.pan(&pan);
+        }
+    }
 }
 
 impl Default for OrbitalCamera {
@@ -71,6 +91,9 @@ impl Default for OrbitalCamera {
             max: 100.0,
             offset: glm::vec3(0.0, 0.0, 0.0),
             world_up: glm::vec3(0.0, 1.0, 0.0),
+            scroll: 1.0,
+            rotation: 0.05,
+            drag: 0.001,
         }
     }
 }
