@@ -2,14 +2,16 @@ use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
-use dragonglass_world::World;
+use dragonglass_world::{Collider, Entity, World};
 use image::io::Reader;
 use imgui::{im_str, Ui};
 use log::error;
-use ncollide3d::world::CollisionWorld;
+use nalgebra_glm as glm;
+use ncollide3d::{na::Point3, pipeline::CollisionGroups, query::Ray, world::CollisionWorld};
 use std::path::PathBuf;
 use winit::{
     dpi::PhysicalSize,
+    event::MouseButton,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
@@ -64,6 +66,62 @@ pub struct Application {
     pub renderer: Box<dyn Renderer>,
 }
 
+impl Application {
+    pub fn pick_object(&self, interact_distance: f32) -> Option<Entity> {
+        let ray = self.mouse_ray();
+
+        let collision_group = CollisionGroups::new();
+        let raycast_result = self.collision_world.first_interference_with_ray(
+            &ray,
+            interact_distance,
+            &collision_group,
+        );
+
+        match raycast_result {
+            Some(result) => {
+                let handle = result.handle;
+                let mut picked_entity = None;
+                for (entity, collider) in self.world.ecs.query::<&Collider>().iter() {
+                    if collider.handle == handle {
+                        picked_entity = Some(entity);
+                        break;
+                    }
+                }
+                picked_entity
+            }
+            None => None,
+        }
+    }
+
+    pub fn mouse_ray(&self) -> Ray<f32> {
+        let (width, height) = (
+            self.system.window_dimensions[0] as f32,
+            self.system.window_dimensions[1] as f32,
+        );
+        let aspect_ratio = self.system.aspect_ratio();
+        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+        let mut position = self.input.mouse.position;
+        position.y = height - position.y;
+        let near_point = glm::vec2_to_vec3(&position);
+        let mut far_point = near_point;
+        far_point.z = 1.0;
+        let p_near = glm::unproject_zo(
+            &near_point,
+            &self.world.view,
+            &projection,
+            glm::vec4(0.0, 0.0, width, height),
+        );
+        let p_far = glm::unproject_zo(
+            &far_point,
+            &self.world.view,
+            &projection,
+            glm::vec4(0.0, 0.0, width, height),
+        );
+        let direction = (p_far - p_near).normalize();
+        Ray::new(Point3::from(p_near), direction)
+    }
+}
+
 pub trait ApplicationRunner {
     fn initialize(&mut self, _application: &mut Application) -> Result<()> {
         Ok(())
@@ -92,6 +150,15 @@ pub trait ApplicationRunner {
     }
 
     fn on_file_dropped(&mut self, _application: &mut Application, _path: &PathBuf) -> Result<()> {
+        Ok(())
+    }
+
+    fn on_mouse(
+        &mut self,
+        _application: &mut Application,
+        _button: MouseButton,
+        _state: ElementState,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -203,9 +270,13 @@ fn run_loop(
                 },
             ..
         } => {
-            if let Err(error) = runner.on_key(application, keystate, keycode) {
-                error!("{}", error);
-            }
+            runner.on_key(application, keystate, keycode)?;
+        }
+        Event::WindowEvent {
+            event: WindowEvent::MouseInput { button, state, .. },
+            ..
+        } => {
+            runner.on_mouse(application, button, state)?;
         }
         Event::LoopDestroyed => {
             runner.cleanup()?;

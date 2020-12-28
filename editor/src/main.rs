@@ -2,20 +2,17 @@ use anyhow::Result;
 use camera::OrbitalCamera;
 use dragonglass::{
     app::{run_application, AppConfig, Application, ApplicationRunner},
-    world::{load_gltf, Collider, ColliderVisible, Entity, Mesh, Selected, Transform},
+    world::{load_gltf, Collider, ColliderVisible, Mesh, Selected, Transform},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use na::Point3;
-use nalgebra as na;
 use nalgebra_glm as glm;
 use ncollide3d::{
     pipeline::{CollisionGroups, GeometricQueryType},
-    query::Ray,
     shape::{Cuboid, ShapeHandle},
 };
 use std::{collections::HashMap, path::PathBuf};
-use winit::event::{ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent};
+use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 mod camera;
 
@@ -109,7 +106,7 @@ impl Viewer {
 
     fn show_hovered_object_collider(&self, application: &mut Application) {
         self.hide_colliders(application);
-        if let Some(entity) = self.pick_object(application) {
+        if let Some(entity) = application.pick_object(f32::MAX) {
             let _ = application.world.ecs.insert_one(entity, ColliderVisible {});
         }
     }
@@ -125,60 +122,6 @@ impl Viewer {
         for entity in entities.into_iter() {
             let _ = application.world.ecs.remove_one::<ColliderVisible>(entity);
         }
-    }
-
-    fn pick_object(&self, application: &mut Application) -> Option<Entity> {
-        let ray = self.mouse_ray(application);
-
-        let collision_group = CollisionGroups::new();
-        let raycast_result = application.collision_world.first_interference_with_ray(
-            &ray,
-            f32::MAX,
-            &collision_group,
-        );
-
-        match raycast_result {
-            Some(result) => {
-                let handle = result.handle;
-                let mut picked_entity = None;
-                for (entity, collider) in application.world.ecs.query::<&Collider>().iter() {
-                    if collider.handle == handle {
-                        picked_entity = Some(entity);
-                        break;
-                    }
-                }
-                picked_entity
-            }
-            None => None,
-        }
-    }
-
-    fn mouse_ray(&self, application: &mut Application) -> Ray<f32> {
-        let (width, height) = (
-            application.system.window_dimensions[0] as f32,
-            application.system.window_dimensions[1] as f32,
-        );
-        let aspect_ratio = application.system.aspect_ratio();
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-        let mut position = application.input.mouse.position;
-        position.y = height - position.y;
-        let near_point = glm::vec2_to_vec3(&position);
-        let mut far_point = near_point;
-        far_point.z = 1.0;
-        let p_near = glm::unproject_zo(
-            &near_point,
-            &application.world.view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let p_far = glm::unproject_zo(
-            &far_point,
-            &application.world.view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let direction = (p_far - p_near).normalize();
-        Ray::new(Point3::from(p_near), direction)
     }
 
     fn clear_colliders(application: &mut Application) {
@@ -298,38 +241,25 @@ impl ApplicationRunner for Viewer {
         Ok(())
     }
 
-    fn handle_events(
+    fn on_mouse(
         &mut self,
         application: &mut Application,
-        event: winit::event::Event<()>,
+        button: MouseButton,
+        state: ElementState,
     ) -> Result<()> {
-        match event {
-            Event::WindowEvent {
-                event:
-                    WindowEvent::MouseInput {
-                        button,
-                        state: button_state,
-                        ..
-                    },
-                ..
-            } => {
-                if let (MouseButton::Left, ElementState::Pressed) = (button, button_state) {
-                    if let Some(entity) = self.pick_object(application) {
-                        let already_selected =
-                            application.world.ecs.get::<Selected>(entity).is_ok();
-                        let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
-                        if !shift_active {
-                            self.clear_selections(application);
-                        }
-                        if !already_selected {
-                            let _ = application.world.ecs.insert_one(entity, Selected {});
-                        } else if shift_active {
-                            let _ = application.world.ecs.remove_one::<Selected>(entity);
-                        }
-                    }
+        if let (MouseButton::Left, ElementState::Pressed) = (button, state) {
+            if let Some(entity) = application.pick_object(f32::MAX) {
+                let already_selected = application.world.ecs.get::<Selected>(entity).is_ok();
+                let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
+                if !shift_active {
+                    self.clear_selections(application);
+                }
+                if !already_selected {
+                    let _ = application.world.ecs.insert_one(entity, Selected {});
+                } else if shift_active {
+                    let _ = application.world.ecs.remove_one::<Selected>(entity);
                 }
             }
-            _ => {}
         }
         Ok(())
     }
