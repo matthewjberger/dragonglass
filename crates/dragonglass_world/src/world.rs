@@ -276,7 +276,7 @@ impl World {
         Ok(transform)
     }
 
-    pub fn remove_component<T: Send + Sync + 'static>(&mut self) {
+    pub fn remove_all<T: Send + Sync + 'static>(&mut self) {
         let entities = self
             .ecs
             .query::<&T>()
