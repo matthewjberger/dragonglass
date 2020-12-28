@@ -241,17 +241,12 @@ impl App for Viewer {
         state.world.camera_position = self.camera.position();
 
         if !state.world.animations.is_empty() {
-            if let Err(error) = state
+            state
                 .world
-                .animate(0, 0.75 * state.system.delta_time as f32)
-            {
-                log::warn!("Failed to animate world: {}", error);
-            }
+                .animate(0, 0.75 * state.system.delta_time as f32)?;
         }
 
-        self.update_colliders(state)
-            .expect("Failed to update colliders");
-
+        self.update_colliders(state)?;
         self.show_hovered_object_collider(state);
 
         Ok(())
