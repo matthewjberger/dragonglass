@@ -450,16 +450,9 @@ checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 name = "dragonglass"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "dragonglass_app",
  "dragonglass_render",
  "dragonglass_world",
- "imgui",
- "log",
- "nalgebra",
- "nalgebra-glm",
- "ncollide3d",
- "winit",
 ]
 
 [[package]]
@@ -516,6 +509,20 @@ dependencies = [
  "ncollide3d",
  "petgraph",
  "serde",
+]
+
+[[package]]
+name = "editor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dragonglass",
+ "imgui",
+ "log",
+ "nalgebra",
+ "nalgebra-glm",
+ "ncollide3d",
+ "winit",
 ]
 
 [[package]]
