@@ -2,16 +2,11 @@ use anyhow::Result;
 use camera::OrbitalCamera;
 use dragonglass::{
     app::{run_application, AppConfig, Application, ApplicationRunner},
-    world::{load_gltf, Collider, ColliderVisible, Mesh, Selected, Transform},
+    world::{load_gltf, BoxCollider, BoxColliderVisible, Mesh, Selected},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use nalgebra_glm as glm;
-use ncollide3d::{
-    pipeline::{CollisionGroups, GeometricQueryType},
-    shape::{Cuboid, ShapeHandle},
-};
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 mod camera;
@@ -19,12 +14,11 @@ mod camera;
 #[derive(Default)]
 pub struct Viewer {
     camera: OrbitalCamera,
-    show_bounding_boxes: bool,
 }
 
 impl Viewer {
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
-        load_gltf(path.clone(), &mut application.world)?;
+        load_gltf(path, &mut application.world)?;
 
         // FIXME: Don't reload entire scene whenever something is added
         if let Err(error) = application.renderer.load_world(&application.world) {
@@ -43,54 +37,6 @@ impl Viewer {
         info!("Loaded hdr cubemap: '{}'", path);
     }
 
-    fn update_colliders(&mut self, application: &mut Application) -> Result<()> {
-        // Add colliders for all meshes that do not have one yet
-        let collision_group = CollisionGroups::new();
-        let query_type = GeometricQueryType::Contacts(0.0, 0.0);
-        let mut entity_map = HashMap::new();
-        for (entity, mesh) in application.world.ecs.query::<&Mesh>().iter() {
-            let bounding_box = mesh.bounding_box();
-            let translation = glm::translation(&bounding_box.center());
-            let transform_matrix = application.world.entity_global_transform(entity)? * translation;
-            let transform = Transform::from(transform_matrix);
-            let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-            let collider_shape = Cuboid::new(half_extents);
-            let shape_handle = ShapeHandle::new(collider_shape);
-
-            match application.world.ecs.entity(entity) {
-                Ok(entity_ref) => match entity_ref.get::<Collider>() {
-                    // collider exists already, sync it
-                    Some(collider) => {
-                        if let Some(collision_object) =
-                            application.collision_world.get_mut(collider.handle)
-                        {
-                            collision_object.set_position(transform.as_isometry());
-                            collision_object.set_shape(shape_handle);
-                        }
-                    }
-                    None => {
-                        let (handle, _collision_object) = application.collision_world.add(
-                            transform.as_isometry(),
-                            shape_handle,
-                            collision_group,
-                            query_type,
-                            (),
-                        );
-                        entity_map.insert(entity, handle);
-                    }
-                },
-                Err(_) => continue,
-            }
-        }
-        for (entity, handle) in entity_map.into_iter() {
-            let _ = application
-                .world
-                .ecs
-                .insert_one(entity, Collider { handle });
-        }
-        Ok(())
-    }
-
     fn clear_selections(&self, application: &mut Application) {
         let entities = application
             .world
@@ -107,7 +53,10 @@ impl Viewer {
     fn show_hovered_object_collider(&self, application: &mut Application) {
         self.hide_colliders(application);
         if let Some(entity) = application.pick_object(f32::MAX) {
-            let _ = application.world.ecs.insert_one(entity, ColliderVisible {});
+            let _ = application
+                .world
+                .ecs
+                .insert_one(entity, BoxColliderVisible {});
         }
     }
 
@@ -120,7 +69,10 @@ impl Viewer {
             .map(|(entity, _)| entity)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            let _ = application.world.ecs.remove_one::<ColliderVisible>(entity);
+            let _ = application
+                .world
+                .ecs
+                .remove_one::<BoxColliderVisible>(entity);
         }
     }
 
@@ -128,7 +80,7 @@ impl Viewer {
         let colliders = application
             .world
             .ecs
-            .query::<&Collider>()
+            .query::<&BoxCollider>()
             .iter()
             .map(|(_entity, collider)| collider.handle)
             .collect::<Vec<_>>();
@@ -195,7 +147,6 @@ impl ApplicationRunner for Viewer {
                 .animate(0, 0.75 * application.system.delta_time as f32)?;
         }
 
-        self.update_colliders(application)?;
         self.show_hovered_object_collider(application);
 
         Ok(())
@@ -248,17 +199,20 @@ impl ApplicationRunner for Viewer {
         state: ElementState,
     ) -> Result<()> {
         if let (MouseButton::Left, ElementState::Pressed) = (button, state) {
-            if let Some(entity) = application.pick_object(f32::MAX) {
-                let already_selected = application.world.ecs.get::<Selected>(entity).is_ok();
-                let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
-                if !shift_active {
-                    self.clear_selections(application);
-                }
-                if !already_selected {
-                    let _ = application.world.ecs.insert_one(entity, Selected {});
-                } else if shift_active {
-                    let _ = application.world.ecs.remove_one::<Selected>(entity);
-                }
+            let entity = match application.pick_object(f32::MAX) {
+                Some(entity) => entity,
+                None => return Ok(()),
+            };
+
+            let already_selected = application.world.ecs.get::<Selected>(entity).is_ok();
+            let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
+            if !shift_active {
+                self.clear_selections(application);
+            }
+            if !already_selected {
+                let _ = application.world.ecs.insert_one(entity, Selected {});
+            } else if shift_active {
+                let _ = application.world.ecs.remove_one::<Selected>(entity);
             }
         }
         Ok(())

@@ -14,8 +14,8 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{
-    AlphaMode, Collider, ColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh, Scene,
-    Selected, Skin, Vertex, World, WrappingMode,
+    AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh,
+    Scene, Selected, Skin, Vertex, World, WrappingMode,
 };
 use log::warn;
 use nalgebra_glm as glm;
@@ -527,14 +527,14 @@ impl WorldRender {
                         let bounding_box_color =
                         if world.ecs.get::<Selected>(entity).is_ok() {
                             Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if world.ecs.get::<ColliderVisible>(entity).is_ok() {
+                        } else if world.ecs.get::<BoxColliderVisible>(entity).is_ok() {
                             Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
                         } else {
                             None
                         };
 
                         if let Some(display_color) = bounding_box_color {
-                            if let Ok(collider) = world.ecs.get::<Collider>(entity) {
+                            if let Ok(collider) = world.ecs.get::<BoxCollider>(entity) {
                                 if let Some(collision_object) = collision_world.collision_object(collider.handle) {
                                     let position = collision_object.position();
                                     let translation = position.translation;

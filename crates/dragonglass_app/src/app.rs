@@ -2,13 +2,16 @@ use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
-use dragonglass_world::{Collider, Entity, World};
+use dragonglass_world::{BoxCollider, Entity, Mesh, Transform, World};
 use image::io::Reader;
-use imgui::{im_str, Ui};
+use imgui::{im_str, DrawData, Ui};
 use log::error;
 use nalgebra_glm as glm;
-use ncollide3d::{na::Point3, pipeline::CollisionGroups, query::Ray, world::CollisionWorld};
-use std::path::PathBuf;
+use ncollide3d::{
+    na::Point3, pipeline::CollisionGroups, pipeline::GeometricQueryType, query::Ray, shape::Cuboid,
+    shape::ShapeHandle, world::CollisionWorld,
+};
+use std::{collections::HashMap, path::PathBuf};
 use winit::{
     dpi::PhysicalSize,
     event::MouseButton,
@@ -81,7 +84,7 @@ impl Application {
             Some(result) => {
                 let handle = result.handle;
                 let mut picked_entity = None;
-                for (entity, collider) in self.world.ecs.query::<&Collider>().iter() {
+                for (entity, collider) in self.world.ecs.query::<&BoxCollider>().iter() {
                     if collider.handle == handle {
                         picked_entity = Some(entity);
                         break;
@@ -119,6 +122,69 @@ impl Application {
         );
         let direction = (p_far - p_near).normalize();
         Ray::new(Point3::from(p_near), direction)
+    }
+
+    pub fn update(&mut self) -> Result<()> {
+        self.update_colliders()?;
+        self.collision_world.update();
+        self.physics_world.update();
+        Ok(())
+    }
+
+    pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
+        self.renderer.render(
+            &self.system.window_dimensions,
+            &self.world,
+            &self.collision_world,
+            draw_data,
+        )?;
+        Ok(())
+    }
+
+    /// Add/Syncs basic cuboid colliders for all meshes that do not have one yet
+    /// This is meant to allow for basic 3D picking
+    fn update_colliders(&mut self) -> Result<()> {
+        let collision_group = CollisionGroups::new();
+        let query_type = GeometricQueryType::Contacts(0.0, 0.0);
+        let mut entity_map = HashMap::new();
+        for (entity, mesh) in self.world.ecs.query::<&Mesh>().iter() {
+            let bounding_box = mesh.bounding_box();
+            let translation = glm::translation(&bounding_box.center());
+            let transform_matrix = self.world.entity_global_transform(entity)? * translation;
+            let transform = Transform::from(transform_matrix);
+            let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+            let collider_shape = Cuboid::new(half_extents);
+            let shape_handle = ShapeHandle::new(collider_shape);
+
+            match self.world.ecs.entity(entity) {
+                Ok(entity_ref) => match entity_ref.get::<BoxCollider>() {
+                    // collider exists already, sync it
+                    Some(collider) => {
+                        if let Some(collision_object) =
+                            self.collision_world.get_mut(collider.handle)
+                        {
+                            collision_object.set_position(transform.as_isometry());
+                            collision_object.set_shape(shape_handle);
+                        }
+                    }
+                    None => {
+                        let (handle, _collision_object) = self.collision_world.add(
+                            transform.as_isometry(),
+                            shape_handle,
+                            collision_group,
+                            query_type,
+                            (),
+                        );
+                        entity_map.insert(entity, handle);
+                    }
+                },
+                Err(_) => continue,
+            }
+        }
+        for (entity, handle) in entity_map.into_iter() {
+            let _ = self.world.ecs.insert_one(entity, BoxCollider { handle });
+        }
+        Ok(())
     }
 }
 
@@ -232,24 +298,16 @@ fn run_loop(
     application.input.allowed = !gui.capturing_input();
 
     match event {
-        Event::MainEventsCleared => {
-            let draw_data = gui.render_frame(&window, |ui| runner.create_ui(application, ui))?;
-
-            runner.update(application)?;
-
-            application.collision_world.update();
-            application.physics_world.update();
-
+        Event::NewEvents(_cause) => {
             if application.system.exit_requested {
                 *control_flow = ControlFlow::Exit;
             }
-
-            application.renderer.render(
-                &application.system.window_dimensions,
-                &application.world,
-                &application.collision_world,
-                draw_data,
-            )?;
+        }
+        Event::MainEventsCleared => {
+            let draw_data = gui.render_frame(&window, |ui| runner.create_ui(application, ui))?;
+            runner.update(application)?;
+            application.update()?;
+            application.render(draw_data)?;
         }
         Event::WindowEvent {
             event: WindowEvent::DroppedFile(ref path),
