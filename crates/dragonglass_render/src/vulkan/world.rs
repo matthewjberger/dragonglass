@@ -488,8 +488,10 @@ impl WorldRender {
         command_buffer: vk::CommandBuffer,
         world: &World,
         collision_world: &CollisionWorld<f32, ()>,
-        projection: glm::Mat4,
     ) -> Result<()> {
+        // FIXME_CAMERA: aspect ratio should probably just be stored
+        let (projection, view, _camera_transform) = world.active_camera(4.0 / 3.0)?;
+
         let pipeline = self
             .pipeline
             .as_ref()
@@ -545,7 +547,7 @@ impl WorldRender {
                                         let scale = glm::scaling(&(cuboid.half_extents * 2.0));
                                         self.cube_render.issue_commands(
                                             command_buffer,
-                                            projection * world.view * offset * rotation * scale,
+                                            projection * view * offset * rotation * scale,
                                             display_color,
                                         )?;
                                     } else {

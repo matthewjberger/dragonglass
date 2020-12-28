@@ -102,7 +102,7 @@ impl Application {
             self.system.window_dimensions[1] as f32,
         );
         let aspect_ratio = self.system.aspect_ratio();
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+        let (projection, view, _camera_transform) = self.world.active_camera(aspect_ratio).unwrap();
         let mut position = self.input.mouse.position;
         position.y = height - position.y;
         let near_point = glm::vec2_to_vec3(&position);
@@ -110,13 +110,13 @@ impl Application {
         far_point.z = 1.0;
         let p_near = glm::unproject_zo(
             &near_point,
-            &self.world.view,
+            &view,
             &projection,
             glm::vec4(0.0, 0.0, width, height),
         );
         let p_far = glm::unproject_zo(
             &far_point,
-            &self.world.view,
+            &view,
             &projection,
             glm::vec4(0.0, 0.0, width, height),
         );

@@ -1,6 +1,5 @@
-use anyhow::{Context, Result};
-use na::linalg::QR;
-use na::{Isometry3, Translation3, UnitQuaternion};
+use anyhow::{bail, Context, Result};
+use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
@@ -21,22 +20,31 @@ pub struct World {
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub geometry: Geometry,
-
-    // FIXME: Remove these properties in favor of an active camera component
-    pub view: glm::Mat4,
-    pub camera_position: glm::Vec3,
 }
 
 impl World {
-    pub fn new() -> World {
+    pub fn new() -> Self {
         let mut world = World::default();
-        world.view = glm::look_at(
-            &glm::vec3(10.0, 10.0, 10.0),
-            &glm::vec3(0.0, 0.0, 0.0),
-            &glm::vec3(0.0, 1.0, 0.0),
-        );
-        world.camera_position = glm::vec3(10.0, 10.0, 10.0);
+        world.add_default_camera();
         world
+    }
+
+    pub fn add_default_camera(&mut self) {
+        self.ecs.spawn((
+            Transform {
+                translation: glm::vec3(10.0, 10.0, 10.0),
+                ..Default::default()
+            },
+            Camera {
+                name: "Default Camera".to_string(),
+                projection: Projection::Perspective(PerspectiveCamera {
+                    aspect_ratio: None,
+                    y_fov_deg: 70.0,
+                    z_far: Some(1000.0),
+                    z_near: 0.1,
+                }),
+            },
+        ));
     }
 
     pub fn clear(&mut self) {
@@ -287,6 +295,31 @@ impl World {
             let _ = self.ecs.remove_one::<T>(entity);
         }
     }
+
+    pub fn active_camera(
+        &self,
+        viewport_aspect_ratio: f32,
+    ) -> Result<(glm::Mat4, glm::Mat4, Transform)> {
+        let (camera_entity, projection) = match self.ecs.query::<&Camera>().iter().next() {
+            Some((entity, camera)) => (entity, camera.projection_matrix(viewport_aspect_ratio)),
+            None => bail!(
+                "The world must have at least one entity with a camera component to render with!"
+            ),
+        };
+
+        let camera_transform = if let Ok(transform) = self.ecs.get::<Transform>(camera_entity) {
+            transform
+        } else {
+            bail!("The entity containing the active camera component did not have a transform copmonent!")
+        };
+
+        let rotation = camera_transform.rotation.normalize();
+        let look_direction = glm::quat_rotate_vec3(&rotation, &(glm::Vec3::z() * -1.0));
+        let target = look_direction + camera_transform.translation;
+        let view = glm::look_at(&camera_transform.translation, &target, &glm::Vec3::y());
+
+        Ok((projection, view, *camera_transform))
+    }
 }
 
 #[derive(Default, Debug)]
@@ -295,7 +328,7 @@ pub struct Scene {
     pub graphs: Vec<SceneGraph>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 pub struct Transform {
     pub translation: glm::Vec3,
     pub rotation: glm::Quat,
@@ -389,7 +422,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
+    pub fn projection_matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
         match &self.projection {
             Projection::Perspective(camera) => camera.matrix(viewport_aspect_ratio),
             Projection::Orthographic(camera) => camera.matrix(),

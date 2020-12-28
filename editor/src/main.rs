@@ -109,9 +109,6 @@ impl ApplicationRunner for Viewer {
             self.camera = OrbitalCamera::default();
         }
 
-        application.world.view = self.camera.view_matrix();
-        application.world.camera_position = self.camera.position();
-
         if !application.world.animations.is_empty() {
             application
                 .world
