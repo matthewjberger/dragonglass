@@ -1,8 +1,7 @@
 use anyhow::Result;
+use camera::OrbitalCamera;
 use dragonglass::{
-    app::{
-        run_application, AppConfig, Application, ApplicationRunner, Input, OrbitalCamera, System,
-    },
+    app::{run_application, AppConfig, Application, ApplicationRunner, Input, System},
     world::{load_gltf, Collider, ColliderVisible, Entity, Mesh, Selected, Transform},
 };
 use imgui::{im_str, Ui};
@@ -17,6 +16,8 @@ use ncollide3d::{
 };
 use std::collections::HashMap;
 use winit::event::{ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent};
+
+mod camera;
 
 pub struct CameraMultipliers {
     pub scroll: f32,
