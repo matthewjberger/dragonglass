@@ -314,6 +314,7 @@ fn load_camera(camera: &gltf::Camera) -> Result<Camera> {
     Ok(Camera {
         name: camera.name().unwrap_or(DEFAULT_NAME).to_string(),
         projection,
+        enabled: false,
     })
 }
 

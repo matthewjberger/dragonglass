@@ -510,7 +510,7 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        let active_camera = world.active_camera(aspect_ratio)?;
+        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
@@ -547,7 +547,7 @@ impl WorldRender {
                                         let scale = glm::scaling(&(cuboid.half_extents * 2.0));
                                         self.cube_render.issue_commands(
                                             command_buffer,
-                                            active_camera.projection * active_camera.view * offset * rotation * scale,
+                                            projection * view * offset * rotation * scale,
                                             display_color,
                                         )?;
                                     } else {

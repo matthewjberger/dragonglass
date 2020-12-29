@@ -33,7 +33,7 @@ impl World {
     pub fn add_default_camera(&mut self) {
         self.ecs.spawn((
             Transform {
-                translation: glm::vec3(0.0, 10.0, 10.0),
+                translation: glm::vec3(10.0, 10.0, 10.0),
                 rotation: glm::quat_angle_axis(-45_f32.to_radians(), &glm::Vec3::x()),
                 ..Default::default()
             },
@@ -45,8 +45,29 @@ impl World {
                     z_far: Some(1000.0),
                     z_near: 0.1,
                 }),
+                enabled: true,
             },
         ));
+    }
+
+    pub fn active_camera(&self) -> Result<Entity> {
+        for (entity, (_transform, camera)) in self.ecs.query::<(&Transform, &Camera)>().iter() {
+            if camera.enabled {
+                return Ok(entity);
+            }
+        }
+        bail!("The world must have at least one entity with an enabled camera component to render with!")
+    }
+
+    pub fn active_camera_matrices(&self, aspect_ratio: f32) -> Result<(glm::Mat4, glm::Mat4)> {
+        let camera_entity = self.active_camera()?;
+        let transform = self.entity_global_transform(camera_entity)?;
+        let view = transform.as_view_matrix();
+        let projection = {
+            let camera = self.ecs.get::<Camera>(camera_entity)?;
+            camera.projection_matrix(aspect_ratio)
+        };
+        Ok((projection, view))
     }
 
     pub fn clear(&mut self) {
@@ -267,7 +288,12 @@ impl World {
         Ok(morph_target_weights)
     }
 
-    pub fn entity_global_transform(&self, entity: Entity) -> Result<glm::Mat4> {
+    pub fn entity_global_transform(&self, entity: Entity) -> Result<Transform> {
+        let transform_matrix = self.entity_global_transform_matrix(entity)?;
+        Ok(Transform::from(transform_matrix))
+    }
+
+    pub fn entity_global_transform_matrix(&self, entity: Entity) -> Result<glm::Mat4> {
         let mut transform = glm::Mat4::identity();
         let mut found = false;
         for graph in self.scene.graphs.iter() {
@@ -302,46 +328,6 @@ impl World {
             let _ = self.ecs.remove_one::<T>(entity);
         }
     }
-
-    pub fn active_camera(&self, viewport_aspect_ratio: f32) -> Result<ActiveCamera> {
-        // FIXME_CAMERA: This needs to select the active camera
-        let (entity, name, projection) = match self.ecs.query::<&Camera>().iter().next() {
-            Some((entity, camera)) => (
-                entity,
-                camera.name.to_string(),
-                camera.projection_matrix(viewport_aspect_ratio),
-            ),
-            None => bail!(
-                "The world must have at least one entity with a camera component to render with!"
-            ),
-        };
-
-        let transform = Transform::from(self.entity_global_transform(entity)?);
-
-        let rotation = transform.rotation.normalize();
-        let look_direction = glm::quat_rotate_vec3(&rotation, &(glm::Vec3::z() * -1.0));
-        let target = look_direction + transform.translation;
-        let view = glm::look_at(&transform.translation, &target, &glm::Vec3::y());
-
-        Ok(ActiveCamera {
-            entity,
-            name,
-            projection,
-            view,
-            transform,
-        })
-    }
-}
-
-// FIXME_CAMERA: Add a marker component to indicate current camera in use
-
-// FIXME_CAMERA: Rename this
-pub struct ActiveCamera {
-    pub entity: Entity,
-    pub name: String,
-    pub projection: glm::Mat4,
-    pub view: glm::Mat4,
-    pub transform: Transform,
 }
 
 #[derive(Default, Debug)]
@@ -405,6 +391,13 @@ impl Transform {
 
         (translation, rotation, scale)
     }
+
+    pub fn as_view_matrix(&self) -> glm::Mat4 {
+        let rotation = self.rotation.normalize();
+        let look_direction = glm::quat_rotate_vec3(&rotation, &(glm::Vec3::z() * -1.0));
+        let target = look_direction + self.translation;
+        glm::look_at(&self.translation, &target, &glm::Vec3::y())
+    }
 }
 
 impl From<glm::Mat4> for Transform {
@@ -441,6 +434,7 @@ pub enum LightKind {
 pub struct Camera {
     pub name: String,
     pub projection: Projection,
+    pub enabled: bool,
 }
 
 impl Camera {
@@ -476,7 +470,7 @@ impl PerspectiveCamera {
 
         if let Some(z_far) = self.z_far {
             let fov = self.y_fov_deg.to_radians();
-            glm::perspective_zo(aspect_ratio, fov, z_far, self.z_near)
+            glm::perspective_zo(aspect_ratio, fov, self.z_near, z_far)
         } else {
             glm::infinite_perspective_rh_zo(aspect_ratio, self.y_fov_deg.to_radians(), self.z_near)
         }

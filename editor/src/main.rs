@@ -110,16 +110,34 @@ impl ApplicationRunner for Viewer {
             application.system.exit_requested = true;
         }
 
-        // FIXME_CAMERA: Update camera here to have arcball or fps controls. Move systems to separate module
-        let active_camera = application
-            .world
-            .active_camera(application.system.aspect_ratio())?;
-        if application.input.is_key_pressed(VirtualKeyCode::Space) {
-            let mut transform = application
-                .world
-                .ecs
-                .get_mut::<Transform>(active_camera.entity)?;
-            transform.translation.y += 2.0 * application.system.delta_time as f32;
+        {
+            let camera_entity = application.world.active_camera()?;
+            let mut transform = application.world.ecs.get_mut::<Transform>(camera_entity)?;
+            let speed = 2.0 * application.system.delta_time as f32;
+
+            if application.input.is_key_pressed(VirtualKeyCode::A) {
+                transform.translation.x -= speed;
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::D) {
+                transform.translation.x += speed;
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::W) {
+                transform.translation.z += speed;
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::S) {
+                transform.translation.z -= speed;
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::LShift) {
+                transform.translation.y -= speed;
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::Space) {
+                transform.translation.y += speed;
+            }
         }
 
         if !application.world.animations.is_empty() {

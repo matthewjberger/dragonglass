@@ -86,16 +86,15 @@ impl Renderer for VulkanRenderer {
             draw_data,
         )?;
 
-        let active_camera = world.active_camera(aspect_ratio)?;
+        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        let camera_entity = world.active_camera()?;
+        let camera_transform = world.entity_global_transform(camera_entity)?;
 
         frame.render(dimensions, |command_buffer, image_index| {
-            let projection =
-                glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
-
             if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world)?;
 
-                let mut camera_position = glm::vec3_to_vec4(&active_camera.transform.translation);
+                let mut camera_position = glm::vec3_to_vec4(&camera_transform.translation);
                 camera_position.w = 1.0;
 
                 let mut joint_matrices =
@@ -106,7 +105,7 @@ impl Renderer for VulkanRenderer {
                     .for_each(|(a, b)| *a = b);
 
                 let ubo = WorldUniformBuffer {
-                    view: active_camera.view,
+                    view,
                     projection,
                     camera_position,
                     joint_matrices,
@@ -118,7 +117,7 @@ impl Renderer for VulkanRenderer {
             }
 
             scene.skybox_rendering.projection = projection;
-            scene.skybox_rendering.view = active_camera.view;
+            scene.skybox_rendering.view = view;
 
             scene.rendergraph.execute_pass(
                 command_buffer,

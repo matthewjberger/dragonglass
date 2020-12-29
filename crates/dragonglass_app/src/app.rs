@@ -103,7 +103,7 @@ impl Application {
         );
         let aspect_ratio = self.system.aspect_ratio();
 
-        let active_camera = self.world.active_camera(aspect_ratio)?;
+        let (projection, view) = self.world.active_camera_matrices(aspect_ratio)?;
 
         let mut position = self.input.mouse.position;
         position.y = height - position.y;
@@ -112,14 +112,14 @@ impl Application {
         far_point.z = 1.0;
         let p_near = glm::unproject_zo(
             &near_point,
-            &active_camera.view,
-            &active_camera.projection,
+            &view,
+            &projection,
             glm::vec4(0.0, 0.0, width, height),
         );
         let p_far = glm::unproject_zo(
             &far_point,
-            &active_camera.view,
-            &active_camera.projection,
+            &view,
+            &projection,
             glm::vec4(0.0, 0.0, width, height),
         );
         let direction = (p_far - p_near).normalize();
@@ -153,7 +153,7 @@ impl Application {
         for (entity, mesh) in self.world.ecs.query::<&Mesh>().iter() {
             let bounding_box = mesh.bounding_box();
             let translation = glm::translation(&bounding_box.center());
-            let transform_matrix = self.world.entity_global_transform(entity)? * translation;
+            let transform_matrix = self.world.entity_global_transform_matrix(entity)? * translation;
             let transform = Transform::from(transform_matrix);
             let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
             let collider_shape = Cuboid::new(half_extents);
