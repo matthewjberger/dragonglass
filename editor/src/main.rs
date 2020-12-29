@@ -72,34 +72,27 @@ impl ApplicationRunner for Viewer {
             application.collision_world.collision_objects().count()
         ));
 
-        // ui.separator();
-        // ui.text(im_str!("Multipliers"));
-        // let _ = ui
-        //     .input_float(im_str!("Scroll"), &mut self.camera.scroll)
-        //     .step(0.1)
-        //     .step_fast(1.0)
-        //     .build();
-        // let _ = ui
-        //     .input_float(im_str!("Drag"), &mut self.camera.drag)
-        //     .step(0.1)
-        //     .step_fast(1.0)
-        //     .build();
-        // let _ = ui
-        //     .input_float(im_str!("Rotation"), &mut self.camera.rotation)
-        //     .step(0.1)
-        //     .step_fast(1.0)
-        //     .build();
+        ui.separator();
+        ui.text(im_str!("Cameras"));
+        let mut change_camera = None;
+        for (entity, camera) in application.world.ecs.query::<&Camera>().iter() {
+            if ui.small_button(&im_str!("{}", camera.name)) {
+                change_camera = Some(entity);
+            }
+        }
+        if let Some(selected_camera_entity) = change_camera {
+            for (entity, camera) in application.world.ecs.query_mut::<&mut Camera>() {
+                camera.enabled = entity == selected_camera_entity;
+                if camera.enabled {
+                    log::info!("Camera: {:#?}", camera);
+                }
+            }
+        }
 
         ui.separator();
         ui.text(im_str!("Selected Entities"));
         for (entity, _) in application.world.ecs.query::<&Selected>().iter() {
             ui.text(im_str!("{:#?}", entity));
-        }
-
-        ui.separator();
-        ui.text(im_str!("Cameras"));
-        for (_entity, camera) in application.world.ecs.query::<&Camera>().iter() {
-            ui.text(im_str!("{}", camera.name,));
         }
 
         Ok(())
@@ -124,11 +117,11 @@ impl ApplicationRunner for Viewer {
             }
 
             if application.input.is_key_pressed(VirtualKeyCode::W) {
-                transform.translation.z += speed;
+                transform.translation.z -= speed;
             }
 
             if application.input.is_key_pressed(VirtualKeyCode::S) {
-                transform.translation.z -= speed;
+                transform.translation.z += speed;
             }
 
             if application.input.is_key_pressed(VirtualKeyCode::LShift) {

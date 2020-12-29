@@ -33,7 +33,7 @@ impl World {
     pub fn add_default_camera(&mut self) {
         self.ecs.spawn((
             Transform {
-                translation: glm::vec3(10.0, 10.0, 10.0),
+                translation: glm::vec3(0.0, 10.0, 10.0),
                 rotation: glm::quat_angle_axis(-45_f32.to_radians(), &glm::Vec3::x()),
                 ..Default::default()
             },
@@ -77,6 +77,7 @@ impl World {
         self.animations.clear();
         self.materials.clear();
         self.geometry.clear();
+        self.add_default_camera();
     }
 
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
@@ -317,13 +318,16 @@ impl World {
         Ok(transform)
     }
 
-    pub fn remove_all<T: Send + Sync + 'static>(&mut self) {
-        let entities = self
-            .ecs
+    pub fn entities_with<T: Send + Sync + 'static>(&self) -> Vec<Entity> {
+        self.ecs
             .query::<&T>()
             .iter()
             .map(|(entity, _)| entity)
-            .collect::<Vec<_>>();
+            .collect()
+    }
+
+    pub fn remove_all<T: Send + Sync + 'static>(&mut self) {
+        let entities = self.entities_with::<T>();
         for entity in entities.into_iter() {
             let _ = self.ecs.remove_one::<T>(entity);
         }
