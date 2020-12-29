@@ -41,7 +41,7 @@ impl World {
                 name: "Default Camera".to_string(),
                 projection: Projection::Perspective(PerspectiveCamera {
                     aspect_ratio: None,
-                    y_fov_deg: 70.0,
+                    y_fov_rad: 70.0,
                     z_far: Some(1000.0),
                     z_near: 0.1,
                 }),
@@ -459,7 +459,7 @@ pub enum Projection {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct PerspectiveCamera {
     pub aspect_ratio: Option<f32>,
-    pub y_fov_deg: f32,
+    pub y_fov_rad: f32,
     pub z_far: Option<f32>,
     pub z_near: f32,
 }
@@ -473,10 +473,9 @@ impl PerspectiveCamera {
         };
 
         if let Some(z_far) = self.z_far {
-            let fov = self.y_fov_deg.to_radians();
-            glm::perspective_zo(aspect_ratio, fov, self.z_near, z_far)
+            glm::perspective_zo(aspect_ratio, self.y_fov_rad, self.z_near, z_far)
         } else {
-            glm::infinite_perspective_rh_zo(aspect_ratio, self.y_fov_deg.to_radians(), self.z_near)
+            glm::infinite_perspective_rh_zo(aspect_ratio, self.y_fov_rad, self.z_near)
         }
     }
 }

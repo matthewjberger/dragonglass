@@ -297,7 +297,7 @@ fn load_camera(camera: &gltf::Camera) -> Result<Camera> {
         gltf::camera::Projection::Perspective(camera) => {
             Projection::Perspective(PerspectiveCamera {
                 aspect_ratio: camera.aspect_ratio(),
-                y_fov_deg: camera.yfov(),
+                y_fov_rad: camera.yfov(),
                 z_far: camera.zfar(),
                 z_near: camera.znear(),
             })

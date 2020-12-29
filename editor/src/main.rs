@@ -75,8 +75,15 @@ impl ApplicationRunner for Viewer {
         ui.separator();
         ui.text(im_str!("Cameras"));
         let mut change_camera = None;
-        for (entity, camera) in application.world.ecs.query::<&Camera>().iter() {
-            if ui.small_button(&im_str!("{}", camera.name)) {
+        for (index, (entity, camera)) in application.world.ecs.query::<&Camera>().iter().enumerate()
+        {
+            let label = if camera.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            };
+            let clicked = ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
+            if change_camera.is_none() && clicked {
                 change_camera = Some(entity);
             }
         }
