@@ -350,7 +350,7 @@ impl WorldPipelineData {
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, ecs);
+                let model = graph.global_transform(node_index, ecs)?;
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -488,7 +488,7 @@ impl WorldRender {
         command_buffer: vk::CommandBuffer,
         world: &World,
         collision_world: &CollisionWorld<f32, ()>,
-        projection: glm::Mat4,
+        aspect_ratio: f32,
     ) -> Result<()> {
         let pipeline = self
             .pipeline
@@ -509,6 +509,8 @@ impl WorldRender {
             .pipeline_layout
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
+
+        let active_camera = world.active_camera(aspect_ratio)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
@@ -545,7 +547,7 @@ impl WorldRender {
                                         let scale = glm::scaling(&(cuboid.half_extents * 2.0));
                                         self.cube_render.issue_commands(
                                             command_buffer,
-                                            projection * world.view * offset * rotation * scale,
+                                            active_camera.projection * active_camera.view * offset * rotation * scale,
                                             display_color,
                                         )?;
                                     } else {

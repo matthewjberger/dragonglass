@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use na::linalg::QR;
 use na::{Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
@@ -21,22 +21,31 @@ pub struct World {
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub geometry: Geometry,
-
-    // FIXME: Remove these properties in favor of an active camera component
-    pub view: glm::Mat4,
-    pub camera_position: glm::Vec3,
 }
 
 impl World {
     pub fn new() -> World {
         let mut world = World::default();
-        world.view = glm::look_at(
-            &glm::vec3(10.0, 10.0, 10.0),
-            &glm::vec3(0.0, 0.0, 0.0),
-            &glm::vec3(0.0, 1.0, 0.0),
-        );
-        world.camera_position = glm::vec3(10.0, 10.0, 10.0);
+        world.add_default_camera();
         world
+    }
+
+    pub fn add_default_camera(&mut self) {
+        self.ecs.spawn((
+            Transform {
+                translation: glm::vec3(10.0, 10.0, 10.0),
+                ..Default::default()
+            },
+            Camera {
+                name: "Default Camera".to_string(),
+                projection: Projection::Perspective(PerspectiveCamera {
+                    aspect_ratio: None,
+                    y_fov_deg: 70.0,
+                    z_far: Some(1000.0),
+                    z_near: 0.1,
+                }),
+            },
+        ));
     }
 
     pub fn clear(&mut self) {
@@ -162,14 +171,14 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.ecs);
+                let node_transform = graph.global_transform(node_index, &self.ecs)?;
                 if let Ok(skin) = self.ecs.get::<Skin>(entity) {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in self.scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
-                                    transform = graph.global_transform(index, &self.ecs);
+                                    transform = graph.global_transform(index, &self.ecs)?;
                                 }
                             }
                             transform
@@ -265,7 +274,7 @@ impl World {
                 if entity != graph[node_index] {
                     return Ok(());
                 }
-                transform = graph.global_transform(node_index, &self.ecs);
+                transform = graph.global_transform(node_index, &self.ecs)?;
                 found = true;
                 Ok(())
             })?;
@@ -287,6 +296,46 @@ impl World {
             let _ = self.ecs.remove_one::<T>(entity);
         }
     }
+
+    pub fn active_camera(&self, viewport_aspect_ratio: f32) -> Result<ActiveCamera> {
+        // FIXME_CAMERA: This needs to select the active camera
+        let (entity, name, projection) = match self.ecs.query::<&Camera>().iter().next() {
+            Some((entity, camera)) => (
+                entity,
+                camera.name.to_string(),
+                camera.projection_matrix(viewport_aspect_ratio),
+            ),
+            None => bail!(
+                "The world must have at least one entity with a camera component to render with!"
+            ),
+        };
+
+        let transform = Transform::from(self.entity_global_transform(entity)?);
+
+        let rotation = transform.rotation.normalize();
+        let look_direction = glm::quat_rotate_vec3(&rotation, &(glm::Vec3::z() * -1.0));
+        let target = look_direction + transform.translation;
+        let view = glm::look_at(&transform.translation, &target, &glm::Vec3::y());
+
+        Ok(ActiveCamera {
+            entity,
+            name,
+            projection,
+            view,
+            transform,
+        })
+    }
+}
+
+// FIXME_CAMERA: Add a marker component to indicate current camera in use
+
+// FIXME_CAMERA: Rename this
+pub struct ActiveCamera {
+    pub entity: Entity,
+    pub name: String,
+    pub projection: glm::Mat4,
+    pub view: glm::Mat4,
+    pub transform: Transform,
 }
 
 #[derive(Default, Debug)]
@@ -295,7 +344,7 @@ pub struct Scene {
     pub graphs: Vec<SceneGraph>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Transform {
     pub translation: glm::Vec3,
     pub rotation: glm::Quat,
@@ -389,7 +438,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
+    pub fn projection_matrix(&self, viewport_aspect_ratio: f32) -> glm::Mat4 {
         match &self.projection {
             Projection::Perspective(camera) => camera.matrix(viewport_aspect_ratio),
             Projection::Orthographic(camera) => camera.matrix(),
@@ -790,16 +839,18 @@ impl SceneGraph {
         Ok(())
     }
 
-    pub fn global_transform(&self, index: NodeIndex, ecs: &Ecs) -> glm::Mat4 {
+    pub fn global_transform(&self, index: NodeIndex, ecs: &Ecs) -> Result<glm::Mat4> {
         let entity = self[index];
         let transform = match ecs.get::<Transform>(entity) {
             Ok(transform) => transform.matrix(),
-            Err(_) => glm::Mat4::identity(),
+            Err(_) => bail!(
+                "A transform component was requested from a component that does not have one!"
+            ),
         };
         let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
         match incoming_walker.next_node(&self.0) {
-            Some(parent_index) => self.global_transform(parent_index, ecs) * transform,
-            None => transform,
+            Some(parent_index) => Ok(self.global_transform(parent_index, ecs)? * transform),
+            None => Ok(transform),
         }
     }
 

@@ -1,8 +1,8 @@
 use anyhow::Result;
-use camera::OrbitalCamera;
 use dragonglass::{
     app::{run_application, AppConfig, Application, ApplicationRunner},
-    world::{load_gltf, BoxCollider, BoxColliderVisible, Mesh, Selected},
+    world::Transform,
+    world::{load_gltf, BoxCollider, BoxColliderVisible, Camera, Mesh, Selected},
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
@@ -12,9 +12,7 @@ use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 mod camera;
 
 #[derive(Default)]
-pub struct Viewer {
-    camera: OrbitalCamera,
-}
+pub struct Viewer;
 
 impl Viewer {
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
@@ -37,14 +35,15 @@ impl Viewer {
         info!("Loaded hdr cubemap: '{}'", path);
     }
 
-    fn show_hovered_object_collider(&self, application: &mut Application) {
+    fn show_hovered_object_collider(&self, application: &mut Application) -> Result<()> {
         application.world.remove_all::<BoxColliderVisible>();
-        if let Some(entity) = application.pick_object(f32::MAX) {
+        if let Some(entity) = application.pick_object(f32::MAX)? {
             let _ = application
                 .world
                 .ecs
                 .insert_one(entity, BoxColliderVisible {});
         }
+        Ok(())
     }
 
     fn clear_colliders(application: &mut Application) {
@@ -73,29 +72,36 @@ impl ApplicationRunner for Viewer {
             application.collision_world.collision_objects().count()
         ));
 
-        ui.separator();
-        ui.text(im_str!("Multipliers"));
-        let _ = ui
-            .input_float(im_str!("Scroll"), &mut self.camera.scroll)
-            .step(0.1)
-            .step_fast(1.0)
-            .build();
-        let _ = ui
-            .input_float(im_str!("Drag"), &mut self.camera.drag)
-            .step(0.1)
-            .step_fast(1.0)
-            .build();
-        let _ = ui
-            .input_float(im_str!("Rotation"), &mut self.camera.rotation)
-            .step(0.1)
-            .step_fast(1.0)
-            .build();
-        ui.separator();
+        // ui.separator();
+        // ui.text(im_str!("Multipliers"));
+        // let _ = ui
+        //     .input_float(im_str!("Scroll"), &mut self.camera.scroll)
+        //     .step(0.1)
+        //     .step_fast(1.0)
+        //     .build();
+        // let _ = ui
+        //     .input_float(im_str!("Drag"), &mut self.camera.drag)
+        //     .step(0.1)
+        //     .step_fast(1.0)
+        //     .build();
+        // let _ = ui
+        //     .input_float(im_str!("Rotation"), &mut self.camera.rotation)
+        //     .step(0.1)
+        //     .step_fast(1.0)
+        //     .build();
 
+        ui.separator();
         ui.text(im_str!("Selected Entities"));
         for (entity, _) in application.world.ecs.query::<&Selected>().iter() {
             ui.text(im_str!("{:#?}", entity));
         }
+
+        ui.separator();
+        ui.text(im_str!("Cameras"));
+        for (_entity, camera) in application.world.ecs.query::<&Camera>().iter() {
+            ui.text(im_str!("{}", camera.name,));
+        }
+
         Ok(())
     }
 
@@ -104,13 +110,7 @@ impl ApplicationRunner for Viewer {
             application.system.exit_requested = true;
         }
 
-        self.camera.update(&application.input, &application.system);
-        if application.input.is_key_pressed(VirtualKeyCode::R) {
-            self.camera = OrbitalCamera::default();
-        }
-
-        application.world.view = self.camera.view_matrix();
-        application.world.camera_position = self.camera.position();
+        // FIXME_CAMERA: Update camera here to have arcball or fps controls. Move systems to separate module
 
         if !application.world.animations.is_empty() {
             application
@@ -118,7 +118,7 @@ impl ApplicationRunner for Viewer {
                 .animate(0, 0.75 * application.system.delta_time as f32)?;
         }
 
-        self.show_hovered_object_collider(application);
+        self.show_hovered_object_collider(application)?;
 
         Ok(())
     }
@@ -170,7 +170,7 @@ impl ApplicationRunner for Viewer {
         state: ElementState,
     ) -> Result<()> {
         if let (MouseButton::Left, ElementState::Pressed) = (button, state) {
-            let entity = match application.pick_object(f32::MAX) {
+            let entity = match application.pick_object(f32::MAX)? {
                 Some(entity) => entity,
                 None => return Ok(()),
             };

@@ -70,8 +70,8 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn pick_object(&self, interact_distance: f32) -> Option<Entity> {
-        let ray = self.mouse_ray();
+    pub fn pick_object(&self, interact_distance: f32) -> Result<Option<Entity>> {
+        let ray = self.mouse_ray()?;
 
         let collision_group = CollisionGroups::new();
         let raycast_result = self.collision_world.first_interference_with_ray(
@@ -90,19 +90,21 @@ impl Application {
                         break;
                     }
                 }
-                picked_entity
+                Ok(picked_entity)
             }
-            None => None,
+            None => Ok(None),
         }
     }
 
-    pub fn mouse_ray(&self) -> Ray<f32> {
+    pub fn mouse_ray(&self) -> Result<Ray<f32>> {
         let (width, height) = (
             self.system.window_dimensions[0] as f32,
             self.system.window_dimensions[1] as f32,
         );
         let aspect_ratio = self.system.aspect_ratio();
-        let projection = glm::perspective_zo(aspect_ratio, 70_f32.to_radians(), 0.1_f32, 1000_f32);
+
+        let active_camera = self.world.active_camera(aspect_ratio)?;
+
         let mut position = self.input.mouse.position;
         position.y = height - position.y;
         let near_point = glm::vec2_to_vec3(&position);
@@ -110,18 +112,19 @@ impl Application {
         far_point.z = 1.0;
         let p_near = glm::unproject_zo(
             &near_point,
-            &self.world.view,
-            &projection,
+            &active_camera.view,
+            &active_camera.projection,
             glm::vec4(0.0, 0.0, width, height),
         );
         let p_far = glm::unproject_zo(
             &far_point,
-            &self.world.view,
-            &projection,
+            &active_camera.view,
+            &active_camera.projection,
             glm::vec4(0.0, 0.0, width, height),
         );
         let direction = (p_far - p_near).normalize();
-        Ray::new(Point3::from(p_near), direction)
+        let ray = Ray::new(Point3::from(p_near), direction);
+        Ok(ray)
     }
 
     pub fn update(&mut self) -> Result<()> {
