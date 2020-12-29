@@ -5,9 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="85de55c2-4134-4ec9-995f-bbbf3fc5cd69" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/crates/dragonglass_world/src/gltf.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/dragonglass_world/src/gltf.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/dragonglass_render/src/vulkan/renderer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/dragonglass_render/src/vulkan/renderer.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/dragonglass_world/src/world.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/dragonglass_world/src/world.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/editor/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/editor/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

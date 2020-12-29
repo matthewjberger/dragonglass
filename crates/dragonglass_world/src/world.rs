@@ -41,7 +41,7 @@ impl World {
                 name: "Default Camera".to_string(),
                 projection: Projection::Perspective(PerspectiveCamera {
                     aspect_ratio: None,
-                    y_fov_rad: 70.0,
+                    y_fov_rad: 70_f32.to_radians(),
                     z_far: Some(1000.0),
                     z_near: 0.1,
                 }),
