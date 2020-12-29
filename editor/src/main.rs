@@ -19,20 +19,27 @@ impl Viewer {
         load_gltf(path, &mut application.world)?;
 
         // FIXME: Don't reload entire scene whenever something is added
-        if let Err(error) = application.renderer.load_world(&application.world) {
-            warn!("Failed to load gltf world: {}", error);
+        match application.renderer.load_world(&application.world) {
+            Ok(_) => {
+                info!("Loaded gltf world: '{}'", path);
+            }
+            Err(error) => {
+                warn!("Failed to load gltf world: {}", error);
+            }
         }
-
-        info!("Loaded gltf world: '{}'", path);
 
         Ok(())
     }
 
     fn load_hdr(path: &str, application: &mut Application) {
-        if let Err(error) = application.renderer.load_skybox(path) {
-            error!("Viewer error: {}", error);
+        match application.renderer.load_skybox(path) {
+            Ok(_) => {
+                info!("Loaded hdr cubemap: '{}'", path);
+            }
+            Err(error) => {
+                error!("Failed to load hdr map: {}", error);
+            }
         }
-        info!("Loaded hdr cubemap: '{}'", path);
     }
 
     fn show_hovered_object_collider(&self, application: &mut Application) -> Result<()> {
