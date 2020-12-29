@@ -64,17 +64,8 @@ impl World {
         let transform = self.entity_global_transform(camera_entity)?;
         let view = transform.as_view_matrix();
         let projection = {
-            //let camera = self.ecs.get::<Camera>(camera_entity)?;
-            //camera.projection_matrix(aspect_ratio)
-
-            // FIXME: This is a hack to workaround camera projections not looking correct
-            let camera = PerspectiveCamera {
-                aspect_ratio: None,
-                y_fov_rad: 70_f32.to_radians(),
-                z_far: Some(1000.0),
-                z_near: 0.01,
-            };
-            camera.matrix(aspect_ratio)
+            let camera = self.ecs.get::<Camera>(camera_entity)?;
+            camera.projection_matrix(aspect_ratio)
         };
         Ok((projection, view))
     }
@@ -456,6 +447,13 @@ impl Camera {
         match &self.projection {
             Projection::Perspective(camera) => camera.matrix(viewport_aspect_ratio),
             Projection::Orthographic(camera) => camera.matrix(),
+        }
+    }
+
+    pub fn is_orthographic(&self) -> bool {
+        match self.projection {
+            Projection::Perspective(_) => false,
+            Projection::Orthographic(_) => true,
         }
     }
 }

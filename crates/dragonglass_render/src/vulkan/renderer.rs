@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
-use dragonglass_world::World;
+use dragonglass_world::{Camera, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
 use log::error;
 use nalgebra_glm as glm;
@@ -89,13 +89,26 @@ impl Renderer for VulkanRenderer {
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
         let camera_entity = world.active_camera()?;
         let camera_transform = world.entity_global_transform(camera_entity)?;
+        let mut camera_position = glm::vec3_to_vec4(&camera_transform.translation);
+        camera_position.w = 1.0;
+
+        // Maintain a perspective projection for the skybox
+        let using_ortho_projection = world.ecs.get::<Camera>(camera_entity)?.is_orthographic();
+        let skybox_projection = if using_ortho_projection {
+            let camera = PerspectiveCamera {
+                aspect_ratio: None,
+                y_fov_rad: 70_f32.to_radians(),
+                z_far: Some(1000.0),
+                z_near: 0.01,
+            };
+            camera.matrix(aspect_ratio)
+        } else {
+            projection
+        };
 
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world)?;
-
-                let mut camera_position = glm::vec3_to_vec4(&camera_transform.translation);
-                camera_position.w = 1.0;
 
                 let mut joint_matrices =
                     [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
@@ -116,7 +129,7 @@ impl Renderer for VulkanRenderer {
                     .upload_data(&[ubo], 0)?;
             }
 
-            scene.skybox_rendering.projection = projection;
+            scene.skybox_rendering.projection = skybox_projection;
             scene.skybox_rendering.view = view;
 
             scene.rendergraph.execute_pass(
