@@ -397,11 +397,22 @@ impl Transform {
     }
 
     pub fn as_view_matrix(&self) -> glm::Mat4 {
-        let rotation = self.rotation.normalize();
-        let look_direction = glm::quat_rotate_vec3(&rotation, &(glm::Vec3::z() * -1.0));
-        let up = glm::quat_rotate_vec3(&rotation, &glm::Vec3::y());
-        let target = look_direction + self.translation;
-        glm::look_at(&self.translation, &target, &up)
+        let eye = self.translation;
+        let target = self.translation + self.forward();
+        let up = self.up();
+        glm::look_at(&eye, &target, &up)
+    }
+
+    pub fn right(&self) -> glm::Vec3 {
+        glm::quat_rotate_vec3(&self.rotation.normalize(), &glm::Vec3::x())
+    }
+
+    pub fn up(&self) -> glm::Vec3 {
+        glm::quat_rotate_vec3(&self.rotation.normalize(), &glm::Vec3::y())
+    }
+
+    pub fn forward(&self) -> glm::Vec3 {
+        glm::quat_rotate_vec3(&self.rotation.normalize(), &(-glm::Vec3::z()))
     }
 }
 

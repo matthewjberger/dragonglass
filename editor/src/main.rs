@@ -97,9 +97,6 @@ impl ApplicationRunner for Viewer {
         if let Some(selected_camera_entity) = change_camera {
             for (entity, camera) in application.world.ecs.query_mut::<&mut Camera>() {
                 camera.enabled = entity == selected_camera_entity;
-                if camera.enabled {
-                    log::info!("Camera: {:#?}", camera);
-                }
             }
         }
 
