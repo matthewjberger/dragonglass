@@ -111,6 +111,16 @@ impl ApplicationRunner for Viewer {
         }
 
         // FIXME_CAMERA: Update camera here to have arcball or fps controls. Move systems to separate module
+        let active_camera = application
+            .world
+            .active_camera(application.system.aspect_ratio())?;
+        if application.input.is_key_pressed(VirtualKeyCode::Space) {
+            let mut transform = application
+                .world
+                .ecs
+                .get_mut::<Transform>(active_camera.entity)?;
+            transform.translation.y += 2.0 * application.system.delta_time as f32;
+        }
 
         if !application.world.animations.is_empty() {
             application

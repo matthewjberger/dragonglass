@@ -33,7 +33,8 @@ impl World {
     pub fn add_default_camera(&mut self) {
         self.ecs.spawn((
             Transform {
-                translation: glm::vec3(10.0, 10.0, 10.0),
+                translation: glm::vec3(0.0, 10.0, 10.0),
+                rotation: glm::quat_angle_axis(-45_f32.to_radians(), &glm::Vec3::x()),
                 ..Default::default()
             },
             Camera {
@@ -281,6 +282,11 @@ impl World {
             if found {
                 break;
             }
+        }
+        if !found {
+            // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
+            // Not found in the scenegraph, so the entity just have a local transform
+            transform = self.ecs.get::<Transform>(entity)?.matrix();
         }
         Ok(transform)
     }
