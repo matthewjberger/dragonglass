@@ -64,8 +64,17 @@ impl World {
         let transform = self.entity_global_transform(camera_entity)?;
         let view = transform.as_view_matrix();
         let projection = {
-            let camera = self.ecs.get::<Camera>(camera_entity)?;
-            camera.projection_matrix(aspect_ratio)
+            //let camera = self.ecs.get::<Camera>(camera_entity)?;
+            //camera.projection_matrix(aspect_ratio)
+
+            // FIXME: This is a hack to workaround camera projections not looking correct
+            let camera = PerspectiveCamera {
+                aspect_ratio: None,
+                y_fov_rad: 70_f32.to_radians(),
+                z_far: Some(1000.0),
+                z_near: 0.01,
+            };
+            camera.matrix(aspect_ratio)
         };
         Ok((projection, view))
     }
@@ -399,8 +408,9 @@ impl Transform {
     pub fn as_view_matrix(&self) -> glm::Mat4 {
         let rotation = self.rotation.normalize();
         let look_direction = glm::quat_rotate_vec3(&rotation, &(glm::Vec3::z() * -1.0));
+        let up = glm::quat_rotate_vec3(&rotation, &glm::Vec3::y());
         let target = look_direction + self.translation;
-        glm::look_at(&self.translation, &target, &glm::Vec3::y())
+        glm::look_at(&self.translation, &target, &up)
     }
 }
 

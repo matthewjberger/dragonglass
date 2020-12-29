@@ -110,6 +110,16 @@ impl ApplicationRunner for Viewer {
             application.system.exit_requested = true;
         }
 
+        if !application.world.animations.is_empty() {
+            application
+                .world
+                .animate(0, 0.75 * application.system.delta_time as f32)?;
+        }
+
+        if !application.input.allowed {
+            return Ok(());
+        }
+
         {
             let camera_entity = application.world.active_camera()?;
             let mut transform = application.world.ecs.get_mut::<Transform>(camera_entity)?;
@@ -138,12 +148,6 @@ impl ApplicationRunner for Viewer {
             if application.input.is_key_pressed(VirtualKeyCode::Space) {
                 transform.translation.y += speed;
             }
-        }
-
-        if !application.world.animations.is_empty() {
-            application
-                .world
-                .animate(0, 0.75 * application.system.delta_time as f32)?;
         }
 
         self.show_hovered_object_collider(application)?;
@@ -197,6 +201,9 @@ impl ApplicationRunner for Viewer {
         button: MouseButton,
         state: ElementState,
     ) -> Result<()> {
+        if !application.input.allowed {
+            return Ok(());
+        }
         if let (MouseButton::Left, ElementState::Pressed) = (button, state) {
             let entity = match application.pick_object(f32::MAX)? {
                 Some(entity) => entity,
