@@ -6,15 +6,18 @@ use dragonglass::{
 };
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
+use nalgebra_glm as glm;
 use std::path::PathBuf;
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 mod camera;
 
 #[derive(Default)]
-pub struct Viewer;
+pub struct Editor {
+    arcball: Arcball,
+}
 
-impl Viewer {
+impl Editor {
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
         load_gltf(path, &mut application.world)?;
 
@@ -65,7 +68,7 @@ impl Viewer {
     }
 }
 
-impl ApplicationRunner for Viewer {
+impl ApplicationRunner for Editor {
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
         let world = &application.world;
         ui.text(im_str!("Number of entities: {}", world.ecs.iter().count()));
@@ -124,34 +127,8 @@ impl ApplicationRunner for Viewer {
             return Ok(());
         }
 
-        {
-            let camera_entity = application.world.active_camera()?;
-            let mut transform = application.world.ecs.get_mut::<Transform>(camera_entity)?;
-            let speed = 2.0 * application.system.delta_time as f32;
-
-            if application.input.is_key_pressed(VirtualKeyCode::A) {
-                transform.translation.x -= speed;
-            }
-
-            if application.input.is_key_pressed(VirtualKeyCode::D) {
-                transform.translation.x += speed;
-            }
-
-            if application.input.is_key_pressed(VirtualKeyCode::W) {
-                transform.translation.z -= speed;
-            }
-
-            if application.input.is_key_pressed(VirtualKeyCode::S) {
-                transform.translation.z += speed;
-            }
-
-            if application.input.is_key_pressed(VirtualKeyCode::LShift) {
-                transform.translation.y -= speed;
-            }
-
-            if application.input.is_key_pressed(VirtualKeyCode::Space) {
-                transform.translation.y += speed;
-            }
+        if application.world.active_camera_is_main()? {
+            self.arcball.update(application)?;
         }
 
         self.show_hovered_object_collider(application)?;
@@ -231,11 +208,63 @@ impl ApplicationRunner for Viewer {
 
 fn main() -> Result<()> {
     run_application(
-        Viewer::default(),
+        Editor::default(),
         AppConfig {
             icon: Some("assets/icon/icon.png".to_string()),
             title: "Dragonglass Editor".to_string(),
             ..Default::default()
         },
     )
+}
+
+#[derive(Default)]
+struct Arcball {
+    pub offset: glm::Vec3, // TODO: this needs to track the arcball target
+}
+
+impl Arcball {
+    pub fn update(&mut self, application: &mut Application) -> Result<()> {
+        let delta_time = application.system.delta_time as f32;
+        let mouse_delta = application.input.mouse.position_delta;
+        let mousewheel_delta = application.input.mouse.wheel_delta;
+
+        let camera_entity = application.world.active_camera()?;
+        let mut transform = application.world.ecs.get_mut::<Transform>(camera_entity)?;
+        let forward = transform.forward();
+        let up = transform.up();
+        let right = transform.right();
+
+        if application.input.mouse.scrolled {
+            let scroll_multiplier = 100.0;
+            transform.translation += forward * scroll_multiplier * mousewheel_delta.y * delta_time;
+        }
+
+        if application.input.mouse.is_right_clicked {
+            transform.translation -= right * mouse_delta.x * delta_time;
+            transform.translation += up * mouse_delta.y * delta_time;
+        }
+
+        if application.input.mouse.is_left_clicked {
+            let yaw_delta = -mouse_delta.x * delta_time;
+            transform.translation =
+                glm::rotate_vec3(&transform.translation, yaw_delta, &glm::Vec3::y());
+
+            let pitch_bound = 80_f32.to_radians();
+            let pitch = glm::quat_euler_angles(&transform.rotation).z;
+            let mut pitch_delta = -mouse_delta.y * delta_time;
+            if pitch + pitch_delta > pitch_bound {
+                pitch_delta = pitch_bound - pitch;
+            }
+            if pitch + pitch_delta < -pitch_bound {
+                pitch_delta = -pitch_bound - pitch;
+            }
+            transform.translation =
+                glm::rotate_vec3(&transform.translation, pitch_delta, &transform.right());
+
+            let target = -transform.translation;
+            transform.look_at(&target, &glm::Vec3::y());
+        }
+
+        Ok(())
+    }
 }

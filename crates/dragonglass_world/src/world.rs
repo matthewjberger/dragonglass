@@ -24,21 +24,26 @@ pub struct World {
 }
 
 impl World {
+    pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
+
     pub fn new() -> World {
         let mut world = World::default();
-        world.add_default_camera();
+        world.add_main_camera();
         world
     }
 
-    pub fn add_default_camera(&mut self) {
+    pub fn add_main_camera(&mut self) {
+        let position = glm::vec3(0.0, 10.0, 10.0);
+        let mut transform = Transform {
+            translation: position,
+            ..Default::default()
+        };
+        transform.look_at(&(-position), &glm::Vec3::y());
+
         self.ecs.spawn((
-            Transform {
-                translation: glm::vec3(0.0, 10.0, 10.0),
-                rotation: glm::quat_angle_axis(-45_f32.to_radians(), &glm::Vec3::x()),
-                ..Default::default()
-            },
+            transform,
             Camera {
-                name: "Default Camera".to_string(),
+                name: Self::MAIN_CAMERA_NAME.to_string(),
                 projection: Projection::Perspective(PerspectiveCamera {
                     aspect_ratio: None,
                     y_fov_rad: 70_f32.to_radians(),
@@ -70,6 +75,11 @@ impl World {
         Ok((projection, view))
     }
 
+    pub fn active_camera_is_main(&self) -> Result<bool> {
+        let camera = self.ecs.get::<Camera>(self.active_camera()?)?;
+        Ok(camera.name == Self::MAIN_CAMERA_NAME)
+    }
+
     pub fn clear(&mut self) {
         self.ecs.clear();
         self.scene.graphs.clear();
@@ -77,7 +87,7 @@ impl World {
         self.animations.clear();
         self.materials.clear();
         self.geometry.clear();
-        self.add_default_camera();
+        self.add_main_camera();
     }
 
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
@@ -413,6 +423,16 @@ impl Transform {
 
     pub fn forward(&self) -> glm::Vec3 {
         glm::quat_rotate_vec3(&self.rotation.normalize(), &(-glm::Vec3::z()))
+    }
+
+    pub fn rotate(&mut self, increment: &glm::Vec3) {
+        self.translation = glm::rotate_x_vec3(&self.translation, increment.x);
+        self.translation = glm::rotate_y_vec3(&self.translation, increment.y);
+        self.translation = glm::rotate_z_vec3(&self.translation, increment.z);
+    }
+
+    pub fn look_at(&mut self, target: &glm::Vec3, up: &glm::Vec3) {
+        self.rotation = glm::quat_conjugate(&glm::quat_look_at(target, up));
     }
 }
 
