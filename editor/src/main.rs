@@ -10,8 +10,6 @@ use nalgebra_glm as glm;
 use std::path::PathBuf;
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
-mod camera;
-
 #[derive(Default)]
 pub struct Editor {
     arcball: Arcball,
