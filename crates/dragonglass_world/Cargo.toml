@@ -7,8 +7,8 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.34"
 gltf = { version = "0.15.2", features = ["names", "KHR_lights_punctual", "KHR_materials_unlit"] }
-hecs = "0.3.1"
 image = "0.23.12"
+legion = "0.3.1"
 log = "0.4.11"
 nalgebra = "0.23.2"
 nalgebra-glm = { version = "0.9.0", features = ["serde-serialize"] }

@@ -10,8 +10,8 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-pub type Ecs = hecs::World;
-pub type Entity = hecs::Entity;
+pub type Ecs = legion::World;
+pub type Entity = legion::Entity;
 
 #[derive(Default)]
 pub struct World {
@@ -24,324 +24,324 @@ pub struct World {
 }
 
 impl World {
-    pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
+    // pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
 
-    pub fn new() -> World {
-        let mut world = World::default();
-        world.add_main_camera();
-        world
-    }
+    // pub fn new() -> World {
+    //     let mut world = World::default();
+    //     world.add_main_camera();
+    //     world
+    // }
 
-    pub fn add_main_camera(&mut self) {
-        let position = glm::vec3(0.0, 10.0, 10.0);
-        let mut transform = Transform {
-            translation: position,
-            ..Default::default()
-        };
-        transform.look_at(&(-position), &glm::Vec3::y());
+    // pub fn add_main_camera(&mut self) {
+    //     let position = glm::vec3(0.0, 10.0, 10.0);
+    //     let mut transform = Transform {
+    //         translation: position,
+    //         ..Default::default()
+    //     };
+    //     transform.look_at(&(-position), &glm::Vec3::y());
 
-        self.ecs.spawn((
-            transform,
-            Camera {
-                name: Self::MAIN_CAMERA_NAME.to_string(),
-                projection: Projection::Perspective(PerspectiveCamera {
-                    aspect_ratio: None,
-                    y_fov_rad: 70_f32.to_radians(),
-                    z_far: Some(1000.0),
-                    z_near: 0.1,
-                }),
-                enabled: true,
-            },
-        ));
-    }
+    //     self.ecs.spawn((
+    //         transform,
+    //         Camera {
+    //             name: Self::MAIN_CAMERA_NAME.to_string(),
+    //             projection: Projection::Perspective(PerspectiveCamera {
+    //                 aspect_ratio: None,
+    //                 y_fov_rad: 70_f32.to_radians(),
+    //                 z_far: Some(1000.0),
+    //                 z_near: 0.1,
+    //             }),
+    //             enabled: true,
+    //         },
+    //     ));
+    // }
 
-    pub fn active_camera(&self) -> Result<Entity> {
-        for (entity, (_transform, camera)) in self.ecs.query::<(&Transform, &Camera)>().iter() {
-            if camera.enabled {
-                return Ok(entity);
-            }
-        }
-        bail!("The world must have at least one entity with an enabled camera component to render with!")
-    }
+    // pub fn active_camera(&self) -> Result<Entity> {
+    //     for (entity, (_transform, camera)) in self.ecs.query::<(&Transform, &Camera)>().iter() {
+    //         if camera.enabled {
+    //             return Ok(entity);
+    //         }
+    //     }
+    //     bail!("The world must have at least one entity with an enabled camera component to render with!")
+    // }
 
-    pub fn active_camera_matrices(&self, aspect_ratio: f32) -> Result<(glm::Mat4, glm::Mat4)> {
-        let camera_entity = self.active_camera()?;
-        let transform = self.entity_global_transform(camera_entity)?;
-        let view = transform.as_view_matrix();
-        let projection = {
-            let camera = self.ecs.get::<Camera>(camera_entity)?;
-            camera.projection_matrix(aspect_ratio)
-        };
-        Ok((projection, view))
-    }
+    // pub fn active_camera_matrices(&self, aspect_ratio: f32) -> Result<(glm::Mat4, glm::Mat4)> {
+    //     let camera_entity = self.active_camera()?;
+    //     let transform = self.entity_global_transform(camera_entity)?;
+    //     let view = transform.as_view_matrix();
+    //     let projection = {
+    //         let camera = self.ecs.get::<Camera>(camera_entity)?;
+    //         camera.projection_matrix(aspect_ratio)
+    //     };
+    //     Ok((projection, view))
+    // }
 
-    pub fn active_camera_is_main(&self) -> Result<bool> {
-        let camera = self.ecs.get::<Camera>(self.active_camera()?)?;
-        Ok(camera.name == Self::MAIN_CAMERA_NAME)
-    }
+    // pub fn active_camera_is_main(&self) -> Result<bool> {
+    //     let camera = self.ecs.get::<Camera>(self.active_camera()?)?;
+    //     Ok(camera.name == Self::MAIN_CAMERA_NAME)
+    // }
 
-    pub fn clear(&mut self) {
-        self.ecs.clear();
-        self.scene.graphs.clear();
-        self.textures.clear();
-        self.animations.clear();
-        self.materials.clear();
-        self.geometry.clear();
-        self.add_main_camera();
-    }
+    // pub fn clear(&mut self) {
+    //     self.ecs.clear();
+    //     self.scene.graphs.clear();
+    //     self.textures.clear();
+    //     self.animations.clear();
+    //     self.materials.clear();
+    //     self.geometry.clear();
+    //     self.add_main_camera();
+    // }
 
-    pub fn material_at_index(&self, index: usize) -> Result<&Material> {
-        let error_message = format!("Failed to lookup material at index: {}", index);
-        self.materials.get(index).context(error_message)
-    }
+    // pub fn material_at_index(&self, index: usize) -> Result<&Material> {
+    //     let error_message = format!("Failed to lookup material at index: {}", index);
+    //     self.materials.get(index).context(error_message)
+    // }
 
-    pub fn animate(&mut self, index: usize, step: f32) -> Result<()> {
-        if self.animations.get(index).is_none() {
-            // TODO: Make this an error and handle it at a higher layer
-            log::warn!("No animation at index: {}. Skipping...", index);
-            return Ok(());
-        }
-        let mut animation = &mut self.animations[index];
+    // pub fn animate(&mut self, index: usize, step: f32) -> Result<()> {
+    //     if self.animations.get(index).is_none() {
+    //         // TODO: Make this an error and handle it at a higher layer
+    //         log::warn!("No animation at index: {}. Skipping...", index);
+    //         return Ok(());
+    //     }
+    //     let mut animation = &mut self.animations[index];
 
-        animation.time += step;
+    //     animation.time += step;
 
-        // TODO: Allow for specifying a specific animation by name
-        if animation.time > animation.max_animation_time {
-            animation.time = 0.0;
-        }
-        if animation.time < 0.0 {
-            animation.time = animation.max_animation_time;
-        }
-        for channel in animation.channels.iter_mut() {
-            let mut input_iter = channel.inputs.iter().enumerate().peekable();
-            while let Some((previous_key, previous_time)) = input_iter.next() {
-                if let Some((next_key, next_time)) = input_iter.peek() {
-                    let next_key = *next_key;
-                    let next_time = **next_time;
-                    let previous_time = *previous_time;
+    //     // TODO: Allow for specifying a specific animation by name
+    //     if animation.time > animation.max_animation_time {
+    //         animation.time = 0.0;
+    //     }
+    //     if animation.time < 0.0 {
+    //         animation.time = animation.max_animation_time;
+    //     }
+    //     for channel in animation.channels.iter_mut() {
+    //         let mut input_iter = channel.inputs.iter().enumerate().peekable();
+    //         while let Some((previous_key, previous_time)) = input_iter.next() {
+    //             if let Some((next_key, next_time)) = input_iter.peek() {
+    //                 let next_key = *next_key;
+    //                 let next_time = **next_time;
+    //                 let previous_time = *previous_time;
 
-                    if animation.time < previous_time || animation.time > next_time {
-                        continue;
-                    }
+    //                 if animation.time < previous_time || animation.time > next_time {
+    //                     continue;
+    //                 }
 
-                    let interpolation =
-                        (animation.time - previous_time) / (next_time - previous_time);
+    //                 let interpolation =
+    //                     (animation.time - previous_time) / (next_time - previous_time);
 
-                    // TODO: Interpolate with other methods
-                    // Only Linear interpolation is used for now
-                    match &channel.transformations {
-                        TransformationSet::Translations(translations) => {
-                            let start = translations[previous_key];
-                            let end = translations[next_key];
-                            let translation_vec = glm::mix(&start, &end, interpolation);
-                            self.ecs.get_mut::<Transform>(channel.target)?.translation =
-                                translation_vec;
-                        }
-                        TransformationSet::Rotations(rotations) => {
-                            let start = rotations[previous_key];
-                            let end = rotations[next_key];
-                            let start_quat = glm::make_quat(start.as_slice());
-                            let end_quat = glm::make_quat(end.as_slice());
-                            let rotation_quat =
-                                glm::quat_slerp(&start_quat, &end_quat, interpolation);
-                            self.ecs.get_mut::<Transform>(channel.target)?.rotation = rotation_quat;
-                        }
-                        TransformationSet::Scales(scales) => {
-                            let start = scales[previous_key];
-                            let end = scales[next_key];
-                            let scale_vec = glm::mix(&start, &end, interpolation);
-                            self.ecs.get_mut::<Transform>(channel.target)?.scale = scale_vec;
-                        }
-                        TransformationSet::MorphTargetWeights(animation_weights) => {
-                            match self.ecs.get_mut::<Mesh>(channel.target) {
-                                Ok(mut mesh) => {
-                                    let number_of_mesh_weights = mesh.weights.len();
-                                    if animation_weights.len() % number_of_mesh_weights != 0 {
-                                        log::warn!("Animation channel's weights are not a multiple of the mesh's weights: (channel) {} % (mesh) {} != 0", number_of_mesh_weights, animation_weights.len());
-                                        continue;
-                                    }
-                                    let weights = animation_weights
-                                        .as_slice()
-                                        .chunks(number_of_mesh_weights)
-                                        .collect::<Vec<_>>();
-                                    let start = weights[previous_key];
-                                    let end = weights[next_key];
-                                    for index in 0..number_of_mesh_weights {
-                                        (*mesh).weights[index] = glm::lerp_scalar(
-                                            start[index],
-                                            end[index],
-                                            interpolation,
-                                        );
-                                    }
-                                }
-                                Err(_) => {
-                                    log::warn!("Animation channel's target node animates morph target weights, but node has no mesh!");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    //                 // TODO: Interpolate with other methods
+    //                 // Only Linear interpolation is used for now
+    //                 match &channel.transformations {
+    //                     TransformationSet::Translations(translations) => {
+    //                         let start = translations[previous_key];
+    //                         let end = translations[next_key];
+    //                         let translation_vec = glm::mix(&start, &end, interpolation);
+    //                         self.ecs.get_mut::<Transform>(channel.target)?.translation =
+    //                             translation_vec;
+    //                     }
+    //                     TransformationSet::Rotations(rotations) => {
+    //                         let start = rotations[previous_key];
+    //                         let end = rotations[next_key];
+    //                         let start_quat = glm::make_quat(start.as_slice());
+    //                         let end_quat = glm::make_quat(end.as_slice());
+    //                         let rotation_quat =
+    //                             glm::quat_slerp(&start_quat, &end_quat, interpolation);
+    //                         self.ecs.get_mut::<Transform>(channel.target)?.rotation = rotation_quat;
+    //                     }
+    //                     TransformationSet::Scales(scales) => {
+    //                         let start = scales[previous_key];
+    //                         let end = scales[next_key];
+    //                         let scale_vec = glm::mix(&start, &end, interpolation);
+    //                         self.ecs.get_mut::<Transform>(channel.target)?.scale = scale_vec;
+    //                     }
+    //                     TransformationSet::MorphTargetWeights(animation_weights) => {
+    //                         match self.ecs.get_mut::<Mesh>(channel.target) {
+    //                             Ok(mut mesh) => {
+    //                                 let number_of_mesh_weights = mesh.weights.len();
+    //                                 if animation_weights.len() % number_of_mesh_weights != 0 {
+    //                                     log::warn!("Animation channel's weights are not a multiple of the mesh's weights: (channel) {} % (mesh) {} != 0", number_of_mesh_weights, animation_weights.len());
+    //                                     continue;
+    //                                 }
+    //                                 let weights = animation_weights
+    //                                     .as_slice()
+    //                                     .chunks(number_of_mesh_weights)
+    //                                     .collect::<Vec<_>>();
+    //                                 let start = weights[previous_key];
+    //                                 let end = weights[next_key];
+    //                                 for index in 0..number_of_mesh_weights {
+    //                                     (*mesh).weights[index] = glm::lerp_scalar(
+    //                                         start[index],
+    //                                         end[index],
+    //                                         interpolation,
+    //                                     );
+    //                                 }
+    //                             }
+    //                             Err(_) => {
+    //                                 log::warn!("Animation channel's target node animates morph target weights, but node has no mesh!");
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
-        let mut offset = 0;
-        let mut number_of_joints = 0;
-        for graph in self.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let entity = graph[node_index];
-                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
-                    number_of_joints += skin.joints.len();
-                }
-                Ok(())
-            })?;
-        }
+    // pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
+    //     let mut offset = 0;
+    //     let mut number_of_joints = 0;
+    //     for graph in self.scene.graphs.iter() {
+    //         graph.walk(|node_index| {
+    //             let entity = graph[node_index];
+    //             if let Ok(skin) = self.ecs.get::<Skin>(entity) {
+    //                 number_of_joints += skin.joints.len();
+    //             }
+    //             Ok(())
+    //         })?;
+    //     }
 
-        let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
-        for graph in self.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.ecs)?;
-                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
-                    for joint in skin.joints.iter() {
-                        let joint_transform = {
-                            let mut transform = glm::Mat4::identity();
-                            for graph in self.scene.graphs.iter() {
-                                if let Some(index) = graph.find_node(joint.target) {
-                                    transform = graph.global_transform(index, &self.ecs)?;
-                                }
-                            }
-                            transform
-                        };
+    //     let mut joint_matrices = vec![glm::Mat4::identity(); number_of_joints];
+    //     for graph in self.scene.graphs.iter() {
+    //         graph.walk(|node_index| {
+    //             let entity = graph[node_index];
+    //             let node_transform = graph.global_transform(node_index, &self.ecs)?;
+    //             if let Ok(skin) = self.ecs.get::<Skin>(entity) {
+    //                 for joint in skin.joints.iter() {
+    //                     let joint_transform = {
+    //                         let mut transform = glm::Mat4::identity();
+    //                         for graph in self.scene.graphs.iter() {
+    //                             if let Some(index) = graph.find_node(joint.target) {
+    //                                 transform = graph.global_transform(index, &self.ecs)?;
+    //                             }
+    //                         }
+    //                         transform
+    //                     };
 
-                        joint_matrices[offset] = glm::inverse(&node_transform)
-                            * joint_transform
-                            * joint.inverse_bind_matrix;
+    //                     joint_matrices[offset] = glm::inverse(&node_transform)
+    //                         * joint_transform
+    //                         * joint.inverse_bind_matrix;
 
-                        offset += 1;
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(joint_matrices)
-    }
+    //                     offset += 1;
+    //                 }
+    //             }
+    //             Ok(())
+    //         })?;
+    //     }
+    //     Ok(joint_matrices)
+    // }
 
-    #[allow(dead_code)]
-    pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
-        let number_of_morph_targets = self
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(_entity, mesh)| mesh)
-            .flat_map(|mesh| &mesh.primitives)
-            .flat_map(|primitive| &primitive.morph_targets)
-            .map(|morph_target| morph_target.total_length())
-            .sum();
+    // #[allow(dead_code)]
+    // pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
+    //     let number_of_morph_targets = self
+    //         .ecs
+    //         .query::<&Mesh>()
+    //         .iter()
+    //         .map(|(_entity, mesh)| mesh)
+    //         .flat_map(|mesh| &mesh.primitives)
+    //         .flat_map(|primitive| &primitive.morph_targets)
+    //         .map(|morph_target| morph_target.total_length())
+    //         .sum();
 
-        let mut offset = 0;
-        let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
-        for graph in self.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let entity = graph[node_index];
-                if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
-                    for primitive in mesh.primitives.iter() {
-                        for morph_target in primitive.morph_targets.iter() {
-                            for position in morph_target.positions.iter() {
-                                morph_targets[offset] = *position;
-                                offset += 1;
-                            }
+    //     let mut offset = 0;
+    //     let mut morph_targets = vec![glm::Vec4::identity(); number_of_morph_targets];
+    //     for graph in self.scene.graphs.iter() {
+    //         graph.walk(|node_index| {
+    //             let entity = graph[node_index];
+    //             if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
+    //                 for primitive in mesh.primitives.iter() {
+    //                     for morph_target in primitive.morph_targets.iter() {
+    //                         for position in morph_target.positions.iter() {
+    //                             morph_targets[offset] = *position;
+    //                             offset += 1;
+    //                         }
 
-                            for normal in morph_target.normals.iter() {
-                                morph_targets[offset] = *normal;
-                                offset += 1;
-                            }
+    //                         for normal in morph_target.normals.iter() {
+    //                             morph_targets[offset] = *normal;
+    //                             offset += 1;
+    //                         }
 
-                            for tangent in morph_target.tangents.iter() {
-                                morph_targets[offset] = *tangent;
-                                offset += 1;
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(morph_targets)
-    }
+    //                         for tangent in morph_target.tangents.iter() {
+    //                             morph_targets[offset] = *tangent;
+    //                             offset += 1;
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             Ok(())
+    //         })?;
+    //     }
+    //     Ok(morph_targets)
+    // }
 
-    #[allow(dead_code)]
-    pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
-        let number_of_morph_target_weights = self
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(_entity, mesh)| mesh.weights.len())
-            .sum();
+    // #[allow(dead_code)]
+    // pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
+    //     let number_of_morph_target_weights = self
+    //         .ecs
+    //         .query::<&Mesh>()
+    //         .iter()
+    //         .map(|(_entity, mesh)| mesh.weights.len())
+    //         .sum();
 
-        let mut offset = 0;
-        let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
-        for graph in self.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let entity = graph[node_index];
-                if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
-                    for weight in mesh.weights.iter() {
-                        morph_target_weights[offset] = *weight;
-                        offset += 1;
-                    }
-                }
-                Ok(())
-            })?;
-        }
-        Ok(morph_target_weights)
-    }
+    //     let mut offset = 0;
+    //     let mut morph_target_weights = vec![0_f32; number_of_morph_target_weights];
+    //     for graph in self.scene.graphs.iter() {
+    //         graph.walk(|node_index| {
+    //             let entity = graph[node_index];
+    //             if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
+    //                 for weight in mesh.weights.iter() {
+    //                     morph_target_weights[offset] = *weight;
+    //                     offset += 1;
+    //                 }
+    //             }
+    //             Ok(())
+    //         })?;
+    //     }
+    //     Ok(morph_target_weights)
+    // }
 
-    pub fn entity_global_transform(&self, entity: Entity) -> Result<Transform> {
-        let transform_matrix = self.entity_global_transform_matrix(entity)?;
-        Ok(Transform::from(transform_matrix))
-    }
+    // pub fn entity_global_transform(&self, entity: Entity) -> Result<Transform> {
+    //     let transform_matrix = self.entity_global_transform_matrix(entity)?;
+    //     Ok(Transform::from(transform_matrix))
+    // }
 
-    pub fn entity_global_transform_matrix(&self, entity: Entity) -> Result<glm::Mat4> {
-        let mut transform = glm::Mat4::identity();
-        let mut found = false;
-        for graph in self.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                if entity != graph[node_index] {
-                    return Ok(());
-                }
-                transform = graph.global_transform(node_index, &self.ecs)?;
-                found = true;
-                Ok(())
-            })?;
-            if found {
-                break;
-            }
-        }
-        if !found {
-            // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
-            // Not found in the scenegraph, so the entity just have a local transform
-            transform = self.ecs.get::<Transform>(entity)?.matrix();
-        }
-        Ok(transform)
-    }
+    // pub fn entity_global_transform_matrix(&self, entity: Entity) -> Result<glm::Mat4> {
+    //     let mut transform = glm::Mat4::identity();
+    //     let mut found = false;
+    //     for graph in self.scene.graphs.iter() {
+    //         graph.walk(|node_index| {
+    //             if entity != graph[node_index] {
+    //                 return Ok(());
+    //             }
+    //             transform = graph.global_transform(node_index, &self.ecs)?;
+    //             found = true;
+    //             Ok(())
+    //         })?;
+    //         if found {
+    //             break;
+    //         }
+    //     }
+    //     if !found {
+    //         // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
+    //         // Not found in the scenegraph, so the entity just have a local transform
+    //         transform = self.ecs.get::<Transform>(entity)?.matrix();
+    //     }
+    //     Ok(transform)
+    // }
 
-    pub fn entities_with<T: Send + Sync + 'static>(&self) -> Vec<Entity> {
-        self.ecs
-            .query::<&T>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .collect()
-    }
+    // pub fn entities_with<T: Send + Sync + 'static>(&self) -> Vec<Entity> {
+    //     self.ecs
+    //         .query::<&T>()
+    //         .iter()
+    //         .map(|(entity, _)| entity)
+    //         .collect()
+    // }
 
-    pub fn remove_all<T: Send + Sync + 'static>(&mut self) {
-        let entities = self.entities_with::<T>();
-        for entity in entities.into_iter() {
-            let _ = self.ecs.remove_one::<T>(entity);
-        }
-    }
+    // pub fn remove_all<T: Send + Sync + 'static>(&mut self) {
+    //     let entities = self.entities_with::<T>();
+    //     for entity in entities.into_iter() {
+    //         let _ = self.ecs.remove_one::<T>(entity);
+    //     }
+    // }
 }
 
 #[derive(Default, Debug)]
@@ -882,18 +882,19 @@ impl SceneGraph {
     }
 
     pub fn global_transform(&self, index: NodeIndex, ecs: &Ecs) -> Result<glm::Mat4> {
-        let entity = self[index];
-        let transform = match ecs.get::<Transform>(entity) {
-            Ok(transform) => transform.matrix(),
-            Err(_) => bail!(
-                "A transform component was requested from a component that does not have one!"
-            ),
-        };
-        let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
-        match incoming_walker.next_node(&self.0) {
-            Some(parent_index) => Ok(self.global_transform(parent_index, ecs)? * transform),
-            None => Ok(transform),
-        }
+        todo!()
+        // let entity = self[index];
+        // let transform = match ecs.get::<Transform>(entity) {
+        //     Ok(transform) => transform.matrix(),
+        //     Err(_) => bail!(
+        //         "A transform component was requested from a component that does not have one!"
+        //     ),
+        // };
+        // let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
+        // match incoming_walker.next_node(&self.0) {
+        //     Some(parent_index) => Ok(self.global_transform(parent_index, ecs)? * transform),
+        //     None => Ok(transform),
+        // }
     }
 
     pub fn find_node(&self, entity: Entity) -> Option<NodeIndex> {

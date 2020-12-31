@@ -72,33 +72,33 @@ pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
         .into_iter()
         .for_each(|texture| world.textures.push(texture));
 
-    let entities = world
-        .ecs
-        .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
-        .collect::<Vec<_>>();
+    // let entities = world
+    //     .ecs
+    //     .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
+    //     .collect::<Vec<_>>();
 
-    load_animations(&gltf, &buffers, &entities)?
-        .into_iter()
-        .for_each(|node| world.animations.push(node));
+    // load_animations(&gltf, &buffers, &entities)?
+    //     .into_iter()
+    //     .for_each(|node| world.animations.push(node));
 
-    load_nodes(&gltf, &buffers, &mut world, &entities)?;
-    entities.iter().for_each(|entity| {
-        if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
-            mesh.primitives.iter_mut().for_each(|primitive| {
-                if let Some(material_index) = primitive.material_index.as_mut() {
-                    *material_index += number_of_materials
-                }
-            })
-        }
-    });
+    // load_nodes(&gltf, &buffers, &mut world, &entities)?;
+    // entities.iter().for_each(|entity| {
+    //     if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
+    //         mesh.primitives.iter_mut().for_each(|primitive| {
+    //             if let Some(material_index) = primitive.material_index.as_mut() {
+    //                 *material_index += number_of_materials
+    //             }
+    //         })
+    //     }
+    // });
 
-    // Only merge default scene
-    let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
-    if let Some(new_scene) = new_scenes.into_iter().next() {
-        new_scene.graphs.into_iter().for_each(|graph| {
-            world.scene.graphs.push(graph);
-        });
-    }
+    // // Only merge default scene
+    // let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
+    // if let Some(new_scene) = new_scenes.into_iter().next() {
+    //     new_scene.graphs.into_iter().for_each(|graph| {
+    //         world.scene.graphs.push(graph);
+    //     });
+    // }
 
     Ok(())
 }
@@ -259,35 +259,35 @@ fn load_nodes(
     world: &mut World,
     entities: &[Entity],
 ) -> Result<()> {
-    for (index, node) in gltf.nodes().enumerate() {
-        let entity = entities[index];
+    // for (index, node) in gltf.nodes().enumerate() {
+    //     let entity = entities[index];
 
-        let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
+    //     let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-        world.ecs.insert(entity, (Name(name),))?;
+    //     world.ecs.insert(entity, (Name(name),))?;
 
-        world.ecs.insert(entity, (node_transform(&node),))?;
+    //     world.ecs.insert(entity, (node_transform(&node),))?;
 
-        if let Some(camera) = node.camera() {
-            world.ecs.insert(entity, (load_camera(&camera)?,))?;
-        }
+    //     if let Some(camera) = node.camera() {
+    //         world.ecs.insert(entity, (load_camera(&camera)?,))?;
+    //     }
 
-        if let Some(mesh) = node.mesh() {
-            world
-                .ecs
-                .insert(entity, (load_mesh(&mesh, buffers, &mut world.geometry)?,))?;
-        }
+    //     if let Some(mesh) = node.mesh() {
+    //         world
+    //             .ecs
+    //             .insert(entity, (load_mesh(&mesh, buffers, &mut world.geometry)?,))?;
+    //     }
 
-        if let Some(skin) = node.skin() {
-            world
-                .ecs
-                .insert(entity, (load_skin(&skin, buffers, entities),))?;
-        }
+    //     if let Some(skin) = node.skin() {
+    //         world
+    //             .ecs
+    //             .insert(entity, (load_skin(&skin, buffers, entities),))?;
+    //     }
 
-        if let Some(light) = node.light() {
-            world.ecs.insert(entity, (load_light(&light),))?;
-        }
-    }
+    //     if let Some(light) = node.light() {
+    //         world.ecs.insert(entity, (load_light(&light),))?;
+    //     }
+    // }
 
     Ok(())
 }
