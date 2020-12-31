@@ -1,17 +1,14 @@
 use anyhow::{bail, Context, Result};
-use na::linalg::QR;
-use na::{Isometry3, Translation3, UnitQuaternion};
+use legion::IntoQuery;
+use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    marker::{Send, Sync},
-    ops::{Index, IndexMut},
-};
+use std::ops::{Index, IndexMut};
 
-pub type Ecs = hecs::World;
-pub type Entity = hecs::Entity;
+pub type Ecs = legion::World;
+pub type Entity = legion::Entity;
 
 #[derive(Default)]
 pub struct World {
@@ -40,7 +37,7 @@ impl World {
         };
         transform.look_at(&(-position), &glm::Vec3::y());
 
-        self.ecs.spawn((
+        self.ecs.push((
             transform,
             Camera {
                 name: Self::MAIN_CAMERA_NAME.to_string(),
@@ -56,9 +53,10 @@ impl World {
     }
 
     pub fn active_camera(&self) -> Result<Entity> {
-        for (entity, (_transform, camera)) in self.ecs.query::<(&Transform, &Camera)>().iter() {
+        let query = <(Entity, &Transform, &Camera)>::query();
+        for (entity, transform, camera) in query.iter(&self.ecs) {
             if camera.enabled {
-                return Ok(entity);
+                return Ok(*entity);
             }
         }
         bail!("The world must have at least one entity with an enabled camera component to render with!")
@@ -69,14 +67,23 @@ impl World {
         let transform = self.entity_global_transform(camera_entity)?;
         let view = transform.as_view_matrix();
         let projection = {
-            let camera = self.ecs.get::<Camera>(camera_entity)?;
+            let entry = self
+                .ecs
+                .entry(camera_entity)
+                .context("Failed to find a requested camera entity!")?;
+            let camera = entry.get_component::<Camera>()?;
             camera.projection_matrix(aspect_ratio)
         };
         Ok((projection, view))
     }
 
     pub fn active_camera_is_main(&self) -> Result<bool> {
-        let camera = self.ecs.get::<Camera>(self.active_camera()?)?;
+        let camera_entity = self.active_camera()?;
+        let entry = self
+            .ecs
+            .entry(camera_entity)
+            .context("The active camera entity does not have a Camera component!")?;
+        let camera = entry.get_component::<Camera>()?;
         Ok(camera.name == Self::MAIN_CAMERA_NAME)
     }
 
@@ -127,6 +134,9 @@ impl World {
                     let interpolation =
                         (animation.time - previous_time) / (next_time - previous_time);
 
+                    let entity = channel.target;
+                    let entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+
                     // TODO: Interpolate with other methods
                     // Only Linear interpolation is used for now
                     match &channel.transformations {
@@ -134,8 +144,8 @@ impl World {
                             let start = translations[previous_key];
                             let end = translations[next_key];
                             let translation_vec = glm::mix(&start, &end, interpolation);
-                            self.ecs.get_mut::<Transform>(channel.target)?.translation =
-                                translation_vec;
+
+                            entry.get_component_mut::<Transform>()?.translation = translation_vec;
                         }
                         TransformationSet::Rotations(rotations) => {
                             let start = rotations[previous_key];
@@ -144,16 +154,18 @@ impl World {
                             let end_quat = glm::make_quat(end.as_slice());
                             let rotation_quat =
                                 glm::quat_slerp(&start_quat, &end_quat, interpolation);
-                            self.ecs.get_mut::<Transform>(channel.target)?.rotation = rotation_quat;
+
+                            entry.get_component_mut::<Transform>()?.rotation = rotation_quat;
                         }
                         TransformationSet::Scales(scales) => {
                             let start = scales[previous_key];
                             let end = scales[next_key];
                             let scale_vec = glm::mix(&start, &end, interpolation);
-                            self.ecs.get_mut::<Transform>(channel.target)?.scale = scale_vec;
+
+                            entry.get_component_mut::<Transform>()?.scale = scale_vec;
                         }
                         TransformationSet::MorphTargetWeights(animation_weights) => {
-                            match self.ecs.get_mut::<Mesh>(channel.target) {
+                            match entry.get_component_mut::<Mesh>() {
                                 Ok(mut mesh) => {
                                     let number_of_mesh_weights = mesh.weights.len();
                                     if animation_weights.len() % number_of_mesh_weights != 0 {
@@ -187,13 +199,14 @@ impl World {
         Ok(())
     }
 
-    pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
+    pub fn joint_matrices(&mut self) -> Result<Vec<glm::Mat4>> {
         let mut offset = 0;
         let mut number_of_joints = 0;
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
+                let entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+                if let Ok(skin) = entry.get_component::<Skin>() {
                     number_of_joints += skin.joints.len();
                 }
                 Ok(())
@@ -204,14 +217,15 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.ecs)?;
-                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
+                let node_transform = graph.global_transform(node_index, &mut self.ecs)?;
+                let entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+                if let Ok(skin) = entry.get_component::<Skin>() {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in self.scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
-                                    transform = graph.global_transform(index, &self.ecs)?;
+                                    transform = graph.global_transform(index, &mut self.ecs)?;
                                 }
                             }
                             transform
@@ -232,11 +246,8 @@ impl World {
 
     #[allow(dead_code)]
     pub fn morph_targets(&self) -> Result<Vec<glm::Vec4>> {
-        let number_of_morph_targets = self
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(_entity, mesh)| mesh)
+        let number_of_morph_targets = <&Mesh>::query()
+            .iter(&self.ecs)
             .flat_map(|mesh| &mesh.primitives)
             .flat_map(|primitive| &primitive.morph_targets)
             .map(|morph_target| morph_target.total_length())
@@ -247,7 +258,11 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
+                let entry = self
+                    .ecs
+                    .entry(entity)
+                    .context("Failed to lookup an entity!")?;
+                if let Ok(mesh) = entry.get_component::<Mesh>() {
                     for primitive in mesh.primitives.iter() {
                         for morph_target in primitive.morph_targets.iter() {
                             for position in morph_target.positions.iter() {
@@ -275,11 +290,9 @@ impl World {
 
     #[allow(dead_code)]
     pub fn morph_target_weights(&self) -> Result<Vec<f32>> {
-        let number_of_morph_target_weights = self
-            .ecs
-            .query::<&Mesh>()
-            .iter()
-            .map(|(_entity, mesh)| mesh.weights.len())
+        let number_of_morph_target_weights = <&Mesh>::query()
+            .iter(&self.ecs)
+            .map(|mesh| mesh.weights.len())
             .sum();
 
         let mut offset = 0;
@@ -287,7 +300,11 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                if let Ok(mesh) = self.ecs.get::<Mesh>(entity) {
+                let entry = self
+                    .ecs
+                    .entry(entity)
+                    .context("Failed to lookup an entity!")?;
+                if let Ok(mesh) = entry.get_component::<Mesh>() {
                     for weight in mesh.weights.iter() {
                         morph_target_weights[offset] = *weight;
                         offset += 1;
@@ -304,7 +321,7 @@ impl World {
         Ok(Transform::from(transform_matrix))
     }
 
-    pub fn entity_global_transform_matrix(&self, entity: Entity) -> Result<glm::Mat4> {
+    pub fn entity_global_transform_matrix(&mut self, entity: Entity) -> Result<glm::Mat4> {
         let mut transform = glm::Mat4::identity();
         let mut found = false;
         for graph in self.scene.graphs.iter() {
@@ -312,7 +329,7 @@ impl World {
                 if entity != graph[node_index] {
                     return Ok(());
                 }
-                transform = graph.global_transform(node_index, &self.ecs)?;
+                transform = graph.global_transform(node_index, &mut self.ecs)?;
                 found = true;
                 Ok(())
             })?;
@@ -321,26 +338,13 @@ impl World {
             }
         }
         if !found {
+            let entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+
             // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
             // Not found in the scenegraph, so the entity just have a local transform
-            transform = self.ecs.get::<Transform>(entity)?.matrix();
+            transform = entry.get_component::<Transform>()?.matrix();
         }
         Ok(transform)
-    }
-
-    pub fn entities_with<T: Send + Sync + 'static>(&self) -> Vec<Entity> {
-        self.ecs
-            .query::<&T>()
-            .iter()
-            .map(|(entity, _)| entity)
-            .collect()
-    }
-
-    pub fn remove_all<T: Send + Sync + 'static>(&mut self) {
-        let entities = self.entities_with::<T>();
-        for entity in entities.into_iter() {
-            let _ = self.ecs.remove_one::<T>(entity);
-        }
     }
 }
 
@@ -881,13 +885,12 @@ impl SceneGraph {
         Ok(())
     }
 
-    pub fn global_transform(&self, index: NodeIndex, ecs: &Ecs) -> Result<glm::Mat4> {
+    pub fn global_transform(&self, index: NodeIndex, ecs: &mut Ecs) -> Result<glm::Mat4> {
         let entity = self[index];
-        let transform = match ecs.get::<Transform>(entity) {
+        let entry = ecs.entry(entity).context("Failed to find entity!")?;
+        let transform = match entry.get_component::<Transform>() {
             Ok(transform) => transform.matrix(),
-            Err(_) => bail!(
-                "A transform component was requested from a component that does not have one!"
-            ),
+            Err(_) => bail!("Failed to find a transform component"),
         };
         let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
         match incoming_walker.next_node(&self.0) {
