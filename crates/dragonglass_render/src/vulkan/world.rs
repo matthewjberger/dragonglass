@@ -327,7 +327,7 @@ impl WorldPipelineData {
         }
     }
 
-    pub fn update_dynamic_ubo(&mut self, world: &World) -> Result<()> {
+    pub fn update_dynamic_ubo(&mut self, world: &mut World) -> Result<()> {
         let world_joint_matrices = world.joint_matrices()?;
         let number_of_joints = world_joint_matrices.len();
         ensure!(
@@ -337,12 +337,12 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world.scene, &world.ecs)?;
+        self.update_node_ubos(&world.scene, &mut world.ecs)?;
 
         Ok(())
     }
 
-    fn update_node_ubos(&mut self, scene: &Scene, ecs: &Ecs) -> Result<()> {
+    fn update_node_ubos(&mut self, scene: &Scene, ecs: &mut Ecs) -> Result<()> {
         let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
@@ -354,14 +354,16 @@ impl WorldPipelineData {
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
-                if let Ok(skin) = ecs.get::<Skin>(entity) {
+                let entry = ecs.entry(entity).context("Failed to lookup an entity!")?;
+
+                if let Ok(skin) = entry.get_component::<Skin>() {
                     let joint_count = skin.joints.len();
                     node_info.x = joint_count as f32;
                     node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                if let Ok(mesh) = ecs.get::<Mesh>(entity) {
+                if let Ok(mesh) = entry.get_component::<Mesh>() {
                     let weight_count = mesh.weights.len();
                     node_info.z = weight_count as f32;
                     node_info.w = weight_offset as f32;
@@ -486,7 +488,7 @@ impl WorldRender {
     pub fn issue_commands(
         &self,
         command_buffer: vk::CommandBuffer,
-        world: &World,
+        world: &mut World,
         collision_world: &CollisionWorld<f32, ()>,
         aspect_ratio: f32,
     ) -> Result<()> {
@@ -516,33 +518,45 @@ impl WorldRender {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
             let mut ubo_offset = -1;
             for graph in world.scene.graphs.iter() {
+                let mut entities = Vec::new();
                 graph.walk(|node_index| {
-                    ubo_offset += 1;
-                    let entity = graph[node_index];
-
-                    if world.ecs.get::<Hidden>(entity).is_ok() {
+                    entities.push(graph[node_index]);
+                    Ok(())
+                })?;
+                for (ubo_offset, entity) in entities.into_iter().enumerate() {
+                    let entry = world
+                        .ecs
+                        .entry(entity)
+                        .context("Failed to lookup an entity!")?;
+                    if entry.get_component::<Hidden>().is_ok() {
                         return Ok(());
                     }
 
-                    if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
-
-                        let bounding_box_color =
-                        if world.ecs.get::<Selected>(entity).is_ok() {
+                    if let Ok(mesh) = entry.get_component::<Mesh>() {
+                        let bounding_box_color = if entry.get_component::<Selected>().is_ok() {
                             Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if world.ecs.get::<BoxColliderVisible>(entity).is_ok() {
+                        } else if entry.get_component::<BoxColliderVisible>().is_ok() {
                             Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
                         } else {
                             None
                         };
 
                         if let Some(display_color) = bounding_box_color {
-                            if let Ok(collider) = world.ecs.get::<BoxCollider>(entity) {
-                                if let Some(collision_object) = collision_world.collision_object(collider.handle) {
+                            if let Ok(collider) = entry.get_component::<BoxCollider>() {
+                                if let Some(collision_object) =
+                                    collision_world.collision_object(collider.handle)
+                                {
                                     let position = collision_object.position();
                                     let translation = position.translation;
                                     let rotation = position.rotation;
-                                    if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
-                                        let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
+                                    if let Some(cuboid) =
+                                        collision_object.shape().as_shape::<Cuboid<f32>>()
+                                    {
+                                        let offset = glm::translation(&glm::vec3(
+                                            translation.x,
+                                            translation.y,
+                                            translation.z,
+                                        ));
                                         let rotation = glm::quat_to_mat4(&rotation);
                                         let scale = glm::scaling(&(cuboid.half_extents * 2.0));
                                         self.cube_render.issue_commands(
@@ -585,29 +599,28 @@ impl WorldRender {
                             );
                         }
 
+                        //             let material = match primitive.material_index {
+                        //                 Some(material_index) => {
+                        //                     let primitive_material =
+                        //                         world.material_at_index(material_index)?;
+                        //                     if primitive_material.alpha_mode != *alpha_mode {
+                        //                         continue;
+                        //                     }
+                        //                     PushConstantMaterial::from_material(primitive_material)?
+                        //                 }
+                        //                 None => PushConstantMaterial::from_material(&Material::default())?,
+                        //             };
+
                         for primitive in mesh.primitives.iter() {
-                            let material = match primitive.material_index {
-                                Some(material_index) => {
-                                    let primitive_material =
-                                        world.material_at_index(material_index)?;
-                                    if primitive_material.alpha_mode != *alpha_mode {
-                                        continue;
-                                    }
-
-                                    PushConstantMaterial::from_material(primitive_material)?
-                                }
-                                None => PushConstantMaterial::from_material(&Material::default())?,
-                            };
-
                             unsafe {
                                 self.device.handle.cmd_push_constants(
                                     command_buffer,
                                     pipeline_layout.handle,
                                     vk::ShaderStageFlags::ALL_GRAPHICS,
                                     0,
-                                    byte_slice_from(&material),
+                                    // byte_slice_from(&material),
+                                    &[],
                                 );
-
                                 if has_indices {
                                     self.device.handle.cmd_draw_indexed(
                                         command_buffer,
@@ -629,8 +642,7 @@ impl WorldRender {
                             }
                         }
                     }
-                    Ok(())
-                })?;
+                }
             }
         }
 

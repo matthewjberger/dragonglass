@@ -19,7 +19,7 @@ impl RenderPass {
         &self,
         buffer: vk::CommandBuffer,
         begin_info: vk::RenderPassBeginInfoBuilder,
-        action: impl Fn(vk::CommandBuffer) -> Result<()>,
+        mut action: impl FnMut(vk::CommandBuffer) -> Result<()>,
     ) -> Result<()> {
         unsafe {
             self.device.handle.cmd_begin_render_pass(

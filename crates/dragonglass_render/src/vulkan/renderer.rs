@@ -6,7 +6,7 @@ use crate::{
     },
     Renderer,
 };
-use anyhow::Result;
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{Camera, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
@@ -70,7 +70,7 @@ impl Renderer for VulkanRenderer {
     fn render(
         &mut self,
         dimensions: &[u32; 2],
-        world: &World,
+        world: &mut World,
         collision_world: &CollisionWorld<f32, ()>,
         draw_data: &DrawData,
     ) -> Result<()> {
@@ -93,17 +93,23 @@ impl Renderer for VulkanRenderer {
         camera_position.w = 1.0;
 
         // Maintain a perspective projection for the skybox
-        let using_ortho_projection = world.ecs.get::<Camera>(camera_entity)?.is_orthographic();
-        let skybox_projection = if using_ortho_projection {
-            let camera = PerspectiveCamera {
-                aspect_ratio: None,
-                y_fov_rad: 70_f32.to_radians(),
-                z_far: Some(1000.0),
-                z_near: 0.01,
-            };
-            camera.matrix(aspect_ratio)
-        } else {
-            projection
+        let skybox_projection = {
+            let entry = world
+                .ecs
+                .entry(camera_entity)
+                .context("Failed to lookup an entity!")?;
+            let using_ortho_projection = entry.get_component::<Camera>()?.is_orthographic();
+            if using_ortho_projection {
+                let camera = PerspectiveCamera {
+                    aspect_ratio: None,
+                    y_fov_rad: 70_f32.to_radians(),
+                    z_far: Some(1000.0),
+                    z_near: 0.01,
+                };
+                camera.matrix(aspect_ratio)
+            } else {
+                projection
+            }
         };
 
         frame.render(dimensions, |command_buffer, image_index| {

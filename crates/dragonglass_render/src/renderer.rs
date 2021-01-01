@@ -24,7 +24,7 @@ pub trait Renderer {
     fn render(
         &mut self,
         dimensions: &[u32; 2],
-        world: &World,
+        world: &mut World,
         collision_world: &CollisionWorld<f32, ()>,
         draw_data: &DrawData,
     ) -> Result<()>;

@@ -10,12 +10,85 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
 #[derive(Default)]
+pub struct Ecs {
+    pub world: legion::World,
+}
+
+impl Ecs {
+    pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
+
+    pub fn active_camera(&self) -> Result<Entity> {
+        let mut query = <(Entity, &Camera)>::query();
+        for (entity, camera) in query.iter(&self.world) {
+            if camera.enabled {
+                return Ok(*entity);
+            }
+        }
+        bail!("The world must have at least one entity with an enabled camera component to render with!")
+    }
+
+    pub fn active_camera_matrices(&mut self, aspect_ratio: f32) -> Result<(glm::Mat4, glm::Mat4)> {
+        let camera_entity = self.active_camera()?;
+        let transform = self.entity_global_transform(camera_entity)?;
+        let view = transform.as_view_matrix();
+        let projection = {
+            let entry = ecs
+                .world
+                .entry(camera_entity)
+                .context("Failed to find a requested camera entity!")?;
+            let camera = entry.get_component::<Camera>()?;
+            camera.projection_matrix(aspect_ratio)
+        };
+        Ok((projection, view))
+    }
+
+    pub fn active_camera_is_main(&mut self, ecs: &mut Ecs) -> Result<bool> {
+        let camera_entity = self.active_camera()?;
+        let entry = ecs
+            .world
+            .entry(camera_entity)
+            .context("The active camera entity does not have a Camera component!")?;
+        let camera = entry.get_component::<Camera>()?;
+        Ok(camera.name == Self::MAIN_CAMERA_NAME)
+    }
+
+    pub fn entity_global_transform(&mut self, entity: Entity) -> Result<Transform> {
+        let transform_matrix = self.entity_global_transform_matrix(entity)?;
+        Ok(Transform::from(transform_matrix))
+    }
+
+    pub fn entity_global_transform_matrix(&mut self, entity: Entity) -> Result<glm::Mat4> {
+        let mut transform = glm::Mat4::identity();
+        let mut node_index = None;
+        for graph in self.scene.graphs.iter() {
+            graph.walk(|index| {
+                if entity != graph[index] {
+                    return Ok(());
+                }
+                node_index = Some(index);
+                Ok(())
+            })?;
+            if let Some(node_index) = node_index {
+                transform = graph.global_transform(node_index, &mut self.ecs)?;
+                break;
+            }
+        }
+        if node_index.is_none() {
+            let entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+
+            // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
+            // Not found in the scenegraph, so the entity just have a local transform
+            transform = entry.get_component::<Transform>()?.matrix();
+        }
+        Ok(transform)
+    }
+}
+
+#[derive(Default)]
 pub struct World {
-    pub ecs: Ecs,
     pub scene: Scene,
     pub animations: Vec<Animation>,
     pub materials: Vec<Material>,
@@ -24,15 +97,13 @@ pub struct World {
 }
 
 impl World {
-    pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
-
-    pub fn new() -> World {
+    pub fn new(ecs: &mut Ecs) -> World {
         let mut world = World::default();
-        world.add_main_camera();
+        world.add_main_camera(ecs);
         world
     }
 
-    pub fn add_main_camera(&mut self) {
+    pub fn add_main_camera(&self, ecs: &mut Ecs) {
         let position = glm::vec3(0.0, 10.0, 10.0);
         let mut transform = Transform {
             translation: position,
@@ -40,7 +111,7 @@ impl World {
         };
         transform.look_at(&(-position), &glm::Vec3::y());
 
-        self.ecs.push((
+        ecs.push((
             transform,
             Camera {
                 name: Self::MAIN_CAMERA_NAME.to_string(),
@@ -55,48 +126,14 @@ impl World {
         ));
     }
 
-    pub fn active_camera(&self) -> Result<Entity> {
-        let mut query = <(Entity, &Camera)>::query();
-        for (entity, camera) in query.iter(&self.ecs) {
-            if camera.enabled {
-                return Ok(*entity);
-            }
-        }
-        bail!("The world must have at least one entity with an enabled camera component to render with!")
-    }
-    pub fn active_camera_matrices(&mut self, aspect_ratio: f32) -> Result<(glm::Mat4, glm::Mat4)> {
-        let camera_entity = self.active_camera()?;
-        let transform = self.entity_global_transform(camera_entity)?;
-        let view = transform.as_view_matrix();
-        let projection = {
-            let entry = self
-                .ecs
-                .entry(camera_entity)
-                .context("Failed to find a requested camera entity!")?;
-            let camera = entry.get_component::<Camera>()?;
-            camera.projection_matrix(aspect_ratio)
-        };
-        Ok((projection, view))
-    }
-
-    pub fn active_camera_is_main(&mut self) -> Result<bool> {
-        let camera_entity = self.active_camera()?;
-        let entry = self
-            .ecs
-            .entry(camera_entity)
-            .context("The active camera entity does not have a Camera component!")?;
-        let camera = entry.get_component::<Camera>()?;
-        Ok(camera.name == Self::MAIN_CAMERA_NAME)
-    }
-
-    pub fn clear(&mut self) {
-        self.ecs.clear();
+    pub fn clear(&mut self, ecs: &mut Ecs) {
+        ecs.world.clear();
         self.scene.graphs.clear();
         self.textures.clear();
         self.animations.clear();
         self.materials.clear();
         self.geometry.clear();
-        self.add_main_camera();
+        self.add_main_camera(ecs);
     }
 
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
@@ -256,37 +293,6 @@ impl World {
             }
         }
         Ok(joint_matrices)
-    }
-
-    pub fn entity_global_transform(&mut self, entity: Entity) -> Result<Transform> {
-        let transform_matrix = self.entity_global_transform_matrix(entity)?;
-        Ok(Transform::from(transform_matrix))
-    }
-
-    pub fn entity_global_transform_matrix(&mut self, entity: Entity) -> Result<glm::Mat4> {
-        let mut transform = glm::Mat4::identity();
-        let mut node_index = None;
-        for graph in self.scene.graphs.iter() {
-            graph.walk(|index| {
-                if entity != graph[index] {
-                    return Ok(());
-                }
-                node_index = Some(index);
-                Ok(())
-            })?;
-            if let Some(node_index) = node_index {
-                transform = graph.global_transform(node_index, &mut self.ecs)?;
-                break;
-            }
-        }
-        if node_index.is_none() {
-            let entry = self.ecs.entry(entity).context("Failed to find entity!")?;
-
-            // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
-            // Not found in the scenegraph, so the entity just have a local transform
-            transform = entry.get_component::<Transform>()?.matrix();
-        }
-        Ok(transform)
     }
 }
 
