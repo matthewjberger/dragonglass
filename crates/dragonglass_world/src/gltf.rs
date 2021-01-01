@@ -72,33 +72,37 @@ pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
         .into_iter()
         .for_each(|texture| world.textures.push(texture));
 
-    // let entities = world
-    //     .ecs
-    //     .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
-    //     .collect::<Vec<_>>();
+    let entities = world
+        .ecs
+        .extend((0..gltf.nodes().len()).map(|_| ()))
+        .to_vec();
 
-    // load_animations(&gltf, &buffers, &entities)?
-    //     .into_iter()
-    //     .for_each(|node| world.animations.push(node));
+    load_animations(&gltf, &buffers, &entities)?
+        .into_iter()
+        .for_each(|node| world.animations.push(node));
 
-    // load_nodes(&gltf, &buffers, &mut world, &entities)?;
-    // entities.iter().for_each(|entity| {
-    //     if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
-    //         mesh.primitives.iter_mut().for_each(|primitive| {
-    //             if let Some(material_index) = primitive.material_index.as_mut() {
-    //                 *material_index += number_of_materials
-    //             }
-    //         })
-    //     }
-    // });
+    load_nodes(&gltf, &buffers, &mut world, &entities)?;
+    entities.iter().for_each(|entity| {
+        let mut entry = match world.ecs.entry(*entity) {
+            Some(entry) => entry,
+            None => return,
+        };
+        if let Ok(mesh) = entry.get_component_mut::<Mesh>() {
+            mesh.primitives.iter_mut().for_each(|primitive| {
+                if let Some(material_index) = primitive.material_index.as_mut() {
+                    *material_index += number_of_materials
+                }
+            })
+        }
+    });
 
-    // // Only merge default scene
-    // let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
-    // if let Some(new_scene) = new_scenes.into_iter().next() {
-    //     new_scene.graphs.into_iter().for_each(|graph| {
-    //         world.scene.graphs.push(graph);
-    //     });
-    // }
+    // Only merge default scene
+    let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
+    if let Some(new_scene) = new_scenes.into_iter().next() {
+        new_scene.graphs.into_iter().for_each(|graph| {
+            world.scene.graphs.push(graph);
+        });
+    }
 
     Ok(())
 }
@@ -259,36 +263,31 @@ fn load_nodes(
     world: &mut World,
     entities: &[Entity],
 ) -> Result<()> {
-    // for (index, node) in gltf.nodes().enumerate() {
-    //     let entity = entities[index];
+    for (index, node) in gltf.nodes().enumerate() {
+        let entity = entities[index];
+        if let Some(mut entry) = world.ecs.entry(entity) {
+            let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-    //     let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
+            entry.add_component(Name(name));
+            entry.add_component(node_transform(&node));
 
-    //     world.ecs.insert(entity, (Name(name),))?;
+            if let Some(camera) = node.camera() {
+                entry.add_component(load_camera(&camera)?);
+            }
 
-    //     world.ecs.insert(entity, (node_transform(&node),))?;
+            if let Some(mesh) = node.mesh() {
+                entry.add_component(load_mesh(&mesh, buffers, &mut world.geometry)?);
+            }
 
-    //     if let Some(camera) = node.camera() {
-    //         world.ecs.insert(entity, (load_camera(&camera)?,))?;
-    //     }
+            if let Some(skin) = node.skin() {
+                entry.add_component(load_skin(&skin, buffers, entities));
+            }
 
-    //     if let Some(mesh) = node.mesh() {
-    //         world
-    //             .ecs
-    //             .insert(entity, (load_mesh(&mesh, buffers, &mut world.geometry)?,))?;
-    //     }
-
-    //     if let Some(skin) = node.skin() {
-    //         world
-    //             .ecs
-    //             .insert(entity, (load_skin(&skin, buffers, entities),))?;
-    //     }
-
-    //     if let Some(light) = node.light() {
-    //         world.ecs.insert(entity, (load_light(&light),))?;
-    //     }
-    // }
-
+            if let Some(light) = node.light() {
+                entry.add_component(load_light(&light));
+            }
+        }
+    }
     Ok(())
 }
 
