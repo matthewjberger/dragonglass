@@ -327,8 +327,8 @@ impl WorldPipelineData {
         }
     }
 
-    pub fn update_dynamic_ubo(&mut self, world: &World) -> Result<()> {
-        let world_joint_matrices = world.joint_matrices()?;
+    pub fn update_dynamic_ubo(&mut self, world: &World, ecs: &mut Ecs) -> Result<()> {
+        let world_joint_matrices = world.joint_matrices(ecs)?;
         let number_of_joints = world_joint_matrices.len();
         ensure!(
             number_of_joints < Self::MAX_NUMBER_OF_JOINTS,
@@ -337,7 +337,7 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world.scene, &world.ecs)?;
+        self.update_node_ubos(&world.scene, &ecs)?;
 
         Ok(())
     }
@@ -486,6 +486,7 @@ impl WorldRender {
     pub fn issue_commands(
         &self,
         command_buffer: vk::CommandBuffer,
+        ecs: &mut Ecs,
         world: &World,
         collision_world: &CollisionWorld<f32, ()>,
         aspect_ratio: f32,
@@ -510,7 +511,7 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        let (projection, view) = world.active_camera_matrices(ecs, aspect_ratio)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
@@ -520,23 +521,23 @@ impl WorldRender {
                     ubo_offset += 1;
                     let entity = graph[node_index];
 
-                    if world.ecs.get::<Hidden>(entity).is_ok() {
+                    if ecs.get::<Hidden>(entity).is_ok() {
                         return Ok(());
                     }
 
-                    if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
+                    if let Ok(mesh) = ecs.get::<Mesh>(entity) {
 
                         let bounding_box_color =
-                        if world.ecs.get::<Selected>(entity).is_ok() {
+                        if ecs.get::<Selected>(entity).is_ok() {
                             Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if world.ecs.get::<BoxColliderVisible>(entity).is_ok() {
+                        } else if ecs.get::<BoxColliderVisible>(entity).is_ok() {
                             Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
                         } else {
                             None
                         };
 
                         if let Some(display_color) = bounding_box_color {
-                            if let Ok(collider) = world.ecs.get::<BoxCollider>(entity) {
+                            if let Ok(collider) = ecs.get::<BoxCollider>(entity) {
                                 if let Some(collision_object) = collision_world.collision_object(collider.handle) {
                                     let position = collision_object.position();
                                     let translation = position.translation;

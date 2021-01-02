@@ -13,8 +13,8 @@ impl Arcball {
         let mouse_delta = application.input.mouse.position_delta;
         let mousewheel_delta = application.input.mouse.wheel_delta;
 
-        let camera_entity = application.world.active_camera()?;
-        let mut transform = application.world.ecs.get_mut::<Transform>(camera_entity)?;
+        let camera_entity = application.world.active_camera(&mut application.ecs)?;
+        let mut transform = application.ecs.get_mut::<Transform>(camera_entity)?;
         let forward = transform.forward();
         let up = transform.up();
         let right = transform.right();

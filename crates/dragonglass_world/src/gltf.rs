@@ -45,7 +45,7 @@ fn node_transform(node: &gltf::Node) -> Transform {
 
 const DEFAULT_NAME: &str = "<Unnamed>";
 
-pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
+pub fn load_gltf(path: impl AsRef<Path>, world: &mut World, ecs: &mut Ecs) -> Result<()> {
     let (gltf, buffers, images) = gltf::import(path)?;
 
     let number_of_materials = world.materials.len();
@@ -72,8 +72,7 @@ pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
         .into_iter()
         .for_each(|texture| world.textures.push(texture));
 
-    let entities = world
-        .ecs
+    let entities = ecs
         .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
         .collect::<Vec<_>>();
 
@@ -81,9 +80,9 @@ pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
         .into_iter()
         .for_each(|node| world.animations.push(node));
 
-    load_nodes(&gltf, &buffers, &mut world, &entities)?;
+    load_nodes(&gltf, &buffers, ecs, &mut world.geometry, &entities)?;
     entities.iter().for_each(|entity| {
-        if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
+        if let Ok(mut mesh) = ecs.get_mut::<Mesh>(*entity) {
             mesh.primitives.iter_mut().for_each(|primitive| {
                 if let Some(material_index) = primitive.material_index.as_mut() {
                     *material_index += number_of_materials
@@ -93,7 +92,7 @@ pub fn load_gltf(path: impl AsRef<Path>, mut world: &mut World) -> Result<()> {
     });
 
     // Only merge default scene
-    let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
+    let new_scenes = load_scenes(&gltf, ecs, &entities);
     if let Some(new_scene) = new_scenes.into_iter().next() {
         new_scene.graphs.into_iter().for_each(|graph| {
             world.scene.graphs.push(graph);
@@ -256,7 +255,8 @@ fn load_scenes(gltf: &gltf::Document, ecs: &mut Ecs, entities: &[Entity]) -> Vec
 fn load_nodes(
     gltf: &gltf::Document,
     buffers: &[gltf::buffer::Data],
-    world: &mut World,
+    ecs: &mut Ecs,
+    geometry: &mut Geometry,
     entities: &[Entity],
 ) -> Result<()> {
     for (index, node) in gltf.nodes().enumerate() {
@@ -264,28 +264,24 @@ fn load_nodes(
 
         let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-        world.ecs.insert(entity, (Name(name),))?;
+        ecs.insert(entity, (Name(name),))?;
 
-        world.ecs.insert(entity, (node_transform(&node),))?;
+        ecs.insert(entity, (node_transform(&node),))?;
 
         if let Some(camera) = node.camera() {
-            world.ecs.insert(entity, (load_camera(&camera)?,))?;
+            ecs.insert(entity, (load_camera(&camera)?,))?;
         }
 
         if let Some(mesh) = node.mesh() {
-            world
-                .ecs
-                .insert(entity, (load_mesh(&mesh, buffers, &mut world.geometry)?,))?;
+            ecs.insert(entity, (load_mesh(&mesh, buffers, geometry)?,))?;
         }
 
         if let Some(skin) = node.skin() {
-            world
-                .ecs
-                .insert(entity, (load_skin(&skin, buffers, entities),))?;
+            ecs.insert(entity, (load_skin(&skin, buffers, entities),))?;
         }
 
         if let Some(light) = node.light() {
-            world.ecs.insert(entity, (load_light(&light),))?;
+            ecs.insert(entity, (load_light(&light),))?;
         }
     }
 

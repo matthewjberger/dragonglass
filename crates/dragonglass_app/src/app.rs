@@ -2,7 +2,7 @@ use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
-use dragonglass_world::{BoxCollider, Entity, Mesh, Transform, World};
+use dragonglass_world::{BoxCollider, Ecs, Entity, Mesh, Transform, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
 use log::error;
@@ -61,6 +61,7 @@ impl AppConfig {
 }
 
 pub struct Application {
+    pub ecs: Ecs,
     pub world: World,
     pub collision_world: CollisionWorld<f32, ()>,
     pub physics_world: PhysicsWorld,
@@ -70,7 +71,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn pick_object(&self, interact_distance: f32) -> Result<Option<Entity>> {
+    pub fn pick_object(&mut self, interact_distance: f32) -> Result<Option<Entity>> {
         let ray = self.mouse_ray()?;
 
         let collision_group = CollisionGroups::new();
@@ -84,7 +85,7 @@ impl Application {
             Some(result) => {
                 let handle = result.handle;
                 let mut picked_entity = None;
-                for (entity, collider) in self.world.ecs.query::<&BoxCollider>().iter() {
+                for (entity, collider) in self.ecs.query::<&BoxCollider>().iter() {
                     if collider.handle == handle {
                         picked_entity = Some(entity);
                         break;
@@ -96,14 +97,16 @@ impl Application {
         }
     }
 
-    pub fn mouse_ray(&self) -> Result<Ray<f32>> {
+    pub fn mouse_ray(&mut self) -> Result<Ray<f32>> {
         let (width, height) = (
             self.system.window_dimensions[0] as f32,
             self.system.window_dimensions[1] as f32,
         );
         let aspect_ratio = self.system.aspect_ratio();
 
-        let (projection, view) = self.world.active_camera_matrices(aspect_ratio)?;
+        let (projection, view) = self
+            .world
+            .active_camera_matrices(&mut self.ecs, aspect_ratio)?;
 
         let mut position = self.input.mouse.position;
         position.y = height - position.y;
@@ -137,6 +140,7 @@ impl Application {
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
         self.renderer.render(
             &self.system.window_dimensions,
+            &mut self.ecs,
             &self.world,
             &self.collision_world,
             draw_data,
@@ -150,16 +154,22 @@ impl Application {
         let collision_group = CollisionGroups::new();
         let query_type = GeometricQueryType::Contacts(0.0, 0.0);
         let mut entity_map = HashMap::new();
-        for (entity, mesh) in self.world.ecs.query::<&Mesh>().iter() {
-            let bounding_box = mesh.bounding_box();
+        let mut entries = Vec::new();
+        for (entity, mesh) in self.ecs.query::<&Mesh>().iter() {
+            entries.push((entity, mesh.bounding_box()));
+        }
+        for (entity, bounding_box) in entries.into_iter() {
             let translation = glm::translation(&bounding_box.center());
-            let transform_matrix = self.world.entity_global_transform_matrix(entity)? * translation;
+            let transform_matrix = self
+                .world
+                .entity_global_transform_matrix(&mut self.ecs, entity)?
+                * translation;
             let transform = Transform::from(transform_matrix);
             let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
             let collider_shape = Cuboid::new(half_extents);
             let shape_handle = ShapeHandle::new(collider_shape);
 
-            match self.world.ecs.entity(entity) {
+            match self.ecs.entity(entity) {
                 Ok(entity_ref) => match entity_ref.get::<BoxCollider>() {
                     // collider exists already, sync it
                     Some(collider) => {
@@ -185,7 +195,7 @@ impl Application {
             }
         }
         for (entity, handle) in entity_map.into_iter() {
-            let _ = self.world.ecs.insert_one(entity, BoxCollider { handle });
+            let _ = self.ecs.insert_one(entity, BoxCollider { handle });
         }
         Ok(())
     }
@@ -258,8 +268,12 @@ pub fn run_application(
         gui.context_mut(),
     )?);
 
+    let mut ecs = Ecs::new();
+    let mut world = World::new(&mut ecs);
+
     let mut state = Application {
-        world: World::new(),
+        ecs,
+        world,
         collision_world: CollisionWorld::new(0.02f32),
         physics_world: PhysicsWorld::new(),
         input: Input::default(),
