@@ -293,17 +293,6 @@ impl World {
         }
         Ok(transform)
     }
-
-    // pub fn entities_with<T: Send + Sync + 'static>(&self, ecs: &mut Ecs) -> Vec<Entity> {
-    //     ecs.query::<&T>().iter().map(|(entity, _)| entity).collect()
-    // }
-
-    // pub fn remove_all<T: Send + Sync + 'static>(&mut self, ecs: &mut Ecs) {
-    //     let entities = self.entities_with::<T>(ecs);
-    //     for entity in entities.into_iter() {
-    //         let _ = ecs.remove_one::<T>(entity);
-    //     }
-    // }
 }
 
 #[derive(Default, Debug)]
