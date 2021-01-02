@@ -2,15 +2,18 @@ mod gltf;
 mod world;
 
 use ncollide3d::pipeline::CollisionObjectSlabHandle;
+use serde::{Deserialize, Serialize};
 
 pub use self::{gltf::*, world::*};
 
+#[derive(Serialize, Deserialize)]
 // TODO: Move collision code to separate module and remove ncollide3d from world module
 pub struct BoxCollider {
     pub handle: CollisionObjectSlabHandle,
     pub visible: bool,
 }
 
+#[derive(Default, Serialize, Deserialize)]
 pub struct Visibility(pub bool);
 
 impl Visibility {
@@ -19,6 +22,7 @@ impl Visibility {
     }
 }
 
+#[derive(Default, Serialize, Deserialize)]
 pub struct Selection(pub bool);
 
 impl Selection {
@@ -27,4 +31,5 @@ impl Selection {
     }
 }
 
+#[derive(Default, Serialize, Deserialize)]
 pub struct Name(pub String);

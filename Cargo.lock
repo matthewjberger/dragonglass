@@ -1141,6 +1141,7 @@ dependencies = [
  "nalgebra",
  "num-traits",
  "petgraph",
+ "serde",
  "simba",
  "slab",
  "slotmap",
