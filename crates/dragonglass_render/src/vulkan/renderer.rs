@@ -6,7 +6,7 @@ use crate::{
     },
     Renderer,
 };
-use anyhow::Result;
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
@@ -94,7 +94,11 @@ impl Renderer for VulkanRenderer {
         camera_position.w = 1.0;
 
         // Maintain a perspective projection for the skybox
-        let using_ortho_projection = ecs.get::<Camera>(camera_entity)?.is_orthographic();
+
+        let entry = ecs
+            .entry(camera_entity)
+            .context("Failed to lookup an entity!")?;
+        let using_ortho_projection = entry.get_component::<Camera>()?.is_orthographic();
         let skybox_projection = if using_ortho_projection {
             let camera = PerspectiveCamera {
                 aspect_ratio: None,

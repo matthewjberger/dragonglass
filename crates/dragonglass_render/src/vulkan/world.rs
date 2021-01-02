@@ -337,12 +337,12 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world.scene, &ecs)?;
+        self.update_node_ubos(&world.scene, ecs)?;
 
         Ok(())
     }
 
-    fn update_node_ubos(&mut self, scene: &Scene, ecs: &Ecs) -> Result<()> {
+    fn update_node_ubos(&mut self, scene: &Scene, ecs: &mut Ecs) -> Result<()> {
         let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
@@ -350,18 +350,20 @@ impl WorldPipelineData {
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, ecs)?;
+                let model = graph.global_transform(ecs, node_index)?;
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
-                if let Ok(skin) = ecs.get::<Skin>(entity) {
+                let entry = ecs.entry(entity).context("Failed to lookup an entity!")?;
+
+                if let Ok(skin) = entry.get_component::<Skin>() {
                     let joint_count = skin.joints.len();
                     node_info.x = joint_count as f32;
                     node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                if let Ok(mesh) = ecs.get::<Mesh>(entity) {
+                if let Ok(mesh) = entry.get_component::<Mesh>() {
                     let weight_count = mesh.weights.len();
                     node_info.z = weight_count as f32;
                     node_info.w = weight_offset as f32;
@@ -521,23 +523,27 @@ impl WorldRender {
                     ubo_offset += 1;
                     let entity = graph[node_index];
 
-                    if ecs.get::<Hidden>(entity).is_ok() {
+                    let entry = 
+                        ecs
+                        .entry(entity)
+                        .context("Failed to lookup an entity!")?;
+
+                    if entry.get_component::<Hidden>().is_ok() {
                         return Ok(());
                     }
 
-                    if let Ok(mesh) = ecs.get::<Mesh>(entity) {
-
+                    if let Ok(mesh) = entry.get_component::<Mesh>() {
                         let bounding_box_color =
-                        if ecs.get::<Selected>(entity).is_ok() {
+                        if entry.get_component::<Selected>().is_ok() {
                             Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if ecs.get::<BoxColliderVisible>(entity).is_ok() {
+                        } else if entry.get_component::<BoxColliderVisible>().is_ok() {
                             Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
                         } else {
                             None
                         };
 
                         if let Some(display_color) = bounding_box_color {
-                            if let Ok(collider) = ecs.get::<BoxCollider>(entity) {
+                            if let Ok(collider) = entry.get_component::<BoxCollider>() {
                                 if let Some(collision_object) = collision_world.collision_object(collider.handle) {
                                     let position = collision_object.position();
                                     let translation = position.translation;

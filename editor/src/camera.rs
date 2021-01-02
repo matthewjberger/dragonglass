@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context as AnyhowContext, Result};
 use dragonglass::{app::Application, world::Transform};
 use nalgebra_glm as glm;
 
@@ -14,7 +14,13 @@ impl Arcball {
         let mousewheel_delta = application.input.mouse.wheel_delta;
 
         let camera_entity = application.world.active_camera(&mut application.ecs)?;
-        let mut transform = application.ecs.get_mut::<Transform>(camera_entity)?;
+
+        let mut entry = application
+            .ecs
+            .entry(camera_entity)
+            .context("Failed to lookup an entity!")?;
+        let mut transform = entry.get_component_mut::<Transform>()?;
+
         let forward = transform.forward();
         let up = transform.up();
         let right = transform.right();

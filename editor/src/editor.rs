@@ -43,76 +43,80 @@ impl Editor {
     }
 
     fn show_hovered_object_collider(&self, application: &mut Application) -> Result<()> {
-        application
-            .world
-            .remove_all::<BoxColliderVisible>(&mut application.ecs);
-        if let Some(entity) = application.pick_object(f32::MAX)? {
-            let _ = application.ecs.insert_one(entity, BoxColliderVisible {});
-        }
+        // FIXME legion
+        // application
+        //     .world
+        //     .remove_all::<BoxColliderVisible>(&mut application.ecs);
+        // if let Some(entity) = application.pick_object(f32::MAX)? {
+        //     let _ = application.ecs.insert_one(entity, BoxColliderVisible {});
+        // }
         Ok(())
     }
 
     fn clear_colliders(application: &mut Application) {
-        let colliders = application
-            .ecs
-            .query::<&BoxCollider>()
-            .iter()
-            .map(|(_entity, collider)| collider.handle)
-            .collect::<Vec<_>>();
-        application.collision_world.remove(&colliders);
+        // FIXME legion
+        // let colliders = application
+        //     .ecs
+        //     .query::<&BoxCollider>()
+        //     .iter()
+        //     .map(|(_entity, collider)| collider.handle)
+        //     .collect::<Vec<_>>();
+        // application.collision_world.remove(&colliders);
     }
 }
 
 impl ApplicationRunner for Editor {
+    // FIXME legion
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
-        ui.text(im_str!(
-            "Number of entities: {}",
-            application.ecs.iter().count()
-        ));
-        let number_of_meshes = application.ecs.query::<&Mesh>().iter().count();
-        ui.text(im_str!("Number of meshes: {}", number_of_meshes));
-        ui.text(im_str!(
-            "Number of animations: {}",
-            application.world.animations.len()
-        ));
-        ui.text(im_str!(
-            "Number of textures: {}",
-            application.world.textures.len()
-        ));
-        ui.text(im_str!(
-            "Number of materials: {}",
-            application.world.materials.len()
-        ));
-        ui.text(im_str!(
-            "Number of collision_objects: {}",
-            application.collision_world.collision_objects().count()
-        ));
+        ui.text(im_str!("placeholder text"));
+        // ui.text(im_str!(
+        //     "Number of entities: {}",
+        //     application.ecs.iter().count()
+        // ));
+        // let number_of_meshes = application.ecs.query::<&Mesh>().iter().count();
+        // ui.text(im_str!("Number of meshes: {}", number_of_meshes));
+        // ui.text(im_str!(
+        //     "Number of animations: {}",
+        //     application.world.animations.len()
+        // ));
+        // ui.text(im_str!(
+        //     "Number of textures: {}",
+        //     application.world.textures.len()
+        // ));
+        // ui.text(im_str!(
+        //     "Number of materials: {}",
+        //     application.world.materials.len()
+        // ));
+        // ui.text(im_str!(
+        //     "Number of collision_objects: {}",
+        //     application.collision_world.collision_objects().count()
+        // ));
 
-        ui.separator();
-        ui.text(im_str!("Cameras"));
-        let mut change_camera = None;
-        for (index, (entity, camera)) in application.ecs.query::<&Camera>().iter().enumerate() {
-            let label = if camera.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            };
-            let clicked = ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
-            if change_camera.is_none() && clicked {
-                change_camera = Some(entity);
-            }
-        }
-        if let Some(selected_camera_entity) = change_camera {
-            for (entity, camera) in application.ecs.query_mut::<&mut Camera>() {
-                camera.enabled = entity == selected_camera_entity;
-            }
-        }
+        // ui.separator();
+        // ui.text(im_str!("Cameras"));
+        // let mut change_camera = None;
+        // for (index, (entity, camera)) in application.ecs.query::<&Camera>().iter().enumerate() {
+        //     let label = if camera.enabled {
+        //         "enabled"
+        //     } else {
+        //         "disabled"
+        //     };
+        //     let clicked = ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
+        //     if change_camera.is_none() && clicked {
+        //         change_camera = Some(entity);
+        //     }
+        // }
+        // if let Some(selected_camera_entity) = change_camera {
+        //     for (entity, camera) in application.ecs.query_mut::<&mut Camera>() {
+        //         camera.enabled = entity == selected_camera_entity;
+        //     }
+        // }
 
-        ui.separator();
-        ui.text(im_str!("Selected Entities"));
-        for (entity, _) in application.ecs.query::<&Selected>().iter() {
-            ui.text(im_str!("{:#?}", entity));
-        }
+        // ui.separator();
+        // ui.text(im_str!("Selected Entities"));
+        // for (entity, _) in application.ecs.query::<&Selected>().iter() {
+        //     ui.text(im_str!("{:#?}", entity));
+        // }
 
         Ok(())
     }
@@ -201,18 +205,19 @@ impl ApplicationRunner for Editor {
                 None => return Ok(()),
             };
 
-            let already_selected = application.ecs.get::<Selected>(entity).is_ok();
-            let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
-            if !shift_active {
-                application
-                    .world
-                    .remove_all::<Selected>(&mut application.ecs);
-            }
-            if !already_selected {
-                let _ = application.ecs.insert_one(entity, Selected {});
-            } else if shift_active {
-                let _ = application.ecs.remove_one::<Selected>(entity);
-            }
+            // FIXME legion
+            // let already_selected = application.ecs.get::<Selected>(entity).is_ok();
+            // let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
+            // if !shift_active {
+            //     application
+            //         .world
+            //         .remove_all::<Selected>(&mut application.ecs);
+            // }
+            // if !already_selected {
+            //     let _ = application.ecs.insert_one(entity, Selected {});
+            // } else if shift_active {
+            //     let _ = application.ecs.remove_one::<Selected>(entity);
+            // }
         }
         Ok(())
     }
