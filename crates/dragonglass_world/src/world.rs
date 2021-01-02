@@ -14,7 +14,7 @@ use std::{
 pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct World {
     pub scene: Scene,
     pub animations: Vec<Animation>,
@@ -295,7 +295,7 @@ impl World {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
@@ -641,7 +641,7 @@ impl Default for Vertex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Animation {
     pub name: String,
     pub time: f32,
@@ -649,7 +649,7 @@ pub struct Animation {
     pub max_animation_time: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Channel {
     pub target: Entity,
     pub inputs: Vec<f32>,
@@ -793,7 +793,7 @@ impl Default for Filter {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneGraph(pub Graph<Entity, ()>);
 
 impl Default for SceneGraph {
