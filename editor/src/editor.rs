@@ -18,12 +18,16 @@ pub struct Editor {
 
 impl Editor {
     fn load_gltf(&mut self, path: &str, application: &mut Application) -> Result<()> {
-        load_gltf(path, &mut application.world, &mut application.ecs)?;
+        load_gltf(
+            path,
+            &mut application.universe.world,
+            &mut application.universe.ecs,
+        )?;
 
         self.add_required_components(application);
 
         // FIXME: Don't reload entire scene whenever something is added
-        match application.renderer.load_world(&application.world) {
+        match application.renderer.load_world(&application.universe.world) {
             Ok(_) => {
                 info!("Loaded gltf world: '{}'", path);
             }
@@ -47,11 +51,11 @@ impl Editor {
     }
 
     fn show_hovered_object_collider(&self, application: &mut Application) -> Result<()> {
-        for box_collider in <&mut BoxCollider>::query().iter_mut(&mut application.ecs) {
+        for box_collider in <&mut BoxCollider>::query().iter_mut(&mut application.universe.ecs) {
             box_collider.visible = false;
         }
         if let Some(entity) = application.pick_object(f32::MAX)? {
-            if let Some(mut entry) = application.ecs.entry(entity) {
+            if let Some(mut entry) = application.universe.ecs.entry(entity) {
                 let mut box_collider = entry.get_component_mut::<BoxCollider>()?;
                 box_collider.visible = true;
             }
@@ -61,11 +65,11 @@ impl Editor {
 
     fn clear_colliders(application: &mut Application) {
         let entities = <(Entity, &BoxCollider)>::query()
-            .iter_mut(&mut application.ecs)
+            .iter_mut(&mut application.universe.ecs)
             .map(|(entity, _)| *entity)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            if let Some(mut entry) = application.ecs.entry(entity) {
+            if let Some(mut entry) = application.universe.ecs.entry(entity) {
                 entry.remove_component::<BoxCollider>();
             }
         }
@@ -73,11 +77,11 @@ impl Editor {
 
     fn add_required_components(&mut self, application: &mut Application) {
         let entities = <Entity>::query()
-            .iter(&mut application.ecs)
+            .iter(&mut application.universe.ecs)
             .map(|entity| *entity)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            if let Some(mut entry) = application.ecs.entry(entity) {
+            if let Some(mut entry) = application.universe.ecs.entry(entity) {
                 let has_selection_component = entry.get_component::<Selection>().is_ok();
                 if !has_selection_component {
                     entry.add_component(Selection(false));
@@ -94,30 +98,34 @@ impl Editor {
 impl ApplicationRunner for Editor {
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
         ui.text(im_str!("placeholder text"));
-        let number_of_meshes = <&Mesh>::query().iter(&application.ecs).count();
+        let number_of_meshes = <&Mesh>::query().iter(&application.universe.ecs).count();
         ui.text(im_str!("Number of meshes: {}", number_of_meshes));
         ui.text(im_str!(
             "Number of animations: {}",
-            application.world.animations.len()
+            application.universe.world.animations.len()
         ));
         ui.text(im_str!(
             "Number of textures: {}",
-            application.world.textures.len()
+            application.universe.world.textures.len()
         ));
         ui.text(im_str!(
             "Number of materials: {}",
-            application.world.materials.len()
+            application.universe.world.materials.len()
         ));
         ui.text(im_str!(
             "Number of collision_objects: {}",
-            application.collision_world.collision_objects().count()
+            application
+                .universe
+                .collision_world
+                .collision_objects()
+                .count()
         ));
 
         ui.separator();
         ui.text(im_str!("Cameras"));
         let mut change_camera = None;
         for (index, (entity, camera)) in <(Entity, &Camera)>::query()
-            .iter(&mut application.ecs)
+            .iter(&mut application.universe.ecs)
             .enumerate()
         {
             let label = if camera.enabled {
@@ -132,7 +140,8 @@ impl ApplicationRunner for Editor {
         }
 
         if let Some(selected_camera_entity) = change_camera {
-            for (entity, camera) in <(Entity, &mut Camera)>::query().iter_mut(&mut application.ecs)
+            for (entity, camera) in
+                <(Entity, &mut Camera)>::query().iter_mut(&mut application.universe.ecs)
             {
                 camera.enabled = *entity == selected_camera_entity;
             }
@@ -140,7 +149,7 @@ impl ApplicationRunner for Editor {
 
         ui.separator();
         ui.text(im_str!("Selected Entities"));
-        for (entity, _) in <(Entity, &Selection)>::query().iter(&application.ecs) {
+        for (entity, _) in <(Entity, &Selection)>::query().iter(&application.universe.ecs) {
             ui.text(im_str!("{:#?}", entity));
         }
 
@@ -152,9 +161,9 @@ impl ApplicationRunner for Editor {
             application.system.exit_requested = true;
         }
 
-        if !application.world.animations.is_empty() {
-            application.world.animate(
-                &mut application.ecs,
+        if !application.universe.world.animations.is_empty() {
+            application.universe.world.animate(
+                &mut application.universe.ecs,
                 0,
                 0.75 * application.system.delta_time as f32,
             )?;
@@ -165,8 +174,9 @@ impl ApplicationRunner for Editor {
         }
 
         if application
+            .universe
             .world
-            .active_camera_is_main(&mut application.ecs)?
+            .active_camera_is_main(&mut application.universe.ecs)?
         {
             self.arcball.update(application)?;
         }
@@ -186,8 +196,11 @@ impl ApplicationRunner for Editor {
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 Self::clear_colliders(application);
-                application.world.clear(&mut application.ecs);
-                if let Err(error) = application.renderer.load_world(&application.world) {
+                application
+                    .universe
+                    .world
+                    .clear(&mut application.universe.ecs);
+                if let Err(error) = application.renderer.load_world(&application.universe.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
             }
@@ -232,13 +245,13 @@ impl ApplicationRunner for Editor {
             };
 
             let already_selected = {
-                match application.ecs.entry(entity) {
+                match application.universe.ecs.entry(entity) {
                     Some(entry) => {
                         let already_selected = entry.get_component::<Selection>()?.is_selected();
                         let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
                         if !shift_active {
                             for selection in
-                                <&mut Selection>::query().iter_mut(&mut application.ecs)
+                                <&mut Selection>::query().iter_mut(&mut application.universe.ecs)
                             {
                                 selection.0 = false;
                             }
@@ -249,7 +262,7 @@ impl ApplicationRunner for Editor {
                 }
             };
 
-            if let Some(mut entry) = application.ecs.entry(entity) {
+            if let Some(mut entry) = application.universe.ecs.entry(entity) {
                 entry.get_component_mut::<Selection>()?.0 = !already_selected;
             }
         }

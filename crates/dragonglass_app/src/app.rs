@@ -61,11 +61,28 @@ impl AppConfig {
     }
 }
 
-pub struct Application {
+pub struct Universe {
     pub ecs: Ecs,
     pub world: World,
     pub collision_world: CollisionWorld<f32, ()>,
     pub physics_world: PhysicsWorld,
+}
+
+impl Universe {
+    pub fn new() -> Self {
+        let mut ecs = Ecs::default();
+        let world = World::new(&mut ecs);
+        Self {
+            ecs,
+            world,
+            collision_world: CollisionWorld::new(0.02f32),
+            physics_world: PhysicsWorld::new(),
+        }
+    }
+}
+
+pub struct Application {
+    pub universe: Universe,
     pub input: Input,
     pub system: System,
     pub renderer: Box<dyn Renderer>,
@@ -76,7 +93,7 @@ impl Application {
         let ray = self.mouse_ray()?;
 
         let collision_group = CollisionGroups::new();
-        let raycast_result = self.collision_world.first_interference_with_ray(
+        let raycast_result = self.universe.collision_world.first_interference_with_ray(
             &ray,
             interact_distance,
             &collision_group,
@@ -86,7 +103,8 @@ impl Application {
             Some(result) => {
                 let handle = result.handle;
                 let mut picked_entity = None;
-                for (entity, collider) in <(Entity, &BoxCollider)>::query().iter(&self.ecs) {
+                for (entity, collider) in <(Entity, &BoxCollider)>::query().iter(&self.universe.ecs)
+                {
                     if collider.handle == handle {
                         picked_entity = Some(*entity);
                         break;
@@ -106,8 +124,9 @@ impl Application {
         let aspect_ratio = self.system.aspect_ratio();
 
         let (projection, view) = self
+            .universe
             .world
-            .active_camera_matrices(&mut self.ecs, aspect_ratio)?;
+            .active_camera_matrices(&mut self.universe.ecs, aspect_ratio)?;
 
         let mut position = self.input.mouse.position;
         position.y = height - position.y;
@@ -133,17 +152,17 @@ impl Application {
 
     pub fn update(&mut self) -> Result<()> {
         self.update_colliders()?;
-        self.collision_world.update();
-        self.physics_world.update();
+        self.universe.collision_world.update();
+        self.universe.physics_world.update();
         Ok(())
     }
 
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
         self.renderer.render(
             &self.system.window_dimensions,
-            &mut self.ecs,
-            &self.world,
-            &self.collision_world,
+            &mut self.universe.ecs,
+            &self.universe.world,
+            &self.universe.collision_world,
             draw_data,
         )?;
         Ok(())
@@ -158,27 +177,28 @@ impl Application {
         let mut entity_map = HashMap::new();
 
         let entities = <(Entity, &Mesh)>::query()
-            .iter(&self.ecs)
+            .iter(&self.universe.ecs)
             .map(|(entity, mesh)| (*entity, mesh.bounding_box()))
             .collect::<Vec<_>>();
 
         for (entity, bounding_box) in entities.into_iter() {
             let translation = glm::translation(&bounding_box.center());
             let transform_matrix = self
+                .universe
                 .world
-                .entity_global_transform_matrix(&mut self.ecs, entity)?
+                .entity_global_transform_matrix(&mut self.universe.ecs, entity)?
                 * translation;
             let transform = Transform::from(transform_matrix);
             let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
             let collider_shape = Cuboid::new(half_extents);
             let shape_handle = ShapeHandle::new(collider_shape);
 
-            match self.ecs.entry(entity) {
+            match self.universe.ecs.entry(entity) {
                 Some(entry) => match entry.get_component::<BoxCollider>() {
                     // collider exists already, sync it
                     Ok(collider) => {
                         if let Some(collision_object) =
-                            self.collision_world.get_mut(collider.handle)
+                            self.universe.collision_world.get_mut(collider.handle)
                         {
                             collision_object.set_position(transform.as_isometry());
                             collision_object.set_shape(shape_handle);
@@ -186,7 +206,7 @@ impl Application {
                     }
                     // collider doesn't exist already, create and add it
                     Err(_) => {
-                        let (handle, _collision_object) = self.collision_world.add(
+                        let (handle, _collision_object) = self.universe.collision_world.add(
                             transform.as_isometry(),
                             shape_handle,
                             collision_group,
@@ -201,7 +221,7 @@ impl Application {
         }
 
         for (entity, handle) in entity_map.into_iter() {
-            if let Some(mut entry) = self.ecs.entry(entity) {
+            if let Some(mut entry) = self.universe.ecs.entry(entity) {
                 entry.add_component(BoxCollider {
                     handle,
                     visible: true,
@@ -279,14 +299,8 @@ pub fn run_application(
         gui.context_mut(),
     )?);
 
-    let mut ecs = Ecs::default();
-    let world = World::new(&mut ecs);
-
     let mut state = Application {
-        ecs,
-        world,
-        collision_world: CollisionWorld::new(0.02f32),
-        physics_world: PhysicsWorld::new(),
+        universe: Universe::new(),
         input: Input::default(),
         system: System::new(window_dimensions),
         renderer,

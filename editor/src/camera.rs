@@ -13,9 +13,13 @@ impl Arcball {
         let mouse_delta = application.input.mouse.position_delta;
         let mousewheel_delta = application.input.mouse.wheel_delta;
 
-        let camera_entity = application.world.active_camera(&mut application.ecs)?;
+        let camera_entity = application
+            .universe
+            .world
+            .active_camera(&mut application.universe.ecs)?;
 
         let mut entry = application
+            .universe
             .ecs
             .entry(camera_entity)
             .context("Failed to lookup an entity!")?;
