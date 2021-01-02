@@ -8,7 +8,6 @@ use petgraph::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    marker::{Send, Sync},
     ops::{Index, IndexMut},
 };
 

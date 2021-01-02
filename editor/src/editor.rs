@@ -2,9 +2,11 @@ use crate::camera::Arcball;
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner},
-    world::{load_gltf, BoxCollider, BoxColliderVisible, Camera, Mesh, Selected},
+    world::Visibility,
+    world::{load_gltf, BoxCollider, Camera, Entity, Mesh, Selection},
 };
 use imgui::{im_str, Ui};
+use legion::IntoQuery;
 use log::{error, info, warn};
 use std::path::PathBuf;
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
@@ -15,8 +17,10 @@ pub struct Editor {
 }
 
 impl Editor {
-    fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
+    fn load_gltf(&mut self, path: &str, application: &mut Application) -> Result<()> {
         load_gltf(path, &mut application.world, &mut application.ecs)?;
+
+        self.add_required_components(application);
 
         // FIXME: Don't reload entire scene whenever something is added
         match application.renderer.load_world(&application.world) {
@@ -43,80 +47,102 @@ impl Editor {
     }
 
     fn show_hovered_object_collider(&self, application: &mut Application) -> Result<()> {
-        // FIXME legion
-        // application
-        //     .world
-        //     .remove_all::<BoxColliderVisible>(&mut application.ecs);
-        // if let Some(entity) = application.pick_object(f32::MAX)? {
-        //     let _ = application.ecs.insert_one(entity, BoxColliderVisible {});
-        // }
+        for box_collider in <&mut BoxCollider>::query().iter_mut(&mut application.ecs) {
+            box_collider.visible = false;
+        }
+        if let Some(entity) = application.pick_object(f32::MAX)? {
+            if let Some(mut entry) = application.ecs.entry(entity) {
+                let mut box_collider = entry.get_component_mut::<BoxCollider>()?;
+                box_collider.visible = true;
+            }
+        }
         Ok(())
     }
 
     fn clear_colliders(application: &mut Application) {
-        // FIXME legion
-        // let colliders = application
-        //     .ecs
-        //     .query::<&BoxCollider>()
-        //     .iter()
-        //     .map(|(_entity, collider)| collider.handle)
-        //     .collect::<Vec<_>>();
-        // application.collision_world.remove(&colliders);
+        let entities = <(Entity, &BoxCollider)>::query()
+            .iter_mut(&mut application.ecs)
+            .map(|(entity, _)| *entity)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            if let Some(mut entry) = application.ecs.entry(entity) {
+                entry.remove_component::<BoxCollider>();
+            }
+        }
+    }
+
+    fn add_required_components(&mut self, application: &mut Application) {
+        let entities = <Entity>::query()
+            .iter(&mut application.ecs)
+            .map(|entity| *entity)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            if let Some(mut entry) = application.ecs.entry(entity) {
+                let has_selection_component = entry.get_component::<Selection>().is_ok();
+                if !has_selection_component {
+                    entry.add_component(Selection(false));
+                }
+                let has_visibility_component = entry.get_component::<Visibility>().is_ok();
+                if !has_visibility_component {
+                    entry.add_component(Visibility(true));
+                }
+            }
+        }
     }
 }
 
 impl ApplicationRunner for Editor {
-    // FIXME legion
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
         ui.text(im_str!("placeholder text"));
-        // ui.text(im_str!(
-        //     "Number of entities: {}",
-        //     application.ecs.iter().count()
-        // ));
-        // let number_of_meshes = application.ecs.query::<&Mesh>().iter().count();
-        // ui.text(im_str!("Number of meshes: {}", number_of_meshes));
-        // ui.text(im_str!(
-        //     "Number of animations: {}",
-        //     application.world.animations.len()
-        // ));
-        // ui.text(im_str!(
-        //     "Number of textures: {}",
-        //     application.world.textures.len()
-        // ));
-        // ui.text(im_str!(
-        //     "Number of materials: {}",
-        //     application.world.materials.len()
-        // ));
-        // ui.text(im_str!(
-        //     "Number of collision_objects: {}",
-        //     application.collision_world.collision_objects().count()
-        // ));
+        let number_of_meshes = <&Mesh>::query().iter(&application.ecs).count();
+        ui.text(im_str!("Number of meshes: {}", number_of_meshes));
+        ui.text(im_str!(
+            "Number of animations: {}",
+            application.world.animations.len()
+        ));
+        ui.text(im_str!(
+            "Number of textures: {}",
+            application.world.textures.len()
+        ));
+        ui.text(im_str!(
+            "Number of materials: {}",
+            application.world.materials.len()
+        ));
+        ui.text(im_str!(
+            "Number of collision_objects: {}",
+            application.collision_world.collision_objects().count()
+        ));
 
-        // ui.separator();
-        // ui.text(im_str!("Cameras"));
-        // let mut change_camera = None;
-        // for (index, (entity, camera)) in application.ecs.query::<&Camera>().iter().enumerate() {
-        //     let label = if camera.enabled {
-        //         "enabled"
-        //     } else {
-        //         "disabled"
-        //     };
-        //     let clicked = ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
-        //     if change_camera.is_none() && clicked {
-        //         change_camera = Some(entity);
-        //     }
-        // }
-        // if let Some(selected_camera_entity) = change_camera {
-        //     for (entity, camera) in application.ecs.query_mut::<&mut Camera>() {
-        //         camera.enabled = entity == selected_camera_entity;
-        //     }
-        // }
+        ui.separator();
+        ui.text(im_str!("Cameras"));
+        let mut change_camera = None;
+        for (index, (entity, camera)) in <(Entity, &Camera)>::query()
+            .iter(&mut application.ecs)
+            .enumerate()
+        {
+            let label = if camera.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            };
+            let clicked = ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
+            if change_camera.is_none() && clicked {
+                change_camera = Some(*entity);
+            }
+        }
 
-        // ui.separator();
-        // ui.text(im_str!("Selected Entities"));
-        // for (entity, _) in application.ecs.query::<&Selected>().iter() {
-        //     ui.text(im_str!("{:#?}", entity));
-        // }
+        if let Some(selected_camera_entity) = change_camera {
+            for (entity, camera) in <(Entity, &mut Camera)>::query().iter_mut(&mut application.ecs)
+            {
+                camera.enabled = *entity == selected_camera_entity;
+            }
+        }
+
+        ui.separator();
+        ui.text(im_str!("Selected Entities"));
+        for (entity, _) in <(Entity, &Selection)>::query().iter(&application.ecs) {
+            ui.text(im_str!("{:#?}", entity));
+        }
 
         Ok(())
     }
@@ -178,7 +204,7 @@ impl ApplicationRunner for Editor {
 
         if let Some(extension) = path.extension() {
             match extension.to_str() {
-                Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
+                Some("glb") | Some("gltf") => self.load_gltf(raw_path, application)?,
                 Some("hdr") => Self::load_hdr(raw_path, application),
                 _ => warn!(
                     "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
@@ -205,19 +231,27 @@ impl ApplicationRunner for Editor {
                 None => return Ok(()),
             };
 
-            // FIXME legion
-            // let already_selected = application.ecs.get::<Selected>(entity).is_ok();
-            // let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
-            // if !shift_active {
-            //     application
-            //         .world
-            //         .remove_all::<Selected>(&mut application.ecs);
-            // }
-            // if !already_selected {
-            //     let _ = application.ecs.insert_one(entity, Selected {});
-            // } else if shift_active {
-            //     let _ = application.ecs.remove_one::<Selected>(entity);
-            // }
+            let already_selected = {
+                match application.ecs.entry(entity) {
+                    Some(entry) => {
+                        let already_selected = entry.get_component::<Selection>()?.is_selected();
+                        let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
+                        if !shift_active {
+                            for selection in
+                                <&mut Selection>::query().iter_mut(&mut application.ecs)
+                            {
+                                selection.0 = false;
+                            }
+                        }
+                        already_selected
+                    }
+                    None => false,
+                }
+            };
+
+            if let Some(mut entry) = application.ecs.entry(entity) {
+                entry.get_component_mut::<Selection>()?.0 = !already_selected;
+            }
         }
         Ok(())
     }

@@ -152,50 +152,62 @@ impl Application {
     /// Add/Syncs basic cuboid colliders for all meshes that do not have one yet
     /// This is meant to allow for basic 3D picking
     fn update_colliders(&mut self) -> Result<()> {
-        // FIXME legion
-        // let collision_group = CollisionGroups::new();
-        // let query_type = GeometricQueryType::Contacts(0.0, 0.0);
-        // let mut entries = Vec::new();
-        // for (entity, mesh) in <(Entity, &Mesh)>::query().iter(&self.ecs) {
-        //     entries.push((entity, mesh.bounding_box()));
-        // }
-        // for (entity, bounding_box) in entries.into_iter() {
-        //     let translation = glm::translation(&bounding_box.center());
-        //     let transform_matrix = self
-        //         .world
-        //         .entity_global_transform_matrix(&mut self.ecs, *entity)?
-        //         * translation;
-        //     let transform = Transform::from(transform_matrix);
-        //     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-        //     let collider_shape = Cuboid::new(half_extents);
-        //     let shape_handle = ShapeHandle::new(collider_shape);
+        let collision_group = CollisionGroups::new();
+        let query_type = GeometricQueryType::Contacts(0.0, 0.0);
 
-        //     match self.ecs.entry(*entity) {
-        //         Some(entry) => match entry.get_component::<BoxCollider>() {
-        //             // collider exists already, sync it
-        //             Ok(collider) => {
-        //                 if let Some(collision_object) =
-        //                     self.collision_world.get_mut(collider.handle)
-        //                 {
-        //                     collision_object.set_position(transform.as_isometry());
-        //                     collision_object.set_shape(shape_handle);
-        //                 }
-        //             }
-        //             // Collider component was not found
-        //             Err(_) => {
-        //                 let (handle, _collision_object) = self.collision_world.add(
-        //                     transform.as_isometry(),
-        //                     shape_handle,
-        //                     collision_group,
-        //                     query_type,
-        //                     (),
-        //                 );
-        //                 entry.add_component(BoxCollider { handle });
-        //             }
-        //         },
-        //         None => continue,
-        //     }
-        // }
+        let mut entity_map = HashMap::new();
+
+        let entities = <(Entity, &Mesh)>::query()
+            .iter(&self.ecs)
+            .map(|(entity, mesh)| (*entity, mesh.bounding_box()))
+            .collect::<Vec<_>>();
+
+        for (entity, bounding_box) in entities.into_iter() {
+            let translation = glm::translation(&bounding_box.center());
+            let transform_matrix = self
+                .world
+                .entity_global_transform_matrix(&mut self.ecs, entity)?
+                * translation;
+            let transform = Transform::from(transform_matrix);
+            let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+            let collider_shape = Cuboid::new(half_extents);
+            let shape_handle = ShapeHandle::new(collider_shape);
+
+            match self.ecs.entry(entity) {
+                Some(entry) => match entry.get_component::<BoxCollider>() {
+                    // collider exists already, sync it
+                    Ok(collider) => {
+                        if let Some(collision_object) =
+                            self.collision_world.get_mut(collider.handle)
+                        {
+                            collision_object.set_position(transform.as_isometry());
+                            collision_object.set_shape(shape_handle);
+                        }
+                    }
+                    // collider doesn't exist already, create and add it
+                    Err(_) => {
+                        let (handle, _collision_object) = self.collision_world.add(
+                            transform.as_isometry(),
+                            shape_handle,
+                            collision_group,
+                            query_type,
+                            (),
+                        );
+                        entity_map.insert(entity, handle);
+                    }
+                },
+                None => continue,
+            }
+        }
+
+        for (entity, handle) in entity_map.into_iter() {
+            if let Some(mut entry) = self.ecs.entry(entity) {
+                entry.add_component(BoxCollider {
+                    handle,
+                    visible: true,
+                });
+            }
+        }
         Ok(())
     }
 }
@@ -268,7 +280,7 @@ pub fn run_application(
     )?);
 
     let mut ecs = Ecs::default();
-    let mut world = World::new(&mut ecs);
+    let world = World::new(&mut ecs);
 
     let mut state = Application {
         ecs,

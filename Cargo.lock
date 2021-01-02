@@ -606,6 +606,7 @@ dependencies = [
  "anyhow",
  "dragonglass",
  "imgui",
+ "legion",
  "log",
  "nalgebra",
  "nalgebra-glm",

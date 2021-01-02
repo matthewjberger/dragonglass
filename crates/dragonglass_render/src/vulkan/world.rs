@@ -14,9 +14,8 @@ use crate::{
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_world::{
-    AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh,
-    Scene, Selected, Skin, Vertex, World, WrappingMode,
-};
+    AlphaMode, BoxCollider, Ecs, Filter, Geometry, Material, Mesh,
+    Scene, Selection, Skin, Vertex, World, WrappingMode, Visibility};
 use log::warn;
 use nalgebra_glm as glm;
 use ncollide3d::{shape::Cuboid, world::CollisionWorld};
@@ -528,15 +527,15 @@ impl WorldRender {
                         .entry(entity)
                         .context("Failed to lookup an entity!")?;
 
-                    if entry.get_component::<Hidden>().is_ok() {
+                    if !entry.get_component::<Visibility>()?.is_visible() {
                         return Ok(());
                     }
 
                     if let Ok(mesh) = entry.get_component::<Mesh>() {
                         let bounding_box_color =
-                        if entry.get_component::<Selected>().is_ok() {
+                        if entry.get_component::<Selection>()?.is_selected() {
                             Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if entry.get_component::<BoxColliderVisible>().is_ok() {
+                        } else if entry.get_component::<BoxCollider>()?.visible {
                             Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
                         } else {
                             None
