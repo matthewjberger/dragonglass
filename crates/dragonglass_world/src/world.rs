@@ -503,13 +503,13 @@ impl OrthographicCamera {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Skin {
     pub name: String,
     pub joints: Vec<Joint>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Joint {
     pub target: Entity,
     pub inverse_bind_matrix: glm::Mat4,

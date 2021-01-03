@@ -1,6 +1,8 @@
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
-use dragonglass_world::{Ecs, Transform, World};
+use dragonglass_world::{
+    Camera, Ecs, Light, Mesh, Name, Selection, Skin, Transform, Visibility, World,
+};
 use legion::Registry;
 use serde::{
     de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
@@ -21,16 +23,13 @@ impl Serialize for Universe {
         S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("Universe", 3)?;
-
         let registry = generate_registry();
         let ecs = self
             .ecs
             .as_serializable(legion::component::<Transform>(), &registry);
         state.serialize_field("ecs", &ecs)?;
-
         state.serialize_field("world", &self.world)?;
         state.serialize_field("physics_world", &self.physics_world)?;
-
         state.end()
     }
 }
@@ -177,5 +176,12 @@ impl Universe {
 fn generate_registry() -> Registry<String> {
     let mut registry = Registry::<String>::default();
     registry.register::<Transform>("transform".to_string());
+    registry.register::<Name>("name".to_string());
+    registry.register::<Camera>("camera".to_string());
+    registry.register::<Mesh>("mesh".to_string());
+    registry.register::<Skin>("skin".to_string());
+    registry.register::<Light>("light".to_string());
+    registry.register::<Selection>("selection".to_string());
+    registry.register::<Visibility>("visibility".to_string());
     registry
 }
