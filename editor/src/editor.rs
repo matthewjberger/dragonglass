@@ -112,14 +112,15 @@ impl ApplicationRunner for Editor {
             "Number of materials: {}",
             application.universe.world.materials.len()
         ));
-        ui.text(im_str!(
-            "Number of collision_objects: {}",
-            application
-                .universe
-                .collision_world
-                .collision_objects()
-                .count()
-        ));
+        // FIXME collision
+        // ui.text(im_str!(
+        //     "Number of collision_objects: {}",
+        //     application
+        //         .universe
+        //         .collision_world
+        //         .collision_objects()
+        //         .count()
+        // ));
 
         ui.separator();
         ui.text(im_str!("Cameras"));
@@ -181,7 +182,8 @@ impl ApplicationRunner for Editor {
             self.arcball.update(application)?;
         }
 
-        self.show_hovered_object_collider(application)?;
+        // FIXME collision
+        // self.show_hovered_object_collider(application)?;
 
         Ok(())
     }
@@ -195,7 +197,8 @@ impl ApplicationRunner for Editor {
         match (keycode, keystate) {
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
-                Self::clear_colliders(application);
+                // FIXME collision
+                // Self::clear_colliders(application);
                 application
                     .universe
                     .world
@@ -239,32 +242,33 @@ impl ApplicationRunner for Editor {
             return Ok(());
         }
         if let (MouseButton::Left, ElementState::Pressed) = (button, state) {
-            let entity = match application.pick_object(f32::MAX)? {
-                Some(entity) => entity,
-                None => return Ok(()),
-            };
+            // FIXME collision
+            // let entity = match application.pick_object(f32::MAX)? {
+            //     Some(entity) => entity,
+            //     None => return Ok(()),
+            // };
 
-            let already_selected = {
-                match application.universe.ecs.entry(entity) {
-                    Some(entry) => {
-                        let already_selected = entry.get_component::<Selection>()?.is_selected();
-                        let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
-                        if !shift_active {
-                            for selection in
-                                <&mut Selection>::query().iter_mut(&mut application.universe.ecs)
-                            {
-                                selection.0 = false;
-                            }
-                        }
-                        already_selected
-                    }
-                    None => false,
-                }
-            };
+            // let already_selected = {
+            //     match application.universe.ecs.entry(entity) {
+            //         Some(entry) => {
+            //             let already_selected = entry.get_component::<Selection>()?.is_selected();
+            //             let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
+            //             if !shift_active {
+            //                 for selection in
+            //                     <&mut Selection>::query().iter_mut(&mut application.universe.ecs)
+            //                 {
+            //                     selection.0 = false;
+            //                 }
+            //             }
+            //             already_selected
+            //         }
+            //         None => false,
+            //     }
+            // };
 
-            if let Some(mut entry) = application.universe.ecs.entry(entity) {
-                entry.get_component_mut::<Selection>()?.0 = !already_selected;
-            }
+            // if let Some(mut entry) = application.universe.ecs.entry(entity) {
+            //     entry.get_component_mut::<Selection>()?.0 = !already_selected;
+            // }
         }
         Ok(())
     }

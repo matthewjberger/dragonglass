@@ -1,7 +1,7 @@
 use anyhow::Result;
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{Ecs, World};
 use imgui::{Context as ImguiContext, DrawData};
-use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 
 #[cfg(feature = "vulkan")]
@@ -26,7 +26,7 @@ pub trait Renderer {
         dimensions: &[u32; 2],
         ecs: &mut Ecs,
         world: &World,
-        collision_world: &CollisionWorld<f32, ()>,
+        physics_world: &PhysicsWorld,
         draw_data: &DrawData,
     ) -> Result<()>;
 }

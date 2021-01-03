@@ -5,6 +5,7 @@ use rapier3d::{
     na::Vector3,
     pipeline::{PhysicsPipeline, QueryPipeline},
 };
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 pub struct RigidBody {
     pub handle: Handle,
@@ -20,6 +21,34 @@ pub struct PhysicsWorld {
     pub colliders: ColliderSet,
     pub joints: JointSet,
     pub query: QueryPipeline,
+}
+
+impl Serialize for PhysicsWorld {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // The pipeline itself does not need to be serialized
+        let mut state = serializer.serialize_struct("PhysicsWorld", 8)?;
+        state.serialize_field("gravity", &self.gravity)?;
+        state.serialize_field("integration_parameters", &self.integration_parameters)?;
+        state.serialize_field("broad_phase", &self.broad_phase)?;
+        state.serialize_field("narrow_phase", &self.narrow_phase)?;
+        state.serialize_field("bodies", &self.bodies)?;
+        state.serialize_field("colliders", &self.colliders)?;
+        state.serialize_field("joints", &self.joints)?;
+        state.serialize_field("query", &self.query)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PhysicsWorld {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
 }
 
 impl Default for PhysicsWorld {

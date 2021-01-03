@@ -1,15 +1,14 @@
 mod gltf;
 mod world;
 
-use ncollide3d::pipeline::CollisionObjectSlabHandle;
+use rapier3d::geometry::ColliderHandle;
 use serde::{Deserialize, Serialize};
 
 pub use self::{gltf::*, world::*};
 
 #[derive(Serialize, Deserialize)]
-// TODO: Move collision code to separate module and remove ncollide3d from world module
 pub struct BoxCollider {
-    pub handle: CollisionObjectSlabHandle,
+    pub handle: ColliderHandle,
     pub visible: bool,
 }
 

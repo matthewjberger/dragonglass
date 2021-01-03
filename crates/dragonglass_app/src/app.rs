@@ -5,13 +5,11 @@ use dragonglass_render::{Backend, Renderer};
 use dragonglass_world::{BoxCollider, Ecs, Entity, Mesh, Transform, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
-use legion::IntoQuery;
+use legion::{IntoQuery, Registry};
 use log::error;
 use nalgebra_glm as glm;
-use ncollide3d::{
-    na::Point3, pipeline::CollisionGroups, pipeline::GeometricQueryType, query::Ray, shape::Cuboid,
-    shape::ShapeHandle, world::CollisionWorld,
-};
+use rapier3d::geometry::Ray;
+use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 use winit::{
     dpi::PhysicalSize,
@@ -64,8 +62,28 @@ impl AppConfig {
 pub struct Universe {
     pub ecs: Ecs,
     pub world: World,
-    pub collision_world: CollisionWorld<f32, ()>,
     pub physics_world: PhysicsWorld,
+}
+
+impl Serialize for Universe {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Universe", 3)?;
+
+        let mut registry = Registry::<String>::default();
+        registry.register::<Transform>("transform".to_string());
+        let ecs = self
+            .ecs
+            .as_serializable(legion::component::<Transform>(), &registry);
+        state.serialize_field("ecs", &ecs)?;
+
+        state.serialize_field("world", &self.world)?;
+        state.serialize_field("physics_world", &self.physics_world)?;
+
+        state.end()
+    }
 }
 
 impl Universe {
@@ -75,7 +93,6 @@ impl Universe {
         Self {
             ecs,
             world,
-            collision_world: CollisionWorld::new(0.02f32),
             physics_world: PhysicsWorld::new(),
         }
     }
@@ -90,69 +107,73 @@ pub struct Application {
 
 impl Application {
     pub fn pick_object(&mut self, interact_distance: f32) -> Result<Option<Entity>> {
-        let ray = self.mouse_ray()?;
+        // FIXME collision
+        todo!();
+        // let ray = self.mouse_ray()?;
 
-        let collision_group = CollisionGroups::new();
-        let raycast_result = self.universe.collision_world.first_interference_with_ray(
-            &ray,
-            interact_distance,
-            &collision_group,
-        );
+        // let collision_group = CollisionGroups::new();
+        // let raycast_result = self.universe.collision_world.first_interference_with_ray(
+        //     &ray,
+        //     interact_distance,
+        //     &collision_group,
+        // );
 
-        match raycast_result {
-            Some(result) => {
-                let handle = result.handle;
-                let mut picked_entity = None;
-                for (entity, collider) in <(Entity, &BoxCollider)>::query().iter(&self.universe.ecs)
-                {
-                    if collider.handle == handle {
-                        picked_entity = Some(*entity);
-                        break;
-                    }
-                }
-                Ok(picked_entity)
-            }
-            None => Ok(None),
-        }
+        // match raycast_result {
+        //     Some(result) => {
+        //         let handle = result.handle;
+        //         let mut picked_entity = None;
+        //         for (entity, collider) in <(Entity, &BoxCollider)>::query().iter(&self.universe.ecs)
+        //         {
+        //             if collider.handle == handle {
+        //                 picked_entity = Some(*entity);
+        //                 break;
+        //             }
+        //         }
+        //         Ok(picked_entity)
+        //     }
+        //     None => Ok(None),
+        // }
     }
 
-    pub fn mouse_ray(&mut self) -> Result<Ray<f32>> {
-        let (width, height) = (
-            self.system.window_dimensions[0] as f32,
-            self.system.window_dimensions[1] as f32,
-        );
-        let aspect_ratio = self.system.aspect_ratio();
+    pub fn mouse_ray(&mut self) -> Result<Ray> {
+        // FIXME collision
+        todo!()
+        // let (width, height) = (
+        //     self.system.window_dimensions[0] as f32,
+        //     self.system.window_dimensions[1] as f32,
+        // );
+        // let aspect_ratio = self.system.aspect_ratio();
 
-        let (projection, view) = self
-            .universe
-            .world
-            .active_camera_matrices(&mut self.universe.ecs, aspect_ratio)?;
+        // let (projection, view) = self
+        //     .universe
+        //     .world
+        //     .active_camera_matrices(&mut self.universe.ecs, aspect_ratio)?;
 
-        let mut position = self.input.mouse.position;
-        position.y = height - position.y;
-        let near_point = glm::vec2_to_vec3(&position);
-        let mut far_point = near_point;
-        far_point.z = 1.0;
-        let p_near = glm::unproject_zo(
-            &near_point,
-            &view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let p_far = glm::unproject_zo(
-            &far_point,
-            &view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let direction = (p_far - p_near).normalize();
-        let ray = Ray::new(Point3::from(p_near), direction);
-        Ok(ray)
+        // let mut position = self.input.mouse.position;
+        // position.y = height - position.y;
+        // let near_point = glm::vec2_to_vec3(&position);
+        // let mut far_point = near_point;
+        // far_point.z = 1.0;
+        // let p_near = glm::unproject_zo(
+        //     &near_point,
+        //     &view,
+        //     &projection,
+        //     glm::vec4(0.0, 0.0, width, height),
+        // );
+        // let p_far = glm::unproject_zo(
+        //     &far_point,
+        //     &view,
+        //     &projection,
+        //     glm::vec4(0.0, 0.0, width, height),
+        // );
+        // let direction = (p_far - p_near).normalize();
+        // let ray = Ray::new(Point3::from(p_near), direction);
+        // Ok(ray)
     }
 
     pub fn update(&mut self) -> Result<()> {
-        self.update_colliders()?;
-        self.universe.collision_world.update();
+        // FIXME collision
+        // self.update_colliders()?;
         self.universe.physics_world.update();
         Ok(())
     }
@@ -162,7 +183,7 @@ impl Application {
             &self.system.window_dimensions,
             &mut self.universe.ecs,
             &self.universe.world,
-            &self.universe.collision_world,
+            &self.universe.physics_world,
             draw_data,
         )?;
         Ok(())
@@ -171,64 +192,66 @@ impl Application {
     /// Add/Syncs basic cuboid colliders for all meshes that do not have one yet
     /// This is meant to allow for basic 3D picking
     fn update_colliders(&mut self) -> Result<()> {
-        let collision_group = CollisionGroups::new();
-        let query_type = GeometricQueryType::Contacts(0.0, 0.0);
+        // FIXME collision
+        todo!()
+        // let collision_group = CollisionGroups::new();
+        // let query_type = GeometricQueryType::Contacts(0.0, 0.0);
 
-        let mut entity_map = HashMap::new();
+        // let mut entity_map = HashMap::new();
 
-        let entities = <(Entity, &Mesh)>::query()
-            .iter(&self.universe.ecs)
-            .map(|(entity, mesh)| (*entity, mesh.bounding_box()))
-            .collect::<Vec<_>>();
+        // let entities = <(Entity, &Mesh)>::query()
+        //     .iter(&self.universe.ecs)
+        //     .map(|(entity, mesh)| (*entity, mesh.bounding_box()))
+        //     .collect::<Vec<_>>();
 
-        for (entity, bounding_box) in entities.into_iter() {
-            let translation = glm::translation(&bounding_box.center());
-            let transform_matrix = self
-                .universe
-                .world
-                .entity_global_transform_matrix(&mut self.universe.ecs, entity)?
-                * translation;
-            let transform = Transform::from(transform_matrix);
-            let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-            let collider_shape = Cuboid::new(half_extents);
-            let shape_handle = ShapeHandle::new(collider_shape);
+        // for (entity, bounding_box) in entities.into_iter() {
+        //     let translation = glm::translation(&bounding_box.center());
+        //     let transform_matrix = self
+        //         .universe
+        //         .world
+        //         .entity_global_transform_matrix(&mut self.universe.ecs, entity)?
+        //         * translation;
+        //     let transform = Transform::from(transform_matrix);
+        //     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        //     let collider_shape = Cuboid::new(half_extents);
+        //     let shape_handle = ShapeHandle::new(collider_shape);
 
-            match self.universe.ecs.entry(entity) {
-                Some(entry) => match entry.get_component::<BoxCollider>() {
-                    // collider exists already, sync it
-                    Ok(collider) => {
-                        if let Some(collision_object) =
-                            self.universe.collision_world.get_mut(collider.handle)
-                        {
-                            collision_object.set_position(transform.as_isometry());
-                            collision_object.set_shape(shape_handle);
-                        }
-                    }
-                    // collider doesn't exist already, create and add it
-                    Err(_) => {
-                        let (handle, _collision_object) = self.universe.collision_world.add(
-                            transform.as_isometry(),
-                            shape_handle,
-                            collision_group,
-                            query_type,
-                            (),
-                        );
-                        entity_map.insert(entity, handle);
-                    }
-                },
-                None => continue,
-            }
-        }
+        //     match self.universe.ecs.entry(entity) {
+        //         Some(entry) => match entry.get_component::<BoxCollider>() {
+        //             // collider exists already, sync it
+        //             Ok(collider) => {
+        //                 if let Some(collision_object) =
+        //                     self.universe.collision_world.get_mut(collider.handle)
+        //                 {
+        //                     collision_object.set_position(transform.as_isometry());
+        //                     collision_object.set_shape(shape_handle);
+        //                 }
+        //             }
+        //             // collider doesn't exist already, create and add it
+        //             Err(_) => {
+        //                 let (handle, _collision_object) = self.universe.collision_world.add(
+        //                     transform.as_isometry(),
+        //                     shape_handle,
+        //                     collision_group,
+        //                     query_type,
+        //                     (),
+        //                 );
+        //                 entity_map.insert(entity, handle);
+        //             }
+        //         },
+        //         None => continue,
+        //     }
+        // }
 
-        for (entity, handle) in entity_map.into_iter() {
-            if let Some(mut entry) = self.universe.ecs.entry(entity) {
-                entry.add_component(BoxCollider {
-                    handle,
-                    visible: true,
-                });
-            }
-        }
-        Ok(())
+        // for (entity, handle) in entity_map.into_iter() {
+        //     if let Some(mut entry) = self.universe.ecs.entry(entity) {
+        //         entry.add_component(BoxCollider {
+        //             handle,
+        //             visible: true,
+        //         });
+        //     }
+        // }
+        // Ok(())
     }
 }
 

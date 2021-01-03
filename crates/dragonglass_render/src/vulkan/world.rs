@@ -13,12 +13,13 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{
-    AlphaMode, BoxCollider, Ecs, Filter, Geometry, Material, Mesh,
-    Scene, Selection, Skin, Vertex, World, WrappingMode, Visibility};
+    AlphaMode, BoxCollider, Ecs, Filter, Geometry, Material, Mesh, Scene, Selection, Skin, Vertex,
+    Visibility, World, WrappingMode,
+};
 use log::warn;
 use nalgebra_glm as glm;
-use ncollide3d::{shape::Cuboid, world::CollisionWorld};
 use std::{mem, sync::Arc};
 
 pub struct PushConstantMaterial {
@@ -489,7 +490,7 @@ impl WorldRender {
         command_buffer: vk::CommandBuffer,
         ecs: &mut Ecs,
         world: &World,
-        collision_world: &CollisionWorld<f32, ()>,
+        physics_world: &PhysicsWorld,
         aspect_ratio: f32,
     ) -> Result<()> {
         let pipeline = self
@@ -522,46 +523,43 @@ impl WorldRender {
                     ubo_offset += 1;
                     let entity = graph[node_index];
 
-                    let entry = 
-                        ecs
-                        .entry(entity)
-                        .context("Failed to lookup an entity!")?;
+                    let entry = ecs.entry(entity).context("Failed to lookup an entity!")?;
 
                     if !entry.get_component::<Visibility>()?.is_visible() {
                         return Ok(());
                     }
 
                     if let Ok(mesh) = entry.get_component::<Mesh>() {
-                        let bounding_box_color =
-                        if entry.get_component::<Selection>()?.is_selected() {
-                            Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if entry.get_component::<BoxCollider>()?.visible {
-                            Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
-                        } else {
-                            None
-                        };
-
-                        if let Some(display_color) = bounding_box_color {
-                            if let Ok(collider) = entry.get_component::<BoxCollider>() {
-                                if let Some(collision_object) = collision_world.collision_object(collider.handle) {
-                                    let position = collision_object.position();
-                                    let translation = position.translation;
-                                    let rotation = position.rotation;
-                                    if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
-                                        let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
-                                        let rotation = glm::quat_to_mat4(&rotation);
-                                        let scale = glm::scaling(&(cuboid.half_extents * 2.0));
-                                        self.cube_render.issue_commands(
-                                            command_buffer,
-                                            projection * view * offset * rotation * scale,
-                                            display_color,
-                                        )?;
-                                    } else {
-                                        warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
-                                    };
-                                }
-                            }
-                        }
+                        // FIXME collision
+                        // let bounding_box_color =
+                        // if entry.get_component::<Selection>()?.is_selected() {
+                        //     Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
+                        // } else if entry.get_component::<BoxCollider>()?.visible {
+                        //     Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
+                        // } else {
+                        //     None
+                        // };
+                        // if let Some(display_color) = bounding_box_color {
+                        //     if let Ok(collider) = entry.get_component::<BoxCollider>() {
+                        //         if let Some(collision_object) = collision_world.collision_object(collider.handle) {
+                        //             let position = collision_object.position();
+                        //             let translation = position.translation;
+                        //             let rotation = position.rotation;
+                        //             if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
+                        //                 let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
+                        //                 let rotation = glm::quat_to_mat4(&rotation);
+                        //                 let scale = glm::scaling(&(cuboid.half_extents * 2.0));
+                        //                 self.cube_render.issue_commands(
+                        //                     command_buffer,
+                        //                     projection * view * offset * rotation * scale,
+                        //                     display_color,
+                        //                 )?;
+                        //             } else {
+                        //                 warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
+                        //             };
+                        //         }
+                        //     }
+                        // }
 
                         if self.wireframe_enabled {
                             pipeline_wireframe.bind(&self.device.handle, command_buffer);

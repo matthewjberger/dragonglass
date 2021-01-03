@@ -8,11 +8,11 @@ use crate::{
 };
 use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
 use log::error;
 use nalgebra_glm as glm;
-use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -72,7 +72,7 @@ impl Renderer for VulkanRenderer {
         dimensions: &[u32; 2],
         ecs: &mut Ecs,
         world: &World,
-        collision_world: &CollisionWorld<f32, ()>,
+        physics_world: &PhysicsWorld,
         draw_data: &DrawData,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
@@ -149,7 +149,7 @@ impl Renderer for VulkanRenderer {
                             command_buffer,
                             ecs,
                             world,
-                            collision_world,
+                            physics_world,
                             aspect_ratio,
                         )?;
                     }
