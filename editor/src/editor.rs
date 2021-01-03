@@ -195,6 +195,9 @@ impl ApplicationRunner for Editor {
         keycode: VirtualKeyCode,
     ) -> Result<()> {
         match (keycode, keystate) {
+            (VirtualKeyCode::S, ElementState::Pressed) => {
+                application.universe.save("saved_map.dga")?;
+            }
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 // FIXME collision

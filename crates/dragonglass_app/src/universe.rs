@@ -1,3 +1,4 @@
+use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{Ecs, Transform, World};
 use legion::Registry;
@@ -6,7 +7,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Serialize,
 };
-use std::fmt;
+use std::{fmt, path::Path};
 
 pub struct Universe {
     pub ecs: Ecs,
@@ -90,7 +91,6 @@ impl<'de> Deserialize<'de> for Universe {
                 V: SeqAccess<'de>,
             {
                 let registry = generate_registry();
-
                 let ecs = seq
                     .next_element_seed(registry.as_deserialize())?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
@@ -111,9 +111,7 @@ impl<'de> Deserialize<'de> for Universe {
             where
                 V: MapAccess<'de>,
             {
-                let mut registry = Registry::<String>::default();
-                registry.register::<Transform>("transform".to_string());
-
+                let registry = generate_registry();
                 let mut ecs = None;
                 let mut world = None;
                 let mut physics_world = None;
@@ -165,6 +163,14 @@ impl Universe {
             world,
             physics_world: PhysicsWorld::new(),
         }
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
+        let encoded: Vec<u8> = bincode::serialize(&self)?;
+        // TODO: write to file
+        // TODO: implement a loader
+        let decoded: Option<String> = bincode::deserialize(&encoded[..])?;
+        Ok(())
     }
 }
 
