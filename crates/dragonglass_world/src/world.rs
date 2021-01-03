@@ -14,7 +14,7 @@ use std::{
 pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct World {
     pub scene: Scene,
     pub animations: Vec<Animation>,
@@ -295,7 +295,7 @@ impl World {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
@@ -603,7 +603,7 @@ impl MorphTarget {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Geometry {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
@@ -641,7 +641,7 @@ impl Default for Vertex {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Animation {
     pub name: String,
     pub time: f32,
@@ -649,7 +649,7 @@ pub struct Animation {
     pub max_animation_time: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Channel {
     pub target: Entity,
     pub inputs: Vec<f32>,
@@ -664,7 +664,7 @@ pub enum Interpolation {
     CubicSpline,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TransformationSet {
     Translations(Vec<glm::Vec3>),
     Rotations(Vec<glm::Vec4>),
