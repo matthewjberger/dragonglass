@@ -1,4 +1,4 @@
-use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
+use crate::{gui::Gui, input::Input, logger::create_logger, system::System, universe::Universe};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
@@ -9,8 +9,7 @@ use legion::{IntoQuery, Registry};
 use log::error;
 use nalgebra_glm as glm;
 use rapier3d::geometry::Ray;
-use serde::{ser::SerializeStruct, Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, fmt, path::PathBuf};
 use winit::{
     dpi::PhysicalSize,
     event::MouseButton,
@@ -56,45 +55,6 @@ impl AppConfig {
 
         let window = window_builder.build(&event_loop)?;
         Ok((event_loop, window))
-    }
-}
-
-pub struct Universe {
-    pub ecs: Ecs,
-    pub world: World,
-    pub physics_world: PhysicsWorld,
-}
-
-impl Serialize for Universe {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut state = serializer.serialize_struct("Universe", 3)?;
-
-        let mut registry = Registry::<String>::default();
-        registry.register::<Transform>("transform".to_string());
-        let ecs = self
-            .ecs
-            .as_serializable(legion::component::<Transform>(), &registry);
-        state.serialize_field("ecs", &ecs)?;
-
-        state.serialize_field("world", &self.world)?;
-        state.serialize_field("physics_world", &self.physics_world)?;
-
-        state.end()
-    }
-}
-
-impl Universe {
-    pub fn new() -> Self {
-        let mut ecs = Ecs::default();
-        let world = World::new(&mut ecs);
-        Self {
-            ecs,
-            world,
-            physics_world: PhysicsWorld::new(),
-        }
     }
 }
 
