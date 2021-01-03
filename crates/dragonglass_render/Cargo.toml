@@ -13,7 +13,7 @@ image = "0.23.12"
 imgui = "0.6.1"
 nalgebra-glm = "0.9.0"
 ncollide3d = "0.26.1"
-hecs = "0.3.1"
+hecs = { git = "https://github.com/Ralith/hecs", features = ["serde"] }
 petgraph = "0.5.1"
 raw-window-handle = "0.3.3"
 
