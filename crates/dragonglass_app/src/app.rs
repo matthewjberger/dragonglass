@@ -142,7 +142,7 @@ impl Application {
     pub fn update(&mut self) -> Result<()> {
         self.update_colliders()?;
         self.collision_world.update();
-        self.physics_world.update();
+        self.physics_world.update(self.system.delta_time as f32);
         Ok(())
     }
 

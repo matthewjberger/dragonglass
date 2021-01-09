@@ -7,113 +7,54 @@ use dragonglass::{
 };
 use imgui::{im_str, Condition, Ui, Window};
 use nalgebra_glm as glm;
-use rapier3d::{dynamics::RigidBodyBuilder, geometry::ColliderBuilder};
+use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::ColliderBuilder};
 
 #[derive(Default)]
 pub struct Game {
     helmet: Option<Entity>,
     plane: Option<Entity>,
+    deer: Option<Entity>,
 }
 
 impl ApplicationRunner for Game {
     fn initialize(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
         application.load_asset("assets/models/plane.gltf")?;
         application.load_asset("assets/models/DamagedHelmet.glb")?;
+        application.load_asset("assets/models/deer.gltf")?;
         application.reload_world()?;
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
             if mesh.name == "mesh_helmet_LP_13930damagedHelmet" {
                 self.helmet = Some(entity);
+                {
+                    let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+                    transform.translation.y = 200.0;
+                }
+            }
+            if mesh.name == "Cylinder" {
+                // The deer was probably modeled from a cylinder
+                self.deer = Some(entity);
+                {
+                    let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+                    transform.translation.y = 100.0;
+                }
             }
             if mesh.name == "Plane" {
                 self.plane = Some(entity);
+                {
+                    let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+                    transform.translation.y = -4.0;
+                }
             }
         }
-        if let Some(helmet) = self.helmet.as_ref() {
-            {
-                let mut transform = application.ecs.get_mut::<Transform>(*helmet)?;
-                transform.translation.y = 4.0;
-            }
 
-            let handle = {
-                let bounding_box = {
-                    let mesh = application.ecs.get::<Mesh>(*helmet)?;
-                    mesh.bounding_box()
-                };
-                let translation = glm::translation(&bounding_box.center());
-                let transform_matrix = application
-                    .world
-                    .entity_global_transform_matrix(&mut application.ecs, *helmet)?
-                    * translation;
-                let transform = Transform::from(transform_matrix);
-
-                // Insert a corresponding rigid body
-                let rigid_body = RigidBodyBuilder::new_dynamic()
-                    .translation(
-                        transform.translation.x,
-                        transform.translation.y,
-                        transform.translation.z,
-                    )
-                    .rotation(transform.rotation.as_vector().xyz())
-                    .build();
-                let handle = application.physics_world.bodies.insert(rigid_body);
-
-                // Insert a collider
-                let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-                let collider =
-                    ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
-                application.physics_world.colliders.insert(
-                    collider,
-                    handle,
-                    &mut application.physics_world.bodies,
-                );
-                handle
-            };
-            application
-                .ecs
-                .insert_one(*helmet, RigidBody::new(handle))?;
+        if let Some(entity) = self.helmet.as_ref() {
+            add_rigid_body(*entity, application, BodyStatus::Dynamic)?;
         }
-
-        if let Some(plane) = self.plane.as_ref() {
-            {
-                let mut transform = application.ecs.get_mut::<Transform>(*plane)?;
-                transform.translation.y = -4.0;
-            }
-
-            let handle = {
-                let bounding_box = {
-                    let mesh = application.ecs.get::<Mesh>(*plane)?;
-                    mesh.bounding_box()
-                };
-                let translation = glm::translation(&bounding_box.center());
-                let transform_matrix = application
-                    .world
-                    .entity_global_transform_matrix(&mut application.ecs, *plane)?
-                    * translation;
-                let transform = Transform::from(transform_matrix);
-
-                // Insert a corresponding rigid body
-                let rigid_body = RigidBodyBuilder::new_static()
-                    .translation(
-                        transform.translation.x,
-                        transform.translation.y,
-                        transform.translation.z,
-                    )
-                    .rotation(transform.rotation.as_vector().xyz())
-                    .build();
-                let handle = application.physics_world.bodies.insert(rigid_body);
-
-                // Insert a collider
-                let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-                let collider =
-                    ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
-                application.physics_world.colliders.insert(
-                    collider,
-                    handle,
-                    &mut application.physics_world.bodies,
-                );
-                handle
-            };
-            application.ecs.insert_one(*plane, RigidBody::new(handle))?;
+        if let Some(entity) = self.deer.as_ref() {
+            add_rigid_body(*entity, application, BodyStatus::Dynamic)?;
+        }
+        if let Some(entity) = self.plane.as_ref() {
+            add_rigid_body(*entity, application, BodyStatus::Static)?;
         }
 
         Ok(())
@@ -142,40 +83,6 @@ impl ApplicationRunner for Game {
             });
         Ok(())
     }
-
-    fn on_key(
-        &mut self,
-        _application: &mut dragonglass::app::Application,
-        _keystate: winit::event::ElementState,
-        _keycode: winit::event::VirtualKeyCode,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn on_file_dropped(
-        &mut self,
-        _application: &mut dragonglass::app::Application,
-        _path: &std::path::PathBuf,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn on_mouse(
-        &mut self,
-        _application: &mut dragonglass::app::Application,
-        _button: winit::event::MouseButton,
-        _state: winit::event::ElementState,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn handle_events(
-        &mut self,
-        _application: &mut dragonglass::app::Application,
-        _event: winit::event::Event<()>,
-    ) -> Result<()> {
-        Ok(())
-    }
 }
 
 fn main() -> Result<()> {
@@ -183,8 +90,52 @@ fn main() -> Result<()> {
         Game::default(),
         AppConfig {
             icon: Some("assets/icon/icon.png".to_string()),
-            title: "Dragonglass Editor".to_string(),
+            title: "Physics Test with Rapier3D".to_string(),
             ..Default::default()
         },
     )
+}
+
+/// Adds a rigid body with a box collider to an entity
+fn add_rigid_body(
+    entity: Entity,
+    application: &mut Application,
+    body_status: BodyStatus,
+) -> Result<()> {
+    let handle = {
+        let bounding_box = {
+            let mesh = application.ecs.get::<Mesh>(entity)?;
+            mesh.bounding_box()
+        };
+        let translation = glm::translation(&bounding_box.center());
+        let transform_matrix = application
+            .world
+            .entity_global_transform_matrix(&mut application.ecs, entity)?
+            * translation;
+        let transform = Transform::from(transform_matrix);
+
+        // Insert a corresponding rigid body
+        let rigid_body = RigidBodyBuilder::new(body_status)
+            .translation(
+                transform.translation.x,
+                transform.translation.y,
+                transform.translation.z,
+            )
+            .rotation(transform.rotation.as_vector().xyz())
+            .build();
+        let handle = application.physics_world.bodies.insert(rigid_body);
+
+        // Insert a collider
+        let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        let collider =
+            ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
+        application.physics_world.colliders.insert(
+            collider,
+            handle,
+            &mut application.physics_world.bodies,
+        );
+        handle
+    };
+    application.ecs.insert_one(entity, RigidBody::new(handle))?;
+    Ok(())
 }

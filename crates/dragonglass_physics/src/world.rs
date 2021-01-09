@@ -43,7 +43,9 @@ impl PhysicsWorld {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, delta_time: f32) {
+        self.integration_parameters.set_dt(delta_time);
+
         // We ignore contact events for now.
         let event_handler = ();
 

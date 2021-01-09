@@ -47,7 +47,7 @@ impl Scene {
         let (skybox, skybox_sampler) = hdr_cubemap(
             context,
             &transient_command_pool,
-            "assets/skyboxes/walk_of_fame.hdr",
+            "assets/skyboxes/desert.hdr",
             &mut shader_cache,
         )?;
 
