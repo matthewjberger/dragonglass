@@ -6,8 +6,8 @@ edition = "2018"
 
 [workspace]
 exclude = ["benches"]
-members = ["crates/*", "editor"]
-default-members = ["editor"]
+members = ["crates/*", "editor", "game"]
+default-members = ["editor", "game"]
 
 [dependencies]
 dragonglass_app = { path = "crates/dragonglass_app" }

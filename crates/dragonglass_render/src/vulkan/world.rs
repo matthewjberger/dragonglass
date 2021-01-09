@@ -13,6 +13,7 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_physics::{PhysicsWorld, RigidBody};
 use dragonglass_world::{
     AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh,
     Scene, Selected, Skin, Vertex, World, WrappingMode,
@@ -488,6 +489,7 @@ impl WorldRender {
         command_buffer: vk::CommandBuffer,
         ecs: &mut Ecs,
         world: &World,
+        physics_world: &PhysicsWorld,
         collision_world: &CollisionWorld<f32, ()>,
         aspect_ratio: f32,
     ) -> Result<()> {
@@ -557,6 +559,32 @@ impl WorldRender {
                                 }
                             }
                         }
+
+                        // Render physics box collider
+                        if let Ok(rigid_body) = ecs.get::<RigidBody>(entity) {
+                            if let Some(body) = physics_world.bodies.get(rigid_body.handle) {
+                                let position = body.position();
+                                let translation = position.translation.vector;
+                                let rotation = *position.rotation.quaternion();
+
+                                for collider_handle in body.colliders().iter() {
+                                    if let Some(collider) = physics_world.colliders.get(*collider_handle) {
+                                        let shape = collider.shape();
+                                            if let Some(cuboid) = shape.as_cuboid() {
+                                                let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
+                                                let rotation = glm::quat_to_mat4(&rotation);
+                                                let scale = glm::scaling(&(cuboid.half_extents * 2.0));
+                                                self.cube_render.issue_commands(
+                                                    command_buffer,
+                                                    projection * view * offset * rotation * scale,
+                                                    glm::vec4(0.0, 1.0, 1.0, 1.0),
+                                                )?;
+                                            }
+                                        }
+                                    }
+                                }
+                        }
+
 
                         if self.wireframe_enabled {
                             pipeline_wireframe.bind(&self.device.handle, command_buffer);

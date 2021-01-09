@@ -545,6 +545,7 @@ dependencies = [
  "ash",
  "ash-window",
  "derive_builder",
+ "dragonglass_physics",
  "dragonglass_world",
  "hecs",
  "image",
@@ -553,6 +554,7 @@ dependencies = [
  "nalgebra-glm",
  "ncollide3d",
  "petgraph",
+ "rapier3d",
  "raw-window-handle",
  "shader-compilation",
  "simplelog 0.8.0",
@@ -637,6 +639,22 @@ name = "fuchsia-zircon-sys"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
+
+[[package]]
+name = "game"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dragonglass",
+ "hecs",
+ "imgui",
+ "log",
+ "nalgebra",
+ "nalgebra-glm",
+ "ncollide3d",
+ "rapier3d",
+ "winit",
+]
 
 [[package]]
 name = "generational-arena"

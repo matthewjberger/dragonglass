@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
 use log::error;
@@ -72,6 +73,7 @@ impl Renderer for VulkanRenderer {
         dimensions: &[u32; 2],
         ecs: &mut Ecs,
         world: &World,
+        physics_world: &PhysicsWorld,
         collision_world: &CollisionWorld<f32, ()>,
         draw_data: &DrawData,
     ) -> Result<()> {
@@ -145,6 +147,7 @@ impl Renderer for VulkanRenderer {
                             command_buffer,
                             ecs,
                             world,
+                            physics_world,
                             collision_world,
                             aspect_ratio,
                         )?;

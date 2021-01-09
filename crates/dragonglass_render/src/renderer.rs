@@ -1,4 +1,5 @@
 use anyhow::Result;
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{Ecs, World};
 use imgui::{Context as ImguiContext, DrawData};
 use ncollide3d::world::CollisionWorld;
@@ -26,6 +27,7 @@ pub trait Renderer {
         dimensions: &[u32; 2],
         ecs: &mut Ecs,
         world: &World,
+        physics_world: &PhysicsWorld,
         collision_world: &CollisionWorld<f32, ()>,
         draw_data: &DrawData,
     ) -> Result<()>;

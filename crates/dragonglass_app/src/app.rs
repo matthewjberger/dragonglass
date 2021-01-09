@@ -2,7 +2,7 @@ use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Renderer};
-use dragonglass_world::{BoxCollider, Ecs, Entity, Mesh, Transform, World};
+use dragonglass_world::{load_gltf, BoxCollider, Ecs, Entity, Mesh, Transform, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
 use log::error;
@@ -71,6 +71,15 @@ pub struct Application {
 }
 
 impl Application {
+    pub fn load_asset(&mut self, path: &str) -> Result<()> {
+        load_gltf(path, &mut self.world, &mut self.ecs)?;
+        Ok(())
+    }
+
+    pub fn reload_world(&mut self) -> Result<()> {
+        self.renderer.load_world(&self.world)
+    }
+
     pub fn pick_object(&mut self, interact_distance: f32) -> Result<Option<Entity>> {
         let ray = self.mouse_ray()?;
 
@@ -142,6 +151,7 @@ impl Application {
             &self.system.window_dimensions,
             &mut self.ecs,
             &self.world,
+            &self.physics_world,
             &self.collision_world,
             draw_data,
         )?;
@@ -269,7 +279,7 @@ pub fn run_application(
     )?);
 
     let mut ecs = Ecs::new();
-    let mut world = World::new(&mut ecs);
+    let world = World::new(&mut ecs);
 
     let mut state = Application {
         ecs,
