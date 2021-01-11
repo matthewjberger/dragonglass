@@ -190,6 +190,21 @@ impl World {
         Ok(())
     }
 
+    pub fn lights(&self, ecs: &mut Ecs) -> Result<Vec<(Transform, Light)>> {
+        let mut lights = Vec::new();
+        for graph in self.scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let entity = graph[node_index];
+                let node_transform = graph.global_transform(node_index, &ecs)?;
+                if let Ok(light) = ecs.get::<Light>(entity) {
+                    lights.push((Transform::from(node_transform), *light));
+                }
+                Ok(())
+            })?;
+        }
+        Ok(lights)
+    }
+
     pub fn joint_matrices(&self, ecs: &mut Ecs) -> Result<Vec<glm::Mat4>> {
         let mut offset = 0;
         let mut number_of_joints = 0;
@@ -381,16 +396,16 @@ impl From<glm::Mat4> for Transform {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+// The 'name' field is purposefully omitted to keep the struct 'Copy'able
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Light {
-    pub name: String,
     pub color: glm::Vec3,
     pub intensity: f32,
     pub range: f32,
     pub kind: LightKind,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum LightKind {
     Directional,
     Point,
@@ -398,6 +413,12 @@ pub enum LightKind {
         inner_cone_angle: f32,
         outer_cone_angle: f32,
     },
+}
+
+impl Default for LightKind {
+    fn default() -> Self {
+        Self::Directional
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

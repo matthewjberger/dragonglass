@@ -15,8 +15,8 @@ use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_physics::{PhysicsWorld, RigidBody};
 use dragonglass_world::{
-    AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, Material, Mesh,
-    Scene, Selected, Skin, Vertex, World, WrappingMode,
+    AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, LightKind, Material,
+    Mesh, Scene, Selected, Skin, Transform, Vertex, World, WrappingMode,
 };
 use log::warn;
 use nalgebra_glm as glm;
@@ -67,6 +67,51 @@ impl From<&Material> for PushConstantMaterial {
             occlusion_strength: material.occlusion_strength,
             emissive_texture_index: material.emissive_texture_index,
             emissive_texture_set: material.emissive_texture_set,
+        }
+    }
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct Light {
+    pub direction: glm::Vec3,
+    pub range: f32,
+
+    pub color: glm::Vec3,
+    pub kind: i32,
+
+    pub position: glm::Vec3,
+    pub inner_cone_cos: f32,
+
+    pub outer_cone_cos: f32,
+    pub padding: glm::Vec3,
+}
+
+impl Light {
+    pub fn from_node(transform: Transform, light: dragonglass_world::Light) -> Self {
+        let mut inner_cone_cos: f32 = 0.0;
+        let mut outer_cone_cos: f32 = 0.0;
+        let kind = match light.kind {
+            LightKind::Directional => 0,
+            LightKind::Point => 1,
+            LightKind::Spot {
+                inner_cone_angle,
+                outer_cone_angle,
+            } => {
+                inner_cone_cos = inner_cone_angle;
+                outer_cone_cos = outer_cone_angle;
+                2
+            }
+        };
+
+        Self {
+            direction: transform.rotation.as_vector().xyz(),
+            range: light.range,
+            color: light.color,
+            kind,
+            position: transform.translation,
+            inner_cone_cos,
+            outer_cone_cos,
+            padding: glm::vec3(0.0, 0.0, 0.0),
         }
     }
 }
@@ -338,7 +383,7 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world.scene, &ecs)?;
+        self.update_node_ubos(&world.scene, ecs)?;
 
         Ok(())
     }

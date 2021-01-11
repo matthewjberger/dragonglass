@@ -626,7 +626,6 @@ fn load_joints(
 
 fn load_light(light: &gltf::khr_lights_punctual::Light) -> Light {
     Light {
-        name: light.name().unwrap_or(DEFAULT_NAME).to_string(),
         color: glm::make_vec3(&light.color()),
         intensity: light.intensity(),
         range: light.range().unwrap_or(-1.0), // if no range is present, range is assumed to be infinite
