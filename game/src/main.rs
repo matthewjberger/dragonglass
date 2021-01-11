@@ -6,7 +6,7 @@ use dragonglass::{
     world::{Camera, Entity, Hidden, Mesh, PerspectiveCamera, Projection, Transform},
 };
 use imgui::{im_str, Condition, Ui, Window};
-use nalgebra::{Point, Point3};
+use nalgebra::Point3;
 use nalgebra_glm as glm;
 use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::ColliderBuilder};
 use winit::event::{ElementState, VirtualKeyCode};

@@ -45,9 +45,9 @@ pub struct PushConstantMaterial {
     pub is_unlit: i32,
 }
 
-impl PushConstantMaterial {
-    fn from_material(material: &Material) -> Result<Self> {
-        Ok(Self {
+impl From<&Material> for PushConstantMaterial {
+    fn from(material: &Material) -> Self {
+        Self {
             base_color_factor: material.base_color_factor,
             metallic_factor: material.metallic_factor,
             roughness_factor: material.roughness_factor,
@@ -67,7 +67,7 @@ impl PushConstantMaterial {
             occlusion_strength: material.occlusion_strength,
             emissive_texture_index: material.emissive_texture_index,
             emissive_texture_set: material.emissive_texture_set,
-        })
+        }
     }
 }
 
@@ -622,10 +622,9 @@ impl WorldRender {
                                     if primitive_material.alpha_mode != *alpha_mode {
                                         continue;
                                     }
-
-                                    PushConstantMaterial::from_material(primitive_material)?
+                                    PushConstantMaterial::from(primitive_material)
                                 }
-                                None => PushConstantMaterial::from_material(&Material::default())?,
+                                None => PushConstantMaterial::from(&Material::default()),
                             };
 
                             unsafe {
