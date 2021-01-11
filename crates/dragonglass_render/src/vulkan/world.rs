@@ -71,7 +71,7 @@ impl From<&Material> for PushConstantMaterial {
     }
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct Light {
     pub direction: glm::Vec3,
     pub range: f32,
@@ -87,7 +87,7 @@ pub struct Light {
 }
 
 impl Light {
-    pub fn from_node(transform: Transform, light: dragonglass_world::Light) -> Self {
+    pub fn from_node(transform: &Transform, light: &dragonglass_world::Light) -> Self {
         let mut inner_cone_cos: f32 = 0.0;
         let mut outer_cone_cos: f32 = 0.0;
         let kind = match light.kind {
@@ -104,7 +104,7 @@ impl Light {
         };
 
         Self {
-            direction: transform.rotation.as_vector().xyz(),
+            direction: transform.rotation.as_vector().xyz().normalize(),
             range: light.range,
             color: light.color,
             kind,
@@ -120,7 +120,9 @@ impl Light {
 pub struct WorldUniformBuffer {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
-    pub camera_position: glm::Vec4,
+    pub camera_position: glm::Vec3,
+    pub number_of_lights: u32,
+    pub lights: [Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS],
     pub joint_matrices: [glm::Mat4; WorldPipelineData::MAX_NUMBER_OF_JOINTS],
 }
 
@@ -151,6 +153,7 @@ impl WorldPipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
     pub const MAX_NUMBER_OF_JOINTS: usize = 200;
+    pub const MAX_NUMBER_OF_LIGHTS: usize = 4; // TODO: Increase this once a deferred or forward+ pipeline is in use
 
     // This does not need to be matched in the shader
     pub const MAX_NUMBER_OF_MESHES: usize = 500;

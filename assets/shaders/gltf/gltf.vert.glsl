@@ -1,6 +1,5 @@
 #version 450
 
-
 layout(location=0) in vec3 inPosition;
 layout(location=1) in vec3 inNormal;
 layout(location=2) in vec2 inUV0;
@@ -9,12 +8,27 @@ layout(location=4) in vec4 inJoint0;
 layout(location=5) in vec4 inWeight0;
 layout(location=6) in vec3 inColor0;
 
+struct Light
+{
+    vec3 direction;
+    float range;
+    vec3 color;
+    float kind;
+    vec3 position;
+    float innerConeCos;
+    float outerConeCos;
+    vec3 padding;
+};
+
+#define MAX_NUMBER_OF_LIGHTS 4
 #define MAX_NUMBER_OF_JOINTS 200
 
 layout(binding=0) uniform UboView{
   mat4 view;
   mat4 projection;
-  vec4 cameraPosition;
+  vec3 cameraPosition;
+  int number_of_lights;
+  Light lights[MAX_NUMBER_OF_LIGHTS];
   mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
 } uboView;
 

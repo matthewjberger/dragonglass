@@ -34,12 +34,27 @@ layout(push_constant) uniform Material{
 
 layout(location = 0) out vec4 outColor;
 
+struct Light
+{
+    vec3 direction;
+    float range;
+    vec3 color;
+    float kind;
+    vec3 position;
+    float innerConeCos;
+    float outerConeCos;
+    vec3 padding;
+};
+
+#define MAX_NUMBER_OF_LIGHTS 4
 #define MAX_NUMBER_OF_JOINTS 200
 
 layout(binding=0) uniform UboView{
   mat4 view;
   mat4 projection;
-  vec4 cameraPosition;
+  vec3 cameraPosition;
+  int number_of_lights
+  Light lights[MAX_NUMBER_OF_LIGHTS];
   mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
 } uboView;
 
@@ -82,7 +97,7 @@ void main()
 
     vec3 normal = normalize(inNormal);
     vec3 light = normalize(lightPosition - inPosition);
-    vec3 view = normalize(uboView.cameraPosition.xyz - inPosition);
+    vec3 view = normalize(uboView.cameraPosition - inPosition);
     vec3 halfway = normalize(view + light);
 
     // Ambient

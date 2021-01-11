@@ -2,7 +2,7 @@ use crate::{
     vulkan::{
         core::{CommandPool, Context, Frame},
         scene::Scene,
-        world::{WorldPipelineData, WorldUniformBuffer},
+        world::{Light, WorldPipelineData, WorldUniformBuffer},
     },
     Renderer,
 };
@@ -92,8 +92,6 @@ impl Renderer for VulkanRenderer {
         let (projection, view) = world.active_camera_matrices(ecs, aspect_ratio)?;
         let camera_entity = world.active_camera(ecs)?;
         let camera_transform = world.entity_global_transform(ecs, camera_entity)?;
-        let mut camera_position = glm::vec3_to_vec4(&camera_transform.translation);
-        camera_position.w = 1.0;
 
         // Maintain a perspective projection for the skybox
         let using_ortho_projection = ecs.get::<Camera>(camera_entity)?.is_orthographic();
@@ -113,6 +111,18 @@ impl Renderer for VulkanRenderer {
             if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world, ecs)?;
 
+                let mut lights = [Light::default(); WorldPipelineData::MAX_NUMBER_OF_LIGHTS];
+                let world_lights = world
+                    .lights(ecs)?
+                    .iter()
+                    .map(|(transform, light)| Light::from_node(transform, light))
+                    .collect::<Vec<_>>();
+                let number_of_lights = world_lights.len() as u32;
+                lights
+                    .iter_mut()
+                    .zip(world_lights)
+                    .for_each(|(a, b)| *a = b);
+
                 let mut joint_matrices =
                     [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
                 joint_matrices
@@ -123,7 +133,9 @@ impl Renderer for VulkanRenderer {
                 let ubo = WorldUniformBuffer {
                     view,
                     projection,
-                    camera_position,
+                    camera_position: camera_transform.translation,
+                    number_of_lights,
+                    lights,
                     joint_matrices,
                 };
                 world_render
