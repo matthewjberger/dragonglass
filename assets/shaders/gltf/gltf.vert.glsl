@@ -27,7 +27,7 @@ layout(binding=0) uniform UboView{
   mat4 view;
   mat4 projection;
   vec3 cameraPosition;
-  int number_of_lights;
+  int numberOfLights;
   Light lights[MAX_NUMBER_OF_LIGHTS];
   mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
 } uboView;
@@ -61,7 +61,7 @@ void main()
   gl_Position = uboView.projection * uboView.view * skinnedModel * vec4(inPosition, 1.0);
 
   outPosition = inPosition; 
-  outNormal = normalize(transpose(inverse(mat3(skinnedModel))) * inNormal);
+  outNormal = mat3(transpose(inverse(skinnedModel))) * inNormal;
   outUV0 = inUV0;
   outUV1 = inUV1;
   outColor0 = inColor0;

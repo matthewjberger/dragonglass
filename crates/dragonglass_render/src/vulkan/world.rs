@@ -102,7 +102,6 @@ impl Light {
                 2
             }
         };
-
         Self {
             direction: transform.rotation.as_vector().xyz().normalize(),
             range: light.range,

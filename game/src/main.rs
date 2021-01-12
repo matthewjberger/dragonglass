@@ -3,7 +3,10 @@ use dragonglass::{
     app::Application,
     app::{run_application, AppConfig, ApplicationRunner},
     physics::RigidBody,
-    world::{Camera, Entity, Hidden, Mesh, PerspectiveCamera, Projection, Transform},
+    world::{
+        Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection, SceneGraph,
+        Transform,
+    },
 };
 use imgui::{im_str, Condition, Ui, Window};
 use nalgebra::Point3;
@@ -25,9 +28,51 @@ impl ApplicationRunner for Game {
         );
         let (level_path, level_handle) = ("assets/models/plane.gltf", "Plane");
 
+        // TODO: add a default scene graph to the world
+        let mut scene_graph = SceneGraph::default();
+
+        {
+            let position = glm::vec3(-4.0, 10.0, 0.0);
+            let mut transform = Transform {
+                translation: position,
+                ..Default::default()
+            };
+            transform.look_at(&(-position), &glm::Vec3::y());
+            let light_entity = application.ecs.spawn((
+                transform,
+                Light {
+                    color: glm::vec3(0.0, 0.4, 0.0),
+                    kind: LightKind::Directional,
+                    ..Default::default()
+                },
+            ));
+            scene_graph.add_node(light_entity);
+        }
+
+        {
+            let position = glm::vec3(4.0, 10.0, 0.0);
+            let mut transform = Transform {
+                translation: position,
+                ..Default::default()
+            };
+            transform.look_at(&(-position), &glm::Vec3::y());
+            let light_entity = application.ecs.spawn((
+                transform,
+                Light {
+                    color: glm::vec3(0.0, 0.0, 0.9),
+                    kind: LightKind::Directional,
+                    ..Default::default()
+                },
+            ));
+            scene_graph.add_node(light_entity);
+        }
+
+        application.world.scene.graphs.push(scene_graph);
+
         application.load_asset(player_path)?;
         application.load_asset(level_path)?;
         application.reload_world()?;
+
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
             if mesh.name == player_handle {
                 self.player = Some(entity);
@@ -52,7 +97,8 @@ impl ApplicationRunner for Game {
 
         if let Some(entity) = self.level.as_ref() {
             add_rigid_body(application, *entity, BodyStatus::Static)?;
-            add_trimesh_collider(application, *entity)?;
+            add_box_collider(application, *entity)?;
+            // add_trimesh_collider(application, *entity)?;
         }
 
         Ok(())
