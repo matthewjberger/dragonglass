@@ -165,6 +165,7 @@ impl ApplicationRunner for Editor {
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
+                application.world.add_default_light(&mut application.ecs)?;
             }
             _ => {}
         }
