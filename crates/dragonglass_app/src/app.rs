@@ -279,7 +279,7 @@ pub fn run_application(
     )?);
 
     let mut ecs = Ecs::new();
-    let world = World::new(&mut ecs);
+    let world = World::new(&mut ecs)?;
 
     let mut state = Application {
         ecs,

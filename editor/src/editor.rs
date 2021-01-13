@@ -64,6 +64,11 @@ impl Editor {
 }
 
 impl ApplicationRunner for Editor {
+    fn initialize(&mut self, application: &mut Application) -> Result<()> {
+        application.world.add_default_light(&mut application.ecs)?;
+        Ok(())
+    }
+
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
         ui.text(im_str!(
             "Number of entities: {}",
@@ -156,7 +161,7 @@ impl ApplicationRunner for Editor {
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 Self::clear_colliders(application);
-                application.world.clear(&mut application.ecs);
+                application.world.clear(&mut application.ecs)?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }

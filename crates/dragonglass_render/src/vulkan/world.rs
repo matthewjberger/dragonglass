@@ -574,6 +574,23 @@ impl WorldRender {
                         return Ok(());
                     }
 
+                    let transform = world.entity_global_transform(ecs, entity)?;
+
+                    // FIXME: Don't always render lights, add a debug flag to the component or something
+                    // Render lights as colored boxes for debugging
+                    if let Ok(light) = ecs.get::<dragonglass_world::Light>(entity) {
+                        // FIXME: Render a solid cube for this instead of a bounding box unit cube
+                        let offset = glm::translation(&transform.translation);
+                        let rotation = glm::quat_to_mat4(&transform.rotation);
+                        let extents = glm::vec3(0.25, 0.25, 0.25);
+                        let scale = glm::scaling(&extents);
+                        self.cube_render.issue_commands(
+                            command_buffer,
+                            projection * view * offset * rotation * scale,
+                            glm::vec3_to_vec4(&light.color),
+                        )?;
+                    }
+
                     if let Ok(mesh) = ecs.get::<Mesh>(entity) {
 
                         let bounding_box_color =
@@ -613,7 +630,6 @@ impl WorldRender {
                                 let position = body.position();
                                 let translation = position.translation.vector;
                                 let rotation = *position.rotation.quaternion();
-
                                 for collider_handle in body.colliders().iter() {
                                     if let Some(collider) = physics_world.colliders.get(*collider_handle) {
                                         let shape = collider.shape();
@@ -631,7 +647,6 @@ impl WorldRender {
                                     }
                                 }
                         }
-
 
                         if self.wireframe_enabled {
                             pipeline_wireframe.bind(&self.device.handle, command_buffer);

@@ -3,7 +3,7 @@ use na::linalg::QR;
 use na::{Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
-use petgraph::prelude::*;
+use petgraph::{graph::WalkNeighbors, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{
     marker::{Send, Sync},
@@ -25,13 +25,20 @@ pub struct World {
 impl World {
     pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
 
-    pub fn new(ecs: &mut Ecs) -> World {
+    pub fn new(ecs: &mut Ecs) -> Result<World> {
         let mut world = World::default();
-        world.add_main_camera(ecs);
-        world
+        world.initialize(ecs)?;
+        Ok(world)
     }
 
-    pub fn add_main_camera(&mut self, ecs: &mut Ecs) {
+    fn initialize(&mut self, ecs: &mut Ecs) -> Result<()> {
+        self.scene = Scene::default();
+        self.scene.name = "Main Scene".to_string();
+        self.add_default_camera(ecs)?;
+        Ok(())
+    }
+
+    fn add_default_camera(&mut self, ecs: &mut Ecs) -> Result<()> {
         let position = glm::vec3(0.0, 10.0, 10.0);
         let mut transform = Transform {
             translation: position,
@@ -39,7 +46,7 @@ impl World {
         };
         transform.look_at(&(-position), &glm::Vec3::y());
 
-        ecs.spawn((
+        let camera_entity = ecs.spawn((
             transform,
             Camera {
                 name: Self::MAIN_CAMERA_NAME.to_string(),
@@ -52,6 +59,29 @@ impl World {
                 enabled: true,
             },
         ));
+
+        self.scene.default_scenegraph_mut()?.add_node(camera_entity);
+
+        Ok(())
+    }
+
+    pub fn add_default_light(&mut self, ecs: &mut Ecs) -> Result<()> {
+        let position = glm::vec3(-2.0, 5.0, 0.0);
+        let mut transform = Transform {
+            translation: position,
+            ..Default::default()
+        };
+        transform.look_at(&(-position), &glm::Vec3::y());
+        let light_entity = ecs.spawn((
+            transform,
+            Light {
+                color: glm::vec3(1.0, 1.0, 1.0),
+                kind: LightKind::Directional,
+                ..Default::default()
+            },
+        ));
+        self.scene.default_scenegraph_mut()?.add_node(light_entity);
+        Ok(())
     }
 
     pub fn active_camera(&self, ecs: &mut Ecs) -> Result<Entity> {
@@ -84,14 +114,15 @@ impl World {
         Ok(camera.name == Self::MAIN_CAMERA_NAME)
     }
 
-    pub fn clear(&mut self, ecs: &mut Ecs) {
+    pub fn clear(&mut self, ecs: &mut Ecs) -> Result<()> {
         ecs.clear();
         self.scene.graphs.clear();
         self.textures.clear();
         self.animations.clear();
         self.materials.clear();
         self.geometry.clear();
-        self.add_main_camera(ecs);
+        self.initialize(ecs)?;
+        Ok(())
     }
 
     pub fn material_at_index(&self, index: usize) -> Result<&Material> {
@@ -293,10 +324,28 @@ impl World {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self {
+            name: "Unnamed Scene".to_string(),
+            graphs: vec![SceneGraph::default()],
+        }
+    }
+}
+
+impl Scene {
+    pub fn default_scenegraph_mut(&mut self) -> Result<&mut SceneGraph> {
+        match self.graphs.iter_mut().next() {
+            Some(graph) => Ok(graph),
+            None => bail!("Failed to find default scenegraph in scene: {}!", self.name),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -310,7 +359,7 @@ impl Default for Transform {
     fn default() -> Self {
         Self {
             translation: glm::vec3(0.0, 0.0, 0.0),
-            rotation: glm::Quat::identity(),
+            rotation: glm::quat_conjugate(&glm::quat_look_at(&glm::Vec3::z(), &glm::Vec3::y())),
             scale: glm::vec3(1.0, 1.0, 1.0),
         }
     }
@@ -829,9 +878,14 @@ impl SceneGraph {
     }
 
     pub fn walk(&self, mut action: impl FnMut(NodeIndex) -> Result<()>) -> Result<()> {
-        let mut dfs = Dfs::new(&self.0, NodeIndex::new(0));
-        while let Some(node_index) = dfs.next(&self.0) {
-            action(node_index)?;
+        for node_index in self.0.node_indices() {
+            if self.has_parents(node_index) {
+                continue;
+            }
+            let mut dfs = Dfs::new(&self.0, node_index);
+            while let Some(node_index) = dfs.next(&self.0) {
+                action(node_index)?;
+            }
         }
         Ok(())
     }
@@ -849,6 +903,22 @@ impl SceneGraph {
             Some(parent_index) => Ok(self.global_transform(parent_index, ecs)? * transform),
             None => Ok(transform),
         }
+    }
+
+    pub fn has_neighbors(&self, index: NodeIndex) -> bool {
+        self.has_parents(index) || self.has_children(index)
+    }
+
+    pub fn has_parents(&self, index: NodeIndex) -> bool {
+        self.neighbors(index, Incoming).next_node(&self.0).is_some()
+    }
+
+    pub fn has_children(&self, index: NodeIndex) -> bool {
+        self.neighbors(index, Outgoing).next_node(&self.0).is_some()
+    }
+
+    pub fn neighbors(&self, index: NodeIndex, direction: Direction) -> WalkNeighbors<u32> {
+        self.0.neighbors_directed(index, direction).detach()
     }
 
     pub fn find_node(&self, entity: Entity) -> Option<NodeIndex> {
