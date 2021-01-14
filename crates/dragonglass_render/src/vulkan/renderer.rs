@@ -11,10 +11,11 @@ use ash::{version::DeviceV1_0, vk};
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
-use log::error;
+use log::{error, info};
 use nalgebra_glm as glm;
 use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
+use shader_compilation::compile_shaders;
 use std::sync::Arc;
 
 pub struct VulkanRenderer {
@@ -65,6 +66,18 @@ impl Renderer for VulkanRenderer {
 
     fn load_world(&mut self, world: &World) -> Result<()> {
         self.scene.load_world(&self.context, world)?;
+        Ok(())
+    }
+
+    fn reload_shaders(&mut self) -> Result<()> {
+        self.scene.shader_cache.shaders.clear();
+        if compile_shaders("assets/shaders/**/*.glsl").is_err() {
+            error!("Failed to recompile shaders!");
+            return Ok(());
+        }
+        unsafe { self.context.device.handle.device_wait_idle() }?;
+        self.scene.create_pipelines(&self.context)?;
+        info!("Reloaded shaders!");
         Ok(())
     }
 

@@ -158,6 +158,7 @@ impl ApplicationRunner for Editor {
         keycode: VirtualKeyCode,
     ) -> Result<()> {
         match (keycode, keystate) {
+            (VirtualKeyCode::R, ElementState::Pressed) => application.renderer.reload_shaders()?,
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 Self::clear_colliders(application);

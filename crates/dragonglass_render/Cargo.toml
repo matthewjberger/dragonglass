@@ -18,6 +18,7 @@ hecs = { git = "https://github.com/Ralith/hecs", features = ["serde"] }
 petgraph = "0.5.1"
 rapier3d = "0.4.2"
 raw-window-handle = "0.3.3"
+shader-compilation = { path = "../shader-compilation" }
 
 # Opted into by features
 ash = { version = "0.31.0", optional = true }

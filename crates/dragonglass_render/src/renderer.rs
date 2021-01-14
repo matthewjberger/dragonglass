@@ -22,6 +22,7 @@ pub trait Renderer {
     // TODO: Make this part of the world
     fn load_skybox(&mut self, path: &str) -> Result<()>;
     fn load_world(&mut self, world: &World) -> Result<()>;
+    fn reload_shaders(&mut self) -> Result<()>;
     fn render(
         &mut self,
         dimensions: &[u32; 2],
