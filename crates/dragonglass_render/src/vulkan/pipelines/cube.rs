@@ -21,7 +21,8 @@ pub struct CubePushConstantBlock {
 
 pub struct CubeRender {
     pub cube: Cube,
-    pub pipeline: Option<Pipeline>,
+    pub solid_pipeline: Option<Pipeline>,
+    pub loop_pipeline: Option<Pipeline>,
     pub segment_pipeline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     device: Arc<Device>,
@@ -31,7 +32,8 @@ impl CubeRender {
     pub fn new(device: Arc<Device>, cube: Cube) -> Self {
         Self {
             cube,
-            pipeline: None,
+            solid_pipeline: None,
+            loop_pipeline: None,
             segment_pipeline: None,
             pipeline_layout: None,
             device,
@@ -66,7 +68,7 @@ impl CubeRender {
             vk::DescriptorSetLayoutCreateInfo::builder(),
         )?);
 
-        self.pipeline = None;
+        self.loop_pipeline = None;
         self.segment_pipeline = None;
         self.pipeline_layout = None;
 
@@ -78,7 +80,16 @@ impl CubeRender {
             .descriptor_set_layout(descriptor_set_layout)
             .shader_set(shader_set)
             .rasterization_samples(samples)
-            .push_constant_range(push_constant_range)
+            .push_constant_range(push_constant_range);
+
+        let mut solid_settings = settings.clone();
+        solid_settings
+            .polygon_mode(vk::PolygonMode::FILL)
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
+
+        let mut loop_settings = settings.clone();
+        loop_settings
             .polygon_mode(vk::PolygonMode::LINE)
             .topology(vk::PrimitiveTopology::LINE_STRIP)
             .dynamic_states(vec![
@@ -88,10 +99,23 @@ impl CubeRender {
                 vk::DynamicState::DEPTH_BIAS,
             ]);
 
-        let mut segment_settings = settings.clone();
-        segment_settings.topology(vk::PrimitiveTopology::LINE_LIST);
+        let mut segment_settings = settings;
+        segment_settings
+            .polygon_mode(vk::PolygonMode::LINE)
+            .topology(vk::PrimitiveTopology::LINE_LIST)
+            .dynamic_states(vec![
+                vk::DynamicState::VIEWPORT,
+                vk::DynamicState::SCISSOR,
+                vk::DynamicState::LINE_WIDTH,
+                vk::DynamicState::DEPTH_BIAS,
+            ]);
 
-        let (pipeline, pipeline_layout) = settings
+        let (solid_pipeline, pipeline_layout) = solid_settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
+        let (loop_pipeline, _) = loop_settings
             .build()
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
@@ -101,7 +125,8 @@ impl CubeRender {
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
 
-        self.pipeline = Some(pipeline);
+        self.solid_pipeline = Some(solid_pipeline);
+        self.loop_pipeline = Some(loop_pipeline);
         self.segment_pipeline = Some(segment_pipeline);
         self.pipeline_layout = Some(pipeline_layout);
 
@@ -113,9 +138,15 @@ impl CubeRender {
         command_buffer: vk::CommandBuffer,
         mvp: glm::Mat4,
         color: glm::Vec4,
+        solid: bool,
     ) -> Result<()> {
-        let pipeline = self
-            .pipeline
+        let solid_pipeline = self
+            .solid_pipeline
+            .as_ref()
+            .context("Failed to get solid pipeline for rendering asset!")?;
+
+        let loop_pipeline = self
+            .loop_pipeline
             .as_ref()
             .context("Failed to get wireframe pipeline for rendering asset!")?;
 
@@ -124,10 +155,7 @@ impl CubeRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering asset!")?;
 
-        pipeline.bind(&self.device.handle, command_buffer);
-
         let push_constants = CubePushConstantBlock { mvp, color };
-
         unsafe {
             self.device.handle.cmd_push_constants(
                 command_buffer,
@@ -136,24 +164,28 @@ impl CubeRender {
                 0,
                 byte_slice_from(&push_constants),
             );
-
-            self.device.handle.cmd_set_line_width(command_buffer, 3.0);
-            self.device
-                .handle
-                .cmd_set_depth_bias(command_buffer, 1.25, 0.0, 1.0);
         }
 
-        self.cube.draw_loops(&self.device.handle, command_buffer)?;
-
-        let segment_pipeline = self
-            .segment_pipeline
-            .as_ref()
-            .context("Failed to get wireframe pipeline for rendering asset!")?;
-
-        segment_pipeline.bind(&self.device.handle, command_buffer);
-
-        self.cube
-            .draw_segments(&self.device.handle, command_buffer)?;
+        if solid {
+            solid_pipeline.bind(&self.device.handle, command_buffer);
+            self.cube.draw(&self.device.handle, command_buffer)?;
+        } else {
+            loop_pipeline.bind(&self.device.handle, command_buffer);
+            unsafe {
+                self.device.handle.cmd_set_line_width(command_buffer, 3.0);
+                self.device
+                    .handle
+                    .cmd_set_depth_bias(command_buffer, 1.25, 0.0, 1.0);
+            }
+            self.cube.draw_loops(&self.device.handle, command_buffer)?;
+            let segment_pipeline = self
+                .segment_pipeline
+                .as_ref()
+                .context("Failed to get wireframe pipeline for rendering asset!")?;
+            segment_pipeline.bind(&self.device.handle, command_buffer);
+            self.cube
+                .draw_segments(&self.device.handle, command_buffer)?;
+        }
 
         Ok(())
     }

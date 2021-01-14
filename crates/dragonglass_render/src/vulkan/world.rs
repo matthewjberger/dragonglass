@@ -588,6 +588,7 @@ impl WorldRender {
                             command_buffer,
                             projection * view * offset * rotation * scale,
                             glm::vec3_to_vec4(&light.color),
+                            true,
                         )?;
                     }
 
@@ -616,6 +617,7 @@ impl WorldRender {
                                             command_buffer,
                                             projection * view * offset * rotation * scale,
                                             display_color,
+                                            false,
                                         )?;
                                     } else {
                                         warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
@@ -641,6 +643,7 @@ impl WorldRender {
                                                     command_buffer,
                                                     projection * view * offset * rotation * scale,
                                                     glm::vec4(0.0, 1.0, 1.0, 1.0),
+                                                    false,
                                                 )?;
                                             }
                                         }
