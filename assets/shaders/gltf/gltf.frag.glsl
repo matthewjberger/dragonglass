@@ -134,5 +134,4 @@ void main()
   
     color = pow(color, vec3(1.0 / 2.2));
     outColor = vec4(color, baseColor.a);
-    outColor = vec4(1.0);
 }

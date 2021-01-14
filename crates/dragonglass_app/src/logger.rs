@@ -6,7 +6,7 @@ pub const LOG_FILE: &str = "dragonglass.log";
 
 pub fn create_logger() -> Result<()> {
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed),
+        TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed),
         WriteLogger::new(
             LevelFilter::max(),
             Config::default(),

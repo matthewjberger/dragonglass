@@ -4,6 +4,7 @@ use dragonglass::{
     app::{Application, ApplicationRunner},
     world::{load_gltf, BoxCollider, BoxColliderVisible, Camera, Mesh, Selected},
 };
+use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
 use std::path::PathBuf;
@@ -12,9 +13,21 @@ use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 #[derive(Default)]
 pub struct Editor {
     arcball: Arcball,
+    _hotwatch: Option<Hotwatch>,
 }
 
 impl Editor {
+    fn setup_file_reloading(&mut self) -> Result<()> {
+        let mut hotwatch = Hotwatch::new()?;
+        hotwatch.watch("assets/shaders/gltf", move |event: Event| {
+            if let Event::Write(_) = event {
+                log::info!("Should reload shaders");
+            }
+        })?;
+        self._hotwatch = Some(hotwatch);
+        Ok(())
+    }
+
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
         load_gltf(path, &mut application.world, &mut application.ecs)?;
 
@@ -65,6 +78,7 @@ impl Editor {
 
 impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
+        self.setup_file_reloading()?;
         application.world.add_default_light(&mut application.ecs)?;
         Ok(())
     }
@@ -123,6 +137,11 @@ impl ApplicationRunner for Editor {
     }
 
     fn update(&mut self, application: &mut Application) -> Result<()> {
+        // FIXME: Reload shaders when requested
+        // if should_reload {
+        //     application.renderer.reload_asset_shaders()?;
+        // }
+
         if application.input.is_key_pressed(VirtualKeyCode::Escape) {
             application.system.exit_requested = true;
         }
@@ -158,9 +177,6 @@ impl ApplicationRunner for Editor {
         keycode: VirtualKeyCode,
     ) -> Result<()> {
         match (keycode, keystate) {
-            (VirtualKeyCode::R, ElementState::Pressed) => {
-                application.renderer.reload_asset_shaders()?
-            }
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 Self::clear_colliders(application);
