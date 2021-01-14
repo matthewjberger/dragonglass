@@ -69,10 +69,17 @@ impl Renderer for VulkanRenderer {
         Ok(())
     }
 
-    fn reload_shaders(&mut self) -> Result<()> {
-        self.scene.shader_cache.shaders.clear();
-        if compile_shaders("assets/shaders/**/*.glsl").is_err() {
-            error!("Failed to recompile shaders!");
+    fn reload_asset_shaders(&mut self) -> Result<()> {
+        self.scene
+            .shader_cache
+            .shaders
+            .remove("assets/shaders/gltf/gltf.vert.spv");
+        self.scene
+            .shader_cache
+            .shaders
+            .remove("assets/shaders/gltf/gltf.frag.spv");
+        if compile_shaders("assets/shaders/gltf/*.glsl").is_err() {
+            error!("Failed to recompile asset shaders!");
             return Ok(());
         }
         unsafe { self.context.device.handle.device_wait_idle() }?;
