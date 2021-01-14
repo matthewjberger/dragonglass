@@ -39,7 +39,7 @@ struct Light
     vec3 direction;
     float range;
     vec3 color;
-    float kind;
+    int kind;
     vec3 position;
     float innerConeCos;
     float outerConeCos;
@@ -54,8 +54,8 @@ layout(binding=0) uniform UboView{
   mat4 projection;
   vec3 cameraPosition;
   int numberOfLights;
-  Light lights[MAX_NUMBER_OF_LIGHTS];
   mat4 jointMatrices[MAX_NUMBER_OF_JOINTS];
+  Light lights[MAX_NUMBER_OF_LIGHTS];
 } uboView;
 
 vec4 srgb_to_linear(vec4 srgbIn)

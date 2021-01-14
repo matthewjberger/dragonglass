@@ -121,8 +121,8 @@ pub struct WorldUniformBuffer {
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec3,
     pub number_of_lights: u32,
-    pub lights: [Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS],
     pub joint_matrices: [glm::Mat4; WorldPipelineData::MAX_NUMBER_OF_JOINTS],
+    pub lights: [Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]

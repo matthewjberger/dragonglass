@@ -162,10 +162,10 @@ impl ApplicationRunner for Editor {
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 Self::clear_colliders(application);
                 application.world.clear(&mut application.ecs)?;
+                application.world.add_default_light(&mut application.ecs)?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
-                application.world.add_default_light(&mut application.ecs)?;
             }
             _ => {}
         }
