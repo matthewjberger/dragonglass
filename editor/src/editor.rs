@@ -7,21 +7,46 @@ use dragonglass::{
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Ui};
 use log::{error, info, warn};
-use std::path::PathBuf;
+use std::{
+    ffi::OsStr,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
-#[derive(Default)]
 pub struct Editor {
     arcball: Arcball,
     _hotwatch: Option<Hotwatch>,
+    reload_shaders: Arc<AtomicBool>,
+}
+
+impl Default for Editor {
+    fn default() -> Self {
+        Self {
+            arcball: Arcball::default(),
+            _hotwatch: None,
+            reload_shaders: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }
 
 impl Editor {
     fn setup_file_reloading(&mut self) -> Result<()> {
+        let reload_shaders = self.reload_shaders.clone();
         let mut hotwatch = Hotwatch::new()?;
         hotwatch.watch("assets/shaders/gltf", move |event: Event| {
-            if let Event::Write(_) = event {
-                log::info!("Should reload shaders");
+            if let Event::Write(path) = event {
+                if let Some(extension) = path.extension() {
+                    // Don't need to reload shaders again
+                    // after a .spv file is generated
+                    if extension == OsStr::new("spv") {
+                        return;
+                    }
+                    reload_shaders.store(true, Ordering::Release);
+                }
             }
         })?;
         self._hotwatch = Some(hotwatch);
@@ -137,10 +162,10 @@ impl ApplicationRunner for Editor {
     }
 
     fn update(&mut self, application: &mut Application) -> Result<()> {
-        // FIXME: Reload shaders when requested
-        // if should_reload {
-        //     application.renderer.reload_asset_shaders()?;
-        // }
+        if self.reload_shaders.load(Ordering::Acquire) {
+            application.renderer.reload_asset_shaders()?;
+        }
+        self.reload_shaders.store(false, Ordering::Release);
 
         if application.input.is_key_pressed(VirtualKeyCode::Escape) {
             application.system.exit_requested = true;
