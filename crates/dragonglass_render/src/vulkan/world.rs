@@ -77,13 +77,15 @@ pub struct Light {
     pub range: f32,
 
     pub color: glm::Vec3,
-    pub kind: i32,
+    pub intensity: f32,
 
     pub position: glm::Vec3,
     pub inner_cone_cos: f32,
 
     pub outer_cone_cos: f32,
-    pub padding: glm::Vec3,
+    pub kind: i32,
+
+    pub padding: glm::Vec2,
 }
 
 impl Light {
@@ -106,11 +108,12 @@ impl Light {
             direction: transform.rotation.as_vector().xyz().normalize(),
             range: light.range,
             color: light.color,
-            kind,
+            intensity: light.intensity,
             position: transform.translation,
             inner_cone_cos,
             outer_cone_cos,
-            padding: glm::vec3(0.0, 0.0, 0.0),
+            kind,
+            padding: glm::vec2(0.0, 0.0),
         }
     }
 }

@@ -38,12 +38,17 @@ struct Light
 {
     vec3 direction;
     float range;
+
     vec3 color;
-    int kind;
+    float intensity;
+
     vec3 position;
     float innerConeCos;
+
     float outerConeCos;
-    vec3 padding;
+    int kind;
+
+    vec2 padding;
 };
 
 #define MAX_NUMBER_OF_LIGHTS 4
