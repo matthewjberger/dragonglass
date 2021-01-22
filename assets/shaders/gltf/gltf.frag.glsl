@@ -69,6 +69,36 @@ vec4 srgb_to_linear(vec4 srgbIn)
     return vec4(linOut,srgbIn.w);
 }
 
+const int LightType_Directional = 0;
+const int LightType_Point = 1;
+const int LightType_Spot = 2;
+
+// https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#range-property
+float getRangeAttenuation(float range, float distance)
+{
+    if (range <= 0.0)
+    {
+        // negative range means unlimited
+        return 1.0;
+    }
+    return max(min(1.0 - pow(distance / range, 4.0), 1.0), 0.0) / pow(distance, 2.0);
+}
+
+// https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#inner-and-outer-cone-angles
+float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeCos, float innerConeCos)
+{
+    float actualCos = dot(normalize(spotDirection), normalize(-pointToLight));
+    if (actualCos > outerConeCos)
+    {
+        if (actualCos < innerConeCos)
+        {
+            return smoothstep(outerConeCos, innerConeCos, actualCos);
+        }
+        return 1.0;
+    }
+    return 0.0;
+}
+
 void main()
 {
     vec4 baseColor;
@@ -101,22 +131,56 @@ void main()
         // Treat all lights as directional lights for now
 
         Light light = uboView.lights[i];
-        vec3 lightDir = normalize(-light.direction);
 
-        vec3 ambient = 0.05 * light.color * baseColor.rgb;
+        vec3 pointToLight = light.direction;
+        float rangeAttenuation = 1.0;
+        float spotAttenuation = 1.0;
 
-        float diff = max(dot(normal, lightDir), 0.0);
-        vec3 diffuse = diff * light.color * baseColor.rgb;
+        // int lightKind = light.kind;
+        int lightKind = LightType_Point;
+        if(lightKind != LightType_Directional)
+        {
+            pointToLight = light.position - inPosition;
+            rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
+        }
+        if (lightKind == LightType_Spot)
+        {
+            spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+        }
+        vec3 l = normalize(pointToLight);
+        // float lightIntensity = light.intensity;
+        float lightIntensity = 0.25;
+        vec3 intensity = rangeAttenuation * spotAttenuation * lightIntensity * light.color;
+        vec3 ambient = 0.05 * intensity * baseColor.rgb;
 
-        vec3 halfway = normalize(view + lightDir);
-        vec3 specular = vec3(0.0);
-        if (diff > 0.0) {
-            float shine = 32.0;
-            float spec = pow(max(dot(halfway, normal), 0.0), shine);
-            specular = light.color * spec;
+        if(lightKind == LightType_Directional) {
+            float diff = max(dot(normal, light.direction), 0.0);
+            vec3 diffuse = diff * intensity * baseColor.rgb;
+
+            vec3 halfway = normalize(view + light.direction);
+            vec3 specular = vec3(0.0);
+            if (diff > 0.0) {
+                float shine = 32.0;
+                float spec = pow(max(dot(halfway, normal), 0.0), shine);
+                specular = light.color * spec;
+            }
+
+            color += ambient + diffuse + specular;
         }
 
-        color += ambient + diffuse + specular;
+        if(lightKind == LightType_Point) {
+            vec3 lightDir = normalize(pointToLight);
+
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = diff * intensity * baseColor.rgb;
+
+            vec3 reflectDir = reflect(lightDir, normal);
+            float shine = 32.0;
+            float spec = pow(max(dot(view, reflectDir), 0.0), shine);
+            vec3 specular = spec * intensity * baseColor.rgb;
+
+            color += ambient + diffuse + specular;
+        }
     }
 
     if (material.occlusionTextureIndex > -1) {

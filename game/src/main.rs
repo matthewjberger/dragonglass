@@ -4,19 +4,23 @@ use dragonglass::{
     app::{run_application, AppConfig, ApplicationRunner},
     physics::RigidBody,
     world::{
-        Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection, SceneGraph,
+        Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection,
         Transform,
     },
 };
 use imgui::{im_str, Condition, Ui, Window};
 use nalgebra::Point3;
 use nalgebra_glm as glm;
-use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::ColliderBuilder};
+use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::{ColliderBuilder, InteractionGroups}};
 use winit::event::{ElementState, VirtualKeyCode};
+
+const PLAYER_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b10, 0b01);
+const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b10);
 
 #[derive(Default)]
 pub struct Game {
     level: Option<Entity>,
+    deer: Option<Entity>,
     player: Option<Entity>,
 }
 
@@ -27,6 +31,7 @@ impl ApplicationRunner for Game {
             "mesh_helmet_LP_13930damagedHelmet",
         );
         let (level_path, level_handle) = ("assets/models/plane.gltf", "Plane");
+        let (deer_path, deer_handle) = ("assets/models/deer.gltf", "Cylinder");
 
         {
             let position = glm::vec3(-2.0, 5.0, 0.0);
@@ -74,7 +79,14 @@ impl ApplicationRunner for Game {
 
         application.load_asset(player_path)?;
         application.load_asset(level_path)?;
+        application.load_asset(deer_path)?;
+        application.load_asset("assets/models/room.glb")?;
         application.reload_world()?;
+
+        log::info!("Player -> Level: {}", PLAYER_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP));
+        log::info!("Player -> Player: {}", PLAYER_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP));
+        log::info!("Level -> Player: {}", LEVEL_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP));
+        log::info!("Level -> Level: {}", LEVEL_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP));
 
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
             if mesh.name == player_handle {
@@ -90,17 +102,27 @@ impl ApplicationRunner for Game {
             if mesh.name == level_handle {
                 self.level = Some(entity);
             }
+            if mesh.name == deer_handle {
+                self.deer = Some(entity);
+            }
             log::info!("Mesh available: {}", mesh.name);
         }
 
         if let Some(entity) = self.player.as_ref() {
+            // activate_first_person(application, *entity)?;
             add_rigid_body(application, *entity, BodyStatus::Dynamic)?;
-            add_box_collider(application, *entity)?;
+            add_box_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
         }
 
         if let Some(entity) = self.level.as_ref() {
             add_rigid_body(application, *entity, BodyStatus::Static)?;
-            add_box_collider(application, *entity)?;
+            add_box_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
+            // add_trimesh_collider(application, *entity)?;
+        }
+
+        if let Some(entity) = self.deer.as_ref() {
+            add_rigid_body(application, *entity, BodyStatus::Static)?;
+            add_box_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
             // add_trimesh_collider(application, *entity)?;
         }
 
@@ -183,7 +205,7 @@ fn add_rigid_body(
     Ok(())
 }
 
-fn add_box_collider(application: &mut Application, entity: Entity) -> Result<()> {
+fn add_box_collider(application: &mut Application, entity: Entity, collision_groups: InteractionGroups) -> Result<()> {
     let bounding_box = {
         let mesh = application.ecs.get::<Mesh>(entity)?;
         mesh.bounding_box()
@@ -191,7 +213,7 @@ fn add_box_collider(application: &mut Application, entity: Entity) -> Result<()>
     let transform = application.ecs.get::<Transform>(entity)?;
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-    let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).build();
+    let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).collision_groups(collision_groups).build();
     application.physics_world.colliders.insert(
         collider,
         rigid_body_handle,
