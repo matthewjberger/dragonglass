@@ -23,8 +23,6 @@ const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b
 
 #[derive(Default)]
 pub struct Game {
-    level: Option<Entity>,
-    deer: Option<Entity>,
     player: Option<Entity>,
 }
 
@@ -34,8 +32,7 @@ impl ApplicationRunner for Game {
             "assets/models/DamagedHelmet.glb",
             "mesh_helmet_LP_13930damagedHelmet",
         );
-        let (level_path, level_handle) = ("assets/models/plane.gltf", "Plane");
-        let (deer_path, deer_handle) = ("assets/models/deer.gltf", "Cylinder");
+        let level_path = "assets/models/blocklevel.glb";
 
         {
             let position = glm::vec3(-2.0, 5.0, 0.0);
@@ -83,8 +80,7 @@ impl ApplicationRunner for Game {
 
         application.load_asset(player_path)?;
         application.load_asset(level_path)?;
-        application.load_asset(deer_path)?;
-        application.load_asset("assets/models/room.glb")?;
+        // application.load_asset("assets/models/room.glb")?;
         application.reload_world()?;
 
         log::info!("Player -> Level: {}", PLAYER_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP));
@@ -92,6 +88,18 @@ impl ApplicationRunner for Game {
         log::info!("Level -> Player: {}", LEVEL_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP));
         log::info!("Level -> Level: {}", LEVEL_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP));
 
+        let level_mesh_names = vec![
+            "Cube.006",
+            "Cube.002",
+            "Sphere",
+            "Cube.003",
+            "Cube.004",
+            "Cube.005",
+            "Torus",
+            "Cylinder",
+            "Icosphere",
+        ];
+        let mut level_meshes = Vec::new();
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
             if mesh.name == player_handle {
                 self.player = Some(entity);
@@ -103,31 +111,22 @@ impl ApplicationRunner for Game {
                     }
                 }
             }
-            if mesh.name == level_handle {
-                self.level = Some(entity);
-            }
-            if mesh.name == deer_handle {
-                self.deer = Some(entity);
+            if level_mesh_names.iter().any(|x| **x == mesh.name) {
+                level_meshes.push(entity);
             }
             log::info!("Mesh available: {}", mesh.name);
         }
 
+        for entity in level_meshes.into_iter() {
+            add_rigid_body(application, entity, BodyStatus::Static)?;
+            add_box_collider(application, entity, LEVEL_COLLISION_GROUP)?;
+            // add_trimesh_collider(application, entity, LEVEL_COLLISION_GROUP)?;
+        }
+
         if let Some(entity) = self.player.as_ref() {
-            // activate_first_person(application, *entity)?;
+            activate_first_person(application, *entity)?;
             add_rigid_body(application, *entity, BodyStatus::Dynamic)?;
             add_box_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
-        }
-
-        if let Some(entity) = self.level.as_ref() {
-            add_rigid_body(application, *entity, BodyStatus::Static)?;
-            add_box_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
-            // add_trimesh_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
-        }
-
-        if let Some(entity) = self.deer.as_ref() {
-            add_rigid_body(application, *entity, BodyStatus::Static)?;
-            add_box_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
-            // add_trimesh_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
         }
 
         Ok(())
