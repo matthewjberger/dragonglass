@@ -14,6 +14,10 @@ use nalgebra_glm as glm;
 use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::{ColliderBuilder, InteractionGroups}};
 use winit::event::{ElementState, VirtualKeyCode};
 
+// TODO: Create trigger with event on collision
+// TODO: Add trimesh component with handle?
+// TODO: Visualize triangle mesh colliders as wireframes in renderer?
+
 const PLAYER_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b10, 0b01);
 const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b10);
 
@@ -117,13 +121,13 @@ impl ApplicationRunner for Game {
         if let Some(entity) = self.level.as_ref() {
             add_rigid_body(application, *entity, BodyStatus::Static)?;
             add_box_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
-            // add_trimesh_collider(application, *entity)?;
+            // add_trimesh_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
         }
 
         if let Some(entity) = self.deer.as_ref() {
             add_rigid_body(application, *entity, BodyStatus::Static)?;
             add_box_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
-            // add_trimesh_collider(application, *entity)?;
+            // add_trimesh_collider(application, *entity, LEVEL_COLLISION_GROUP)?;
         }
 
         Ok(())
@@ -222,7 +226,7 @@ fn add_box_collider(application: &mut Application, entity: Entity, collision_gro
     Ok(())
 }
 
-fn add_trimesh_collider(application: &mut Application, entity: Entity) -> Result<()> {
+fn add_trimesh_collider(application: &mut Application, entity: Entity, collision_groups: InteractionGroups) -> Result<()> {
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let (vertices, indices) = {
         let mesh = application.ecs.get::<Mesh>(entity)?;
@@ -250,7 +254,7 @@ fn add_trimesh_collider(application: &mut Application, entity: Entity) -> Result
         }
         (vertices, indices)
     };
-    let collider = ColliderBuilder::trimesh(vertices, indices).build();
+    let collider = ColliderBuilder::trimesh(vertices, indices).collision_groups(collision_groups).build();
     application.physics_world.colliders.insert(
         collider,
         rigid_body_handle,
