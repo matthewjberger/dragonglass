@@ -4,14 +4,17 @@ use dragonglass::{
     app::{run_application, AppConfig, ApplicationRunner},
     physics::RigidBody,
     world::{
-        Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection,
-        Transform,
+        Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection, Transform,
     },
 };
 use imgui::{im_str, Condition, Ui, Window};
 use nalgebra::Point3;
 use nalgebra_glm as glm;
-use rapier3d::{dynamics::BodyStatus, dynamics::RigidBodyBuilder, geometry::{ColliderBuilder, InteractionGroups}};
+use rapier3d::{
+    dynamics::BodyStatus,
+    dynamics::RigidBodyBuilder,
+    geometry::{ColliderBuilder, InteractionGroups},
+};
 use winit::event::{ElementState, VirtualKeyCode};
 
 // TODO: Create trigger with event on collision
@@ -83,10 +86,22 @@ impl ApplicationRunner for Game {
         // application.load_asset("assets/models/room.glb")?;
         application.reload_world()?;
 
-        log::info!("Player -> Level: {}", PLAYER_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP));
-        log::info!("Player -> Player: {}", PLAYER_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP));
-        log::info!("Level -> Player: {}", LEVEL_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP));
-        log::info!("Level -> Level: {}", LEVEL_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP));
+        log::info!(
+            "Player -> Level: {}",
+            PLAYER_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP)
+        );
+        log::info!(
+            "Player -> Player: {}",
+            PLAYER_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP)
+        );
+        log::info!(
+            "Level -> Player: {}",
+            LEVEL_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP)
+        );
+        log::info!(
+            "Level -> Level: {}",
+            LEVEL_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP)
+        );
 
         let level_mesh_names = vec![
             "Cube.006",
@@ -208,7 +223,11 @@ fn add_rigid_body(
     Ok(())
 }
 
-fn add_box_collider(application: &mut Application, entity: Entity, collision_groups: InteractionGroups) -> Result<()> {
+fn add_box_collider(
+    application: &mut Application,
+    entity: Entity,
+    collision_groups: InteractionGroups,
+) -> Result<()> {
     let bounding_box = {
         let mesh = application.ecs.get::<Mesh>(entity)?;
         mesh.bounding_box()
@@ -216,7 +235,9 @@ fn add_box_collider(application: &mut Application, entity: Entity, collision_gro
     let transform = application.ecs.get::<Transform>(entity)?;
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-    let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z).collision_groups(collision_groups).build();
+    let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
+        .collision_groups(collision_groups)
+        .build();
     application.physics_world.colliders.insert(
         collider,
         rigid_body_handle,
@@ -225,7 +246,11 @@ fn add_box_collider(application: &mut Application, entity: Entity, collision_gro
     Ok(())
 }
 
-fn add_trimesh_collider(application: &mut Application, entity: Entity, collision_groups: InteractionGroups) -> Result<()> {
+fn add_trimesh_collider(
+    application: &mut Application,
+    entity: Entity,
+    collision_groups: InteractionGroups,
+) -> Result<()> {
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let (vertices, indices) = {
         let mesh = application.ecs.get::<Mesh>(entity)?;
@@ -253,7 +278,9 @@ fn add_trimesh_collider(application: &mut Application, entity: Entity, collision
         }
         (vertices, indices)
     };
-    let collider = ColliderBuilder::trimesh(vertices, indices).collision_groups(collision_groups).build();
+    let collider = ColliderBuilder::trimesh(vertices, indices)
+        .collision_groups(collision_groups)
+        .build();
     application.physics_world.colliders.insert(
         collider,
         rigid_body_handle,
