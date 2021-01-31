@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.36"
-dragonglass = { path = ".." }
+dragonglass = { path = "../.." }
 hecs = { git = "https://github.com/Ralith/hecs", features = ["serde"] }
 imgui = "0.6.1"
 log = "0.4.11"
