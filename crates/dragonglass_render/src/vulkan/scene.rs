@@ -4,9 +4,7 @@ use crate::vulkan::{
         ShaderCache, Swapchain, SwapchainProperties,
     },
     pbr::hdr_cubemap,
-    pipelines::{FullscreenRender, GuiRender},
-    skybox::SkyboxRendering,
-    world::WorldRender,
+    render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
 };
 use anyhow::Result;
 use ash::vk;
@@ -16,7 +14,7 @@ use std::{path::Path, sync::Arc};
 
 pub struct Scene {
     pub world_render: Option<WorldRender>,
-    pub skybox_rendering: SkyboxRendering,
+    pub skybox_render: SkyboxRender,
     pub fullscreen_pipeline: Option<FullscreenRender>,
     pub gui_render: GuiRender,
     pub rendergraph: RenderGraph,
@@ -51,7 +49,7 @@ impl Scene {
             &mut shader_cache,
         )?;
 
-        let skybox_rendering = SkyboxRendering::new(
+        let skybox_render = SkyboxRender::new(
             context,
             &transient_command_pool,
             skybox.view.handle,
@@ -69,7 +67,7 @@ impl Scene {
 
         let mut scene = Self {
             world_render: None,
-            skybox_rendering,
+            skybox_render,
             fullscreen_pipeline: None,
             gui_render,
             rendergraph,
@@ -100,7 +98,7 @@ impl Scene {
             .create_pipeline(&mut self.shader_cache, fullscreen_pass)?;
 
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
-        self.skybox_rendering.create_pipeline(
+        self.skybox_render.create_pipeline(
             &mut self.shader_cache,
             offscreen_renderpass.clone(),
             self.samples,
@@ -224,7 +222,7 @@ impl Scene {
             path,
             &mut self.shader_cache,
         )?;
-        self.skybox_rendering.update_descriptor_set(
+        self.skybox_render.update_descriptor_set(
             context.device.clone(),
             skybox.view.handle,
             self.skybox_sampler.handle,

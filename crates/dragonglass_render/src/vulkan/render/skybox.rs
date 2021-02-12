@@ -20,7 +20,7 @@ pub struct SkyboxPushConstantBlock {
     pub projection: glm::Mat4,
 }
 
-pub struct SkyboxRendering {
+pub struct SkyboxRender {
     pub cube: Cube,
     pub pipeline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
@@ -32,7 +32,7 @@ pub struct SkyboxRendering {
     device: Arc<Device>,
 }
 
-impl SkyboxRendering {
+impl SkyboxRender {
     pub fn new(
         context: &Context,
         command_pool: &CommandPool,

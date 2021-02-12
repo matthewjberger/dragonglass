@@ -8,7 +8,7 @@ use crate::{
             Texture,
         },
         cube::Cube,
-        pipelines::CubeRender,
+        render::CubeRender,
     },
 };
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};

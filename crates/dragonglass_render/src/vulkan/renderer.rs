@@ -1,8 +1,8 @@
 use crate::{
     vulkan::{
         core::{CommandPool, Context, Frame},
+        render::{Light, WorldPipelineData, WorldUniformBuffer},
         scene::Scene,
-        world::{Light, WorldPipelineData, WorldUniformBuffer},
     },
     Renderer,
 };
@@ -164,8 +164,8 @@ impl Renderer for VulkanRenderer {
                     .upload_data(&[ubo], 0)?;
             }
 
-            scene.skybox_rendering.projection = skybox_projection;
-            scene.skybox_rendering.view = view;
+            scene.skybox_render.projection = skybox_projection;
+            scene.skybox_render.view = view;
 
             scene.rendergraph.execute_pass(
                 command_buffer,
@@ -173,7 +173,7 @@ impl Renderer for VulkanRenderer {
                 image_index,
                 |pass, command_buffer| {
                     device.update_viewport(command_buffer, pass.extent, true)?;
-                    scene.skybox_rendering.issue_commands(command_buffer)?;
+                    scene.skybox_render.issue_commands(command_buffer)?;
                     if let Some(world_render) = scene.world_render.as_ref() {
                         world_render.issue_commands(
                             command_buffer,
