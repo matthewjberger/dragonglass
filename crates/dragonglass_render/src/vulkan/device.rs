@@ -4,7 +4,7 @@ use crate::{
         render::{Light, WorldPipelineData, WorldUniformBuffer},
         scene::Scene,
     },
-    Renderer,
+    Render,
 };
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
@@ -18,14 +18,14 @@ use raw_window_handle::HasRawWindowHandle;
 use shader_compilation::compile_shaders;
 use std::sync::Arc;
 
-pub struct VulkanRenderer {
+pub struct VulkanRenderBackend {
     _command_pool: CommandPool,
     frame: Frame,
     scene: Scene,
     context: Arc<Context>,
 }
 
-impl VulkanRenderer {
+impl VulkanRenderBackend {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
     pub fn new(
@@ -59,7 +59,7 @@ impl VulkanRenderer {
     }
 }
 
-impl Renderer for VulkanRenderer {
+impl Render for VulkanRenderBackend {
     fn load_skybox(&mut self, path: &str) -> Result<()> {
         self.scene.load_skybox(&self.context, path)
     }
@@ -226,7 +226,7 @@ impl Renderer for VulkanRenderer {
     }
 }
 
-impl Drop for VulkanRenderer {
+impl Drop for VulkanRenderBackend {
     fn drop(&mut self) {
         unsafe {
             if let Err(error) = self.context.device.handle.device_wait_idle() {

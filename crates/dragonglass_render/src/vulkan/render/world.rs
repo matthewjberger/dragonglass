@@ -1,5 +1,5 @@
 use crate::{
-    renderer::byte_slice_from,
+    byte_slice_from,
     vulkan::{
         core::{
             CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
@@ -7,7 +7,7 @@ use crate::{
             PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
             Texture,
         },
-        cube::Cube,
+        geometry::Cube,
         render::CubeRender,
     },
 };

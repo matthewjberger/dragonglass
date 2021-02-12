@@ -1,5 +1,5 @@
 use crate::{
-    renderer::byte_slice_from,
+    byte_slice_from,
     vulkan::{
         core::{
             transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
@@ -8,7 +8,7 @@ use crate::{
             PipelineLayout, RenderGraph, RenderPass, Sampler, ShaderCache, ShaderPathSet,
             ShaderPathSetBuilder, Texture,
         },
-        cube::Cube,
+        geometry::Cube,
     },
 };
 use anyhow::{anyhow, Result};

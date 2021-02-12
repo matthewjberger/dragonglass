@@ -1,5 +1,5 @@
 use crate::{
-    renderer::byte_slice_from,
+    byte_slice_from,
     vulkan::core::{
         CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GeometryBuffer,
         GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline, PipelineLayout, RenderPass,

@@ -6,18 +6,13 @@ use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 
 #[cfg(feature = "vulkan")]
-use crate::vulkan::VulkanRenderer;
-
-pub unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
-    let data_ptr = (data as *const T) as *const u8;
-    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
-}
+use crate::vulkan::VulkanRenderBackend;
 
 pub enum Backend {
     Vulkan,
 }
 
-pub trait Renderer {
+pub trait Render {
     fn toggle_wireframe(&mut self);
     // TODO: Make this part of the world
     fn load_skybox(&mut self, path: &str) -> Result<()>;
@@ -34,16 +29,16 @@ pub trait Renderer {
     ) -> Result<()>;
 }
 
-impl dyn Renderer {
+impl dyn Render {
     pub fn create_backend(
         backend: &Backend,
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
         imgui: &mut ImguiContext,
-    ) -> Result<impl Renderer> {
+    ) -> Result<impl Render> {
         match backend {
             #[cfg(feature = "vulkan")]
-            Backend::Vulkan => VulkanRenderer::new(window_handle, dimensions, imgui),
+            Backend::Vulkan => VulkanRenderBackend::new(window_handle, dimensions, imgui),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
-use dragonglass_render::{Backend, Renderer};
+use dragonglass_render::{Backend, Render};
 use dragonglass_world::{load_gltf, BoxCollider, Ecs, Entity, Mesh, Transform, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
@@ -67,7 +67,7 @@ pub struct Application {
     pub physics_world: PhysicsWorld,
     pub input: Input,
     pub system: System,
-    pub renderer: Box<dyn Renderer>,
+    pub renderer: Box<dyn Render>,
 }
 
 impl Application {
@@ -271,7 +271,7 @@ pub fn run_application(
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let renderer = Box::new(Renderer::create_backend(
+    let renderer = Box::new(Render::create_backend(
         &Backend::Vulkan,
         &window,
         &window_dimensions,

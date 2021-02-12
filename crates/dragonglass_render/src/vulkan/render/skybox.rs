@@ -1,12 +1,12 @@
 use crate::{
-    renderer::byte_slice_from,
+    byte_slice_from,
     vulkan::{
         core::{
             CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device,
             GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
             ShaderPathSet, ShaderPathSetBuilder,
         },
-        cube::Cube,
+        geometry::Cube,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
