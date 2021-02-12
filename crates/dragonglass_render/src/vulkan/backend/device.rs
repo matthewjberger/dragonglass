@@ -1,8 +1,8 @@
 use crate::{
     vulkan::{
+        backend::Scene,
         core::{CommandPool, Context, Frame},
         render::{Light, WorldPipelineData, WorldUniformBuffer},
-        scene::Scene,
     },
     Render,
 };

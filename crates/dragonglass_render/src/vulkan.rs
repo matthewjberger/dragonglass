@@ -15,11 +15,10 @@
     clippy::wildcard_imports
 )]
 
-pub use self::device::VulkanRenderBackend;
+pub use self::backend::VulkanRenderBackend;
 
+mod backend;
 mod core;
-mod device;
 mod geometry;
 mod pbr;
 mod render;
-mod scene;
