@@ -7,7 +7,7 @@ use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 
-pub struct FullscreenPipeline {
+pub struct FullscreenRender {
     pub pipeline: Option<Pipeline>,
     pub pipeline_layout: PipelineLayout,
     pub descriptor_pool: DescriptorPool,
@@ -16,7 +16,7 @@ pub struct FullscreenPipeline {
     device: Arc<Device>,
 }
 
-impl FullscreenPipeline {
+impl FullscreenRender {
     pub fn new(
         context: &Context,
         render_pass: Arc<RenderPass>,

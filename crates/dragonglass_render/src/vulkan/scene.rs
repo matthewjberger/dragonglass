@@ -4,7 +4,7 @@ use crate::vulkan::{
         ShaderCache, Swapchain, SwapchainProperties,
     },
     pbr::hdr_cubemap,
-    pipelines::{FullscreenPipeline, GuiRender},
+    pipelines::{FullscreenRender, GuiRender},
     skybox::SkyboxRendering,
     world::WorldRender,
 };
@@ -17,7 +17,7 @@ use std::{path::Path, sync::Arc};
 pub struct Scene {
     pub world_render: Option<WorldRender>,
     pub skybox_rendering: SkyboxRendering,
-    pub fullscreen_pipeline: Option<FullscreenPipeline>,
+    pub fullscreen_pipeline: Option<FullscreenRender>,
     pub gui_render: GuiRender,
     pub rendergraph: RenderGraph,
     pub transient_command_pool: CommandPool,
@@ -87,7 +87,7 @@ impl Scene {
         let fullscreen_pass = self.rendergraph.pass_handle("fullscreen")?;
 
         self.fullscreen_pipeline = None;
-        let fullscreen_pipeline = FullscreenPipeline::new(
+        let fullscreen_pipeline = FullscreenRender::new(
             context,
             fullscreen_pass.clone(),
             &mut self.shader_cache,
