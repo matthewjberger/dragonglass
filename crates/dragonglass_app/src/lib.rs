@@ -1,7 +1,6 @@
 mod app;
 mod gui;
-mod input;
 mod logger;
-mod system;
+mod state;
 
-pub use self::{app::*, gui::*, input::*, logger::*, system::*};
+pub use self::{app::*, gui::*, logger::*, state::*};

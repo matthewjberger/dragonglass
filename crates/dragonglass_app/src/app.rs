@@ -1,4 +1,8 @@
-use crate::{gui::Gui, input::Input, logger::create_logger, system::System};
+use crate::{
+    gui::Gui,
+    logger::create_logger,
+    state::{Input, System},
+};
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_render::{Backend, Render};
