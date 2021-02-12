@@ -11,7 +11,7 @@ use crate::{
         pipelines::CubeRender,
     },
 };
-use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
+use anyhow::{anyhow, bail, ensure, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_physics::{PhysicsWorld, RigidBody};
 use dragonglass_world::{
@@ -401,7 +401,12 @@ impl WorldPipelineData {
         for graph in scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, ecs)?;
+                let model = if ecs.get::<RigidBody>(entity).is_ok() {
+                    let transform = ecs.get::<Transform>(entity).context("A transform component was requested from a component that does not have one!")?;
+                    transform.matrix()
+                } else {
+                    graph.global_transform(node_index, ecs)?
+                };
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 

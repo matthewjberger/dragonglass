@@ -1,25 +1,20 @@
 use anyhow::Result;
 use dragonglass::{
-    app::Application,
-    app::{run_application, AppConfig, ApplicationRunner},
+    app::{run_application, AppConfig, Application, ApplicationRunner},
     physics::RigidBody,
     world::{
         Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection, Transform,
     },
 };
 use imgui::{im_str, Condition, Ui, Window};
-use nalgebra::Point3;
+use nalgebra::{Isometry3, UnitQuaternion};
 use nalgebra_glm as glm;
 use rapier3d::{
-    dynamics::BodyStatus,
-    dynamics::RigidBodyBuilder,
+    dynamics::{BodyStatus, RigidBodyBuilder},
     geometry::{ColliderBuilder, InteractionGroups},
+    math::Translation,
 };
 use winit::event::{ElementState, VirtualKeyCode};
-
-// TODO: Create trigger with event on collision
-// TODO: Add trimesh component with handle?
-// TODO: Visualize triangle mesh colliders as wireframes in renderer?
 
 const PLAYER_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b10, 0b01);
 const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b10);
@@ -31,11 +26,8 @@ pub struct Game {
 
 impl ApplicationRunner for Game {
     fn initialize(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
-        let (player_path, player_handle) = (
-            "assets/models/DamagedHelmet.glb",
-            "mesh_helmet_LP_13930damagedHelmet",
-        );
-        let level_path = "assets/models/blocklevel.glb";
+        let (player_path, player_handle) = ("assets/models/player.glb", "Player");
+        let level_path = "assets/models/segmented_room.glb";
 
         {
             let position = glm::vec3(-2.0, 5.0, 0.0);
@@ -47,29 +39,7 @@ impl ApplicationRunner for Game {
             let light_entity = application.ecs.spawn((
                 transform,
                 Light {
-                    color: glm::vec3(0.0, 1.0, 1.0),
-                    kind: LightKind::Directional,
-                    ..Default::default()
-                },
-            ));
-            application
-                .world
-                .scene
-                .default_scenegraph_mut()?
-                .add_node(light_entity);
-        }
-
-        {
-            let position = glm::vec3(2.0, 5.0, 0.0);
-            let mut transform = Transform {
-                translation: position,
-                ..Default::default()
-            };
-            transform.look_at(&(-position), &glm::Vec3::y());
-            let light_entity = application.ecs.spawn((
-                transform,
-                Light {
-                    color: glm::vec3(1.0, 0.0, 0.0),
+                    color: glm::vec3(1.0, 1.0, 1.0),
                     kind: LightKind::Directional,
                     ..Default::default()
                 },
@@ -83,36 +53,10 @@ impl ApplicationRunner for Game {
 
         application.load_asset(player_path)?;
         application.load_asset(level_path)?;
-        // application.load_asset("assets/models/room.glb")?;
         application.reload_world()?;
 
-        log::info!(
-            "Player -> Level: {}",
-            PLAYER_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP)
-        );
-        log::info!(
-            "Player -> Player: {}",
-            PLAYER_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP)
-        );
-        log::info!(
-            "Level -> Player: {}",
-            LEVEL_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP)
-        );
-        log::info!(
-            "Level -> Level: {}",
-            LEVEL_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP)
-        );
-
         let level_mesh_names = vec![
-            "Cube.006",
-            "Cube.002",
-            "Sphere",
-            "Cube.003",
-            "Cube.004",
-            "Cube.005",
-            "Torus",
-            "Cylinder",
-            "Icosphere",
+            "Cube", "Cube.001", "Cube.002", "Cube.003", "Cube.004", "Cube.005",
         ];
         let mut level_meshes = Vec::new();
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
@@ -121,7 +65,7 @@ impl ApplicationRunner for Game {
                 {
                     {
                         let mut transform = application.ecs.get_mut::<Transform>(entity)?;
-                        transform.translation.y = 40.0;
+                        transform.translation.y = 1.0;
                         transform.scale = glm::vec3(0.5, 0.5, 0.5);
                     }
                 }
@@ -133,14 +77,13 @@ impl ApplicationRunner for Game {
         }
 
         for entity in level_meshes.into_iter() {
-            add_rigid_body(application, entity, BodyStatus::Static)?;
+            add_rigid_body(application, entity, BodyStatus::Static, 0.0, false)?;
             add_box_collider(application, entity, LEVEL_COLLISION_GROUP)?;
-            // add_trimesh_collider(application, entity, LEVEL_COLLISION_GROUP)?;
         }
 
         if let Some(entity) = self.player.as_ref() {
             activate_first_person(application, *entity)?;
-            add_rigid_body(application, *entity, BodyStatus::Dynamic)?;
+            add_rigid_body(application, *entity, BodyStatus::Dynamic, 0.01, true)?;
             add_box_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
         }
 
@@ -158,7 +101,6 @@ impl ApplicationRunner for Game {
     }
 
     fn update(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
-        sync_all_rigid_bodies(application);
         if let Some(player) = self.player.as_ref() {
             update_player(application, *player)?;
         }
@@ -191,10 +133,13 @@ fn main() -> Result<()> {
     )
 }
 
+// TODO: This has too many parameters
 fn add_rigid_body(
     application: &mut Application,
     entity: Entity,
     body_status: BodyStatus,
+    mass: f32,
+    lock_rotations: bool,
 ) -> Result<()> {
     let handle = {
         let bounding_box = {
@@ -209,14 +154,23 @@ fn add_rigid_body(
         let transform = Transform::from(transform_matrix);
 
         // Insert a corresponding rigid body
-        let rigid_body = RigidBodyBuilder::new(body_status)
-            .translation(
-                transform.translation.x,
-                transform.translation.y,
-                transform.translation.z,
-            )
-            .rotation(transform.rotation.as_vector().xyz())
-            .build();
+        let rigid_body = {
+            let angles = glm::quat_euler_angles(&transform.rotation);
+            let mut builder = RigidBodyBuilder::new(body_status)
+                .mass(mass, false)
+                .translation(
+                    transform.translation.x,
+                    transform.translation.y,
+                    transform.translation.z,
+                )
+                .rotation(glm::vec3(angles.z, angles.x, angles.y));
+
+            if lock_rotations {
+                builder = builder.lock_rotations();
+            }
+
+            builder.build()
+        };
         application.physics_world.bodies.insert(rigid_body)
     };
     application.ecs.insert_one(entity, RigidBody::new(handle))?;
@@ -236,6 +190,7 @@ fn add_box_collider(
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
     let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
+        .friction(0.1)
         .collision_groups(collision_groups)
         .build();
     application.physics_world.colliders.insert(
@@ -246,55 +201,58 @@ fn add_box_collider(
     Ok(())
 }
 
-fn add_trimesh_collider(
-    application: &mut Application,
-    entity: Entity,
-    collision_groups: InteractionGroups,
-) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
-    let (vertices, indices) = {
-        let mesh = application.ecs.get::<Mesh>(entity)?;
-        let mut indices = Vec::new();
-        let mut vertices = Vec::new();
-        let mut index_offset = 0;
-        for primitive in mesh.primitives.iter() {
-            let vertex_offset = primitive.first_vertex as u32;
-            let world_indices = &application.world.geometry.indices
-                [primitive.first_index..(primitive.first_index + primitive.number_of_indices)];
-            for offset in 0..world_indices.len() / 3 {
-                let index = offset * 3;
-                indices.push(Point3::new(
-                    world_indices[index] - vertex_offset + index_offset,
-                    world_indices[index + 1] - vertex_offset + index_offset,
-                    world_indices[index + 2] - vertex_offset + index_offset,
-                ));
-            }
-            let world_vertices = &application.world.geometry.vertices
-                [primitive.first_vertex..(primitive.first_vertex + primitive.number_of_vertices)];
-            for vertex in world_vertices.iter() {
-                vertices.push(Point3::from(vertex.position));
-            }
-            index_offset += world_vertices.len() as u32;
+fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
+    let speed = 6.0 * application.system.delta_time as f32;
+    {
+        let mut translation = glm::vec3(0.0, 0.0, 0.0);
+
+        let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+        let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
+        if let Some(body) = application.physics_world.bodies.get(rigid_body_handle) {
+            let position = body.position();
+            transform.translation = position.translation.vector;
+            transform.rotation = *position.rotation.quaternion();
         }
-        (vertices, indices)
-    };
-    let collider = ColliderBuilder::trimesh(vertices, indices)
-        .collision_groups(collision_groups)
-        .build();
-    application.physics_world.colliders.insert(
-        collider,
-        rigid_body_handle,
-        &mut application.physics_world.bodies,
-    );
+
+        if application.input.is_key_pressed(VirtualKeyCode::W) {
+            translation = -speed * glm::Vec3::z();
+        }
+
+        if application.input.is_key_pressed(VirtualKeyCode::A) {
+            translation = -speed * glm::Vec3::x();
+        }
+
+        if application.input.is_key_pressed(VirtualKeyCode::S) {
+            translation = speed * glm::Vec3::z();
+        }
+
+        if application.input.is_key_pressed(VirtualKeyCode::D) {
+            translation = speed * glm::Vec3::x();
+        }
+
+        if let Some(rigid_body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
+            // rigid_body.apply_force(translation, true);
+            let isometry = transform.as_isometry();
+            rigid_body.set_position(
+                Isometry3::from_parts(
+                    Translation::from(transform.translation + translation),
+                    UnitQuaternion::from(isometry.rotation),
+                ),
+                true,
+            );
+        }
+    }
     Ok(())
 }
 
-fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -> Result<()> {
+fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
-    let transform = application.ecs.get::<Transform>(entity)?;
-    if let Some(body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
-        body.set_position(transform.as_isometry(), true);
+    if let Some(rigid_body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
+        let jump_strength = 0.1;
+        let impulse = jump_strength * glm::Vec3::y();
+        rigid_body.apply_impulse(impulse, true);
     }
+    sync_transform_to_rigid_body(application, entity)?;
     Ok(())
 }
 
@@ -304,63 +262,10 @@ fn sync_transform_to_rigid_body(application: &mut Application, entity: Entity) -
     if let Some(body) = application.physics_world.bodies.get(rigid_body_handle) {
         let position = body.position();
         transform.translation = position.translation.vector;
-        transform.rotation = *position.rotation.quaternion();
     }
     if let Some(body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
         body.wake_up(true);
     }
-    Ok(())
-}
-
-fn sync_all_rigid_bodies(application: &mut Application) {
-    // Sync the render transforms with the physics rigid bodies
-    for (_entity, (rigid_body, transform)) in
-        application.ecs.query_mut::<(&RigidBody, &mut Transform)>()
-    {
-        if let Some(body) = application.physics_world.bodies.get(rigid_body.handle) {
-            let position = body.position();
-            transform.translation = position.translation.vector;
-            transform.rotation = *position.rotation.quaternion();
-        }
-    }
-}
-
-fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
-    let speed = 6.0 * application.system.delta_time as f32;
-    {
-        let mut transform = application.ecs.get_mut::<Transform>(entity)?;
-        let mut translation = glm::vec3(0.0, 0.0, 0.0);
-
-        if application.input.is_key_pressed(VirtualKeyCode::W) {
-            translation = speed * transform.forward();
-        }
-
-        if application.input.is_key_pressed(VirtualKeyCode::A) {
-            translation = -speed * transform.right();
-        }
-
-        if application.input.is_key_pressed(VirtualKeyCode::S) {
-            translation = -speed * transform.forward();
-        }
-
-        if application.input.is_key_pressed(VirtualKeyCode::D) {
-            translation = speed * transform.right();
-        }
-
-        transform.translation += translation;
-    }
-    sync_rigid_body_to_transform(application, entity)?;
-    Ok(())
-}
-
-fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
-    if let Some(rigid_body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
-        let jump_strength = 5.0;
-        let impulse = jump_strength * glm::Vec3::y();
-        rigid_body.apply_impulse(impulse, true);
-    }
-    sync_transform_to_rigid_body(application, entity)?;
     Ok(())
 }
 
