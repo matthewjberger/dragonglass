@@ -115,7 +115,7 @@ impl CpuToGpuBuffer {
             let data_pointer = data_pointer.add(offset);
             (data_pointer as *mut T).copy_from_nonoverlapping(data.as_ptr(), data.len());
         }
-        self.unmap_memory()?;
+        self.unmap_memory();
         Ok(())
     }
 
@@ -132,8 +132,8 @@ impl CpuToGpuBuffer {
             let mut align = ash::util::Align::new(data_pointer as _, alignment, size as _);
             align.copy_from_slice(data);
         }
-        self.buffer.flush(0, size)?;
-        self.unmap_memory()?;
+        self.buffer.flush(0, size);
+        self.unmap_memory();
         Ok(())
     }
 
@@ -141,7 +141,7 @@ impl CpuToGpuBuffer {
         self.buffer.allocator.map_memory(&self.buffer.allocation)
     }
 
-    pub fn unmap_memory(&self) -> vk_mem::error::Result<()> {
+    pub fn unmap_memory(&self) {
         self.buffer.allocator.unmap_memory(&self.buffer.allocation)
     }
 }
@@ -172,18 +172,15 @@ impl Buffer {
         Ok(buffer)
     }
 
-    pub fn flush(&self, offset: usize, size: usize) -> Result<()> {
+    pub fn flush(&self, offset: usize, size: usize) {
         self.allocator
-            .flush_allocation(&self.allocation, offset, size)?;
-        Ok(())
+            .flush_allocation(&self.allocation, offset, size);
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        if let Err(error) = self.allocator.destroy_buffer(self.handle, &self.allocation) {
-            error!("{}", error);
-        }
+        self.allocator.destroy_buffer(self.handle, &self.allocation);
     }
 }
 

@@ -467,9 +467,7 @@ impl AllocatedImage {
 
 impl Drop for AllocatedImage {
     fn drop(&mut self) {
-        if let Err(error) = self.allocator.destroy_image(self.handle, &self.allocation) {
-            error!("{}", error);
-        }
+        self.allocator.destroy_image(self.handle, &self.allocation);
     }
 }
 
