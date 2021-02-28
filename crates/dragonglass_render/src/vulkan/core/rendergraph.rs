@@ -206,7 +206,22 @@ impl RenderGraph {
         self.framebuffers.get(name).context(error_message)
     }
 
-    #[allow(dead_code)]
+    pub fn take_image(&mut self, name: &str) -> Result<(Box<dyn Image>, ImageView)> {
+        let error_message = format!(
+            "Attempted to access image with the key '{}' that was not found in the rendergraph",
+            name
+        );
+        let image = self.images.remove(name).context(error_message)?;
+
+        let error_message = format!(
+            "Attempted to access image view with the key '{}' that was not found in the rendergraph",
+            name
+        );
+        let image_view = self.image_views.remove(name).context(error_message)?;
+
+        Ok((image, image_view))
+    }
+
     pub fn image(&self, name: &str) -> Result<&Box<dyn Image>> {
         let error_message = format!(
             "Attempted to access image with the key '{}' that was not found in the rendergraph",

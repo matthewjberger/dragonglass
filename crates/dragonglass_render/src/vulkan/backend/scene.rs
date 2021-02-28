@@ -1,7 +1,7 @@
 use crate::vulkan::{
     core::{
-        CommandPool, Context, Cubemap, Device, Image, ImageNode, RawImage, RenderGraph, Sampler,
-        ShaderCache, Swapchain, SwapchainProperties,
+        CommandPool, Context, Cubemap, Device, Image, ImageNode, ImageView, RawImage, RenderGraph,
+        Sampler, ShaderCache, Swapchain, SwapchainProperties,
     },
     pbr::hdr_cubemap,
     render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
@@ -235,7 +235,12 @@ impl Scene {
     pub fn load_world(&mut self, context: &Context, world: &World) -> Result<()> {
         self.world_render = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
-        let mut rendering = WorldRender::new(context, &self.transient_command_pool, world)?;
+        let mut rendering = WorldRender::new(
+            context,
+            &self.transient_command_pool,
+            &mut self.shader_cache,
+            world,
+        )?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
         self.world_render = Some(rendering);
         Ok(())

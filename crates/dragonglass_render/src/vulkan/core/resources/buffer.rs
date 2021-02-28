@@ -1,7 +1,6 @@
 use crate::vulkan::core::{BufferToBufferCopyBuilder, CommandPool};
 use anyhow::{anyhow, Result};
 use ash::{version::DeviceV1_0, vk};
-use log::error;
 use std::sync::Arc;
 use vk_mem::Allocator;
 

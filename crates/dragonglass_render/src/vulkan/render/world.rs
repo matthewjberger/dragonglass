@@ -8,6 +8,7 @@ use crate::{
             Texture,
         },
         geometry::Cube,
+        pbr::Brdflut,
         render::CubeRender,
     },
 };
@@ -18,10 +19,32 @@ use dragonglass_world::{
     AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, LightKind, Material,
     Mesh, Scene, Selected, Skin, Transform, Vertex, World, WrappingMode,
 };
-use log::warn;
+use log::{info, warn};
 use nalgebra_glm as glm;
 use ncollide3d::{shape::Cuboid, world::CollisionWorld};
 use std::{mem, sync::Arc};
+
+// FIXME_BRDFLUT: Move this to pbr module
+// FIXME_BRDFLUT: Add hdr map to this
+// FIXME_BRDFLUT: Move out of world pipeline data and store in scene at high level
+pub struct EnvironmentMapSet {
+    pub brdflut: Brdflut,
+}
+
+impl EnvironmentMapSet {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        shader_cache: &mut ShaderCache,
+    ) -> Result<Self> {
+        info!("Creating Brdflut");
+        let brdflut = Brdflut::new(context, command_pool, shader_cache)?;
+
+        // FIXME_BRDFLUT: move hdr map in here too
+
+        Ok(Self { brdflut })
+    }
+}
 
 pub struct PushConstantMaterial {
     pub base_color_factor: glm::Vec4,
@@ -138,6 +161,7 @@ pub struct EntityDynamicUniformBuffer {
 }
 
 pub struct WorldPipelineData {
+    pub environment_maps: EnvironmentMapSet,
     pub uniform_buffer: CpuToGpuBuffer,
     pub dynamic_uniform_buffer: CpuToGpuBuffer,
     pub dynamic_alignment: u64,
@@ -160,9 +184,16 @@ impl WorldPipelineData {
     // This does not need to be matched in the shader
     pub const MAX_NUMBER_OF_MESHES: usize = 500;
 
-    pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        shader_cache: &mut ShaderCache,
+        world: &World,
+    ) -> Result<Self> {
         let device = context.device.clone();
         let allocator = context.allocator.clone();
+
+        let environment_maps = EnvironmentMapSet::new(context, command_pool, shader_cache)?;
 
         let mut textures = Vec::new();
         let mut samplers = Vec::new();
@@ -210,6 +241,7 @@ impl WorldPipelineData {
             geometry_buffer,
             dummy_texture,
             dummy_sampler,
+            environment_maps,
         };
         data.update_descriptor_set(device);
         Ok(data)
@@ -234,7 +266,18 @@ impl WorldPipelineData {
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
-        let bindings = [ubo_binding, dynamic_ubo_binding, sampler_binding];
+        let brdflut_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(3)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+        let bindings = [
+            ubo_binding,
+            dynamic_ubo_binding,
+            sampler_binding,
+            brdflut_binding,
+        ];
         let create_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
         DescriptorSetLayout::new(device, create_info)
     }
@@ -255,7 +298,17 @@ impl WorldPipelineData {
             descriptor_count: Self::MAX_NUMBER_OF_TEXTURES as _,
         };
 
-        let pool_sizes = [ubo_pool_size, dynamic_ubo_pool_size, sampler_pool_size];
+        let brdflut_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [
+            ubo_pool_size,
+            dynamic_ubo_pool_size,
+            sampler_pool_size,
+            brdflut_pool_size,
+        ];
 
         let create_info = vk::DescriptorPoolCreateInfo::builder()
             .pool_sizes(&pool_sizes)
@@ -341,6 +394,13 @@ impl WorldPipelineData {
             }
         }
 
+        let brdflut_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(self.environment_maps.brdflut.view.handle)
+            .sampler(self.environment_maps.brdflut.sampler.handle)
+            .build();
+        let brdflut_image_infos = [brdflut_image_info];
+
         let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(0)
@@ -365,10 +425,19 @@ impl WorldPipelineData {
             .image_info(&image_infos)
             .build();
 
+        let brdflut_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&brdflut_image_infos)
+            .build();
+
         let descriptor_writes = [
             ubo_descriptor_write,
             dynamic_ubo_descriptor_write,
             sampler_descriptor_write,
+            brdflut_descriptor_write,
         ];
 
         unsafe {
@@ -444,8 +513,13 @@ pub struct WorldRender {
 }
 
 impl WorldRender {
-    pub fn new(context: &Context, command_pool: &CommandPool, world: &World) -> Result<Self> {
-        let pipeline_data = WorldPipelineData::new(context, command_pool, world)?;
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        shader_cache: &mut ShaderCache,
+        world: &World,
+    ) -> Result<Self> {
+        let pipeline_data = WorldPipelineData::new(context, command_pool, shader_cache, world)?;
         let cube = Cube::new(context.allocator.clone(), command_pool)?;
         let cube_render = CubeRender::new(context.device.clone(), cube);
         Ok(Self {

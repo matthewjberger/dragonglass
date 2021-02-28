@@ -49,6 +49,7 @@ impl VulkanRenderBackend {
             context.graphics_queue(),
             create_info,
         )?;
+
         let renderer = Self {
             _command_pool: command_pool,
             frame,
