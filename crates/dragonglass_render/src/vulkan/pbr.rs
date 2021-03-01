@@ -1,4 +1,4 @@
-pub use self::{hdr::*, brdflut::*};
+pub use self::{brdflut::*, hdr::*};
 
-mod hdr;
 mod brdflut;
+mod hdr;
