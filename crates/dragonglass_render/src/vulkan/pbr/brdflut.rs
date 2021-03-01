@@ -43,6 +43,7 @@ impl Brdflut {
                 },
                 samples: vk::SampleCountFlags::TYPE_1,
                 force_store: true,
+                force_shader_read: true,
             }],
             &[(fullscreen, &color)],
         )?;
@@ -60,7 +61,7 @@ impl Brdflut {
 
         command_pool.execute_once(|command_buffer| {
             rendergraph.execute_pass(command_buffer, fullscreen, 0, |pass, command_buffer| {
-                device.update_viewport(command_buffer, pass.extent, true)?;
+                device.update_viewport(command_buffer, pass.extent, false)?;
                 pipeline.issue_commands(command_buffer)?;
                 Ok(())
             })

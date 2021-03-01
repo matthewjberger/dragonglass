@@ -1,7 +1,7 @@
 use crate::vulkan::{
     core::{
-        CommandPool, Context, Cubemap, Device, Image, ImageNode, ImageView, RawImage, RenderGraph,
-        Sampler, ShaderCache, Swapchain, SwapchainProperties,
+        CommandPool, Context, Cubemap, Device, Image, ImageNode, RawImage, RenderGraph, Sampler,
+        ShaderCache, Swapchain, SwapchainProperties,
     },
     pbr::hdr_cubemap,
     render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
@@ -155,6 +155,7 @@ impl Scene {
                     },
                     samples,
                     force_store: false,
+                    force_shader_read: false,
                 },
                 ImageNode {
                     name: RenderGraph::DEPTH_STENCIL.to_owned(),
@@ -168,6 +169,7 @@ impl Scene {
                     },
                     samples,
                     force_store: false,
+                    force_shader_read: false,
                 },
                 ImageNode {
                     name: color_resolve.to_string(),
@@ -180,6 +182,7 @@ impl Scene {
                     },
                     samples: vk::SampleCountFlags::TYPE_1,
                     force_store: false,
+                    force_shader_read: false,
                 },
                 ImageNode {
                     name: RenderGraph::backbuffer_name(0),
@@ -192,6 +195,7 @@ impl Scene {
                     },
                     samples: vk::SampleCountFlags::TYPE_1,
                     force_store: false,
+                    force_shader_read: false,
                 },
             ],
             &[

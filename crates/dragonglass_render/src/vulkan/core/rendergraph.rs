@@ -273,6 +273,7 @@ impl RenderGraph {
                         should_clear,
                         has_children,
                         image_node.force_store,
+                        image_node.force_shader_read,
                     )?;
                     pass_builder.add_output_image(image_node, attachment_description)?;
                 }
@@ -352,6 +353,7 @@ pub struct ImageNode {
     pub clear_value: vk::ClearValue,
     pub samples: vk::SampleCountFlags,
     pub force_store: bool,
+    pub force_shader_read: bool,
 }
 
 impl ImageNode {
@@ -380,6 +382,7 @@ impl ImageNode {
         should_clear: bool,
         has_children: bool,
         force_store: bool,
+        force_shader_read: bool,
     ) -> Result<vk::AttachmentDescription> {
         let load_op = if should_clear {
             vk::AttachmentLoadOp::CLEAR
@@ -393,7 +396,7 @@ impl ImageNode {
             store_op = vk::AttachmentStoreOp::STORE;
         }
 
-        if has_children {
+        if force_shader_read || has_children {
             final_layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
         }
 

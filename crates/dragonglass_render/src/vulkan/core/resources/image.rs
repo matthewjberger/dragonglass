@@ -6,7 +6,6 @@ use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
 use image::{hdr::HdrDecoder, DynamicImage, ImageBuffer, Pixel, RgbImage};
-use log::error;
 use std::{
     io::BufReader,
     path::{Path, PathBuf},
