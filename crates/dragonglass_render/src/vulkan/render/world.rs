@@ -8,7 +8,7 @@ use crate::{
             Texture,
         },
         geometry::Cube,
-        pbr::Brdflut,
+        pbr::EnvironmentMapSet,
         render::CubeRender,
     },
 };
@@ -19,32 +19,10 @@ use dragonglass_world::{
     AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, LightKind, Material,
     Mesh, Scene, Selected, Skin, Transform, Vertex, World, WrappingMode,
 };
-use log::{info, warn};
+use log::warn;
 use nalgebra_glm as glm;
 use ncollide3d::{shape::Cuboid, world::CollisionWorld};
 use std::{mem, sync::Arc};
-
-// FIXME_BRDFLUT: Move this to pbr module
-// FIXME_BRDFLUT: Add hdr map to this
-// FIXME_BRDFLUT: Move out of world pipeline data and store in scene at high level
-pub struct EnvironmentMapSet {
-    pub brdflut: Brdflut,
-}
-
-impl EnvironmentMapSet {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        shader_cache: &mut ShaderCache,
-    ) -> Result<Self> {
-        info!("Creating Brdflut");
-        let brdflut = Brdflut::new(context, command_pool, shader_cache)?;
-
-        // FIXME_BRDFLUT: move hdr map in here too
-
-        Ok(Self { brdflut })
-    }
-}
 
 pub struct PushConstantMaterial {
     pub base_color_factor: glm::Vec4,
