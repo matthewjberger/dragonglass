@@ -139,7 +139,6 @@ pub struct EntityDynamicUniformBuffer {
 }
 
 pub struct WorldPipelineData {
-    pub environment_maps: EnvironmentMapSet,
     pub uniform_buffer: CpuToGpuBuffer,
     pub dynamic_uniform_buffer: CpuToGpuBuffer,
     pub dynamic_alignment: u64,
@@ -165,13 +164,11 @@ impl WorldPipelineData {
     pub fn new(
         context: &Context,
         command_pool: &CommandPool,
-        shader_cache: &mut ShaderCache,
         world: &World,
+        environment_maps: &EnvironmentMapSet,
     ) -> Result<Self> {
         let device = context.device.clone();
         let allocator = context.allocator.clone();
-
-        let environment_maps = EnvironmentMapSet::new(context, command_pool, shader_cache)?;
 
         let mut textures = Vec::new();
         let mut samplers = Vec::new();
@@ -219,9 +216,8 @@ impl WorldPipelineData {
             geometry_buffer,
             dummy_texture,
             dummy_sampler,
-            environment_maps,
         };
-        data.update_descriptor_set(device);
+        data.update_descriptor_set(device, environment_maps);
         Ok(data)
     }
 
@@ -328,7 +324,7 @@ impl WorldPipelineData {
         Ok(geometry_buffer)
     }
 
-    fn update_descriptor_set(&self, device: Arc<Device>) {
+    fn update_descriptor_set(&self, device: Arc<Device>, environment_maps: &EnvironmentMapSet) {
         let uniform_buffer_size = mem::size_of::<WorldUniformBuffer>() as vk::DeviceSize;
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
@@ -374,8 +370,8 @@ impl WorldPipelineData {
 
         let brdflut_image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(self.environment_maps.brdflut.view.handle)
-            .sampler(self.environment_maps.brdflut.sampler.handle)
+            .image_view(environment_maps.brdflut.view.handle)
+            .sampler(environment_maps.brdflut.sampler.handle)
             .build();
         let brdflut_image_infos = [brdflut_image_info];
 
@@ -494,10 +490,10 @@ impl WorldRender {
     pub fn new(
         context: &Context,
         command_pool: &CommandPool,
-        shader_cache: &mut ShaderCache,
         world: &World,
+        environment_maps: &EnvironmentMapSet,
     ) -> Result<Self> {
-        let pipeline_data = WorldPipelineData::new(context, command_pool, shader_cache, world)?;
+        let pipeline_data = WorldPipelineData::new(context, command_pool, world, environment_maps)?;
         let cube = Cube::new(context.allocator.clone(), command_pool)?;
         let cube_render = CubeRender::new(context.device.clone(), cube);
         Ok(Self {

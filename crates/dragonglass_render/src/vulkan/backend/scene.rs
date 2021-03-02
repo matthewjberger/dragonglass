@@ -3,7 +3,7 @@ use crate::vulkan::{
         CommandPool, Context, Cubemap, Device, Image, ImageNode, RawImage, RenderGraph, Sampler,
         ShaderCache, Swapchain, SwapchainProperties,
     },
-    pbr::hdr_cubemap,
+    pbr::{hdr_cubemap, EnvironmentMapSet},
     render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
 };
 use anyhow::Result;
@@ -13,6 +13,7 @@ use imgui::Context as ImguiContext;
 use std::{path::Path, sync::Arc};
 
 pub struct Scene {
+    pub environment_maps: EnvironmentMapSet,
     pub world_render: Option<WorldRender>,
     pub skybox_render: SkyboxRender,
     pub fullscreen_pipeline: Option<FullscreenRender>,
@@ -65,7 +66,11 @@ impl Scene {
             &transient_command_pool,
         )?;
 
+        let environment_maps =
+            EnvironmentMapSet::new(context, &transient_command_pool, &mut shader_cache)?;
+
         let mut scene = Self {
+            environment_maps,
             world_render: None,
             skybox_render,
             fullscreen_pipeline: None,
@@ -242,8 +247,8 @@ impl Scene {
         let mut rendering = WorldRender::new(
             context,
             &self.transient_command_pool,
-            &mut self.shader_cache,
             world,
+            &self.environment_maps,
         )?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
         self.world_render = Some(rendering);
