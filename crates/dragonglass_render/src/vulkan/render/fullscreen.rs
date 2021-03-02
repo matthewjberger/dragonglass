@@ -1,7 +1,7 @@
 use crate::vulkan::core::{
     Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipelineSettings,
     GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
-    ShaderPathSet, ShaderPathSetBuilder,
+    ShaderPathSet,
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
@@ -23,6 +23,7 @@ impl FullscreenRender {
         shader_cache: &mut ShaderCache,
         color_target: vk::ImageView,
         sampler: vk::Sampler,
+        shader_path_set: ShaderPathSet,
     ) -> Result<Self> {
         let device = context.device.clone();
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(device.clone())?);
@@ -34,6 +35,7 @@ impl FullscreenRender {
             shader_cache,
             render_pass,
             descriptor_set_layout.clone(),
+            shader_path_set,
         )?;
         let (pipeline, pipeline_layout) = settings.create_pipeline(device.clone())?;
         let mut rendering = Self {
@@ -48,22 +50,13 @@ impl FullscreenRender {
         Ok(rendering)
     }
 
-    fn shader_paths() -> Result<ShaderPathSet> {
-        let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
-            .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
-        Ok(shader_path_set)
-    }
-
     fn settings(
         device: Arc<Device>,
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
         descriptor_set_layout: Arc<DescriptorSetLayout>,
+        shader_paths: ShaderPathSet,
     ) -> Result<GraphicsPipelineSettings> {
-        let shader_paths = Self::shader_paths()?;
         let shader_set = shader_cache.create_shader_set(device, &shader_paths)?;
         let settings = GraphicsPipelineSettingsBuilder::default()
             .shader_set(shader_set)

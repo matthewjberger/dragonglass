@@ -1,12 +1,12 @@
 use crate::vulkan::{
     core::{
         CommandPool, Context, Device, Image, ImageNode, RawImage, RenderGraph, ShaderCache,
-        Swapchain, SwapchainProperties,
+        ShaderPathSetBuilder, Swapchain, SwapchainProperties,
     },
     pbr::{EnvironmentMapSet, HdrCubemap},
     render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ash::vk;
 use dragonglass_world::World;
 use imgui::Context as ImguiContext;
@@ -74,6 +74,12 @@ impl Scene {
     pub fn create_pipelines(&mut self, context: &Context) -> Result<()> {
         let fullscreen_pass = self.rendergraph.pass_handle("fullscreen")?;
 
+        let shader_path_set = ShaderPathSetBuilder::default()
+            .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
+            .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+
         self.fullscreen_pipeline = None;
         let fullscreen_pipeline = FullscreenRender::new(
             context,
@@ -81,6 +87,7 @@ impl Scene {
             &mut self.shader_cache,
             self.rendergraph.image_view("color_resolve")?.handle,
             self.rendergraph.sampler("default")?.handle,
+            shader_path_set,
         )?;
         self.fullscreen_pipeline = Some(fullscreen_pipeline);
 
