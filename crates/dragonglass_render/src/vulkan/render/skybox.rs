@@ -7,6 +7,7 @@ use crate::{
             ShaderPathSet, ShaderPathSetBuilder,
         },
         geometry::Cube,
+        pbr::HdrCubemap,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -33,12 +34,7 @@ pub struct SkyboxRender {
 }
 
 impl SkyboxRender {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        image_view: vk::ImageView,
-        sampler: vk::Sampler,
-    ) -> Result<Self> {
+    pub fn new(context: &Context, command_pool: &CommandPool, hdr: &HdrCubemap) -> Result<Self> {
         let cube = Cube::new(context.allocator.clone(), command_pool)?;
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(context.device.clone())?);
         let descriptor_pool = Self::descriptor_pool(context.device.clone())?;
@@ -55,7 +51,7 @@ impl SkyboxRender {
             descriptor_set_layout,
             device: context.device.clone(),
         };
-        rendering.update_descriptor_set(context.device.clone(), image_view, sampler);
+        rendering.update_descriptor_set(context.device.clone(), hdr);
         Ok(rendering)
     }
 
@@ -184,16 +180,11 @@ impl SkyboxRender {
         DescriptorPool::new(device, pool_info)
     }
 
-    pub fn update_descriptor_set(
-        &self,
-        device: Arc<Device>,
-        image_view: vk::ImageView,
-        sampler: vk::Sampler,
-    ) {
+    pub fn update_descriptor_set(&self, device: Arc<Device>, hdr: &HdrCubemap) {
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(image_view)
-            .sampler(sampler)
+            .image_view(hdr.cubemap.view.handle)
+            .sampler(hdr.sampler.handle)
             .build();
         let image_infos = [image_info];
 

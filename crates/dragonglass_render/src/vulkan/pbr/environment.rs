@@ -1,14 +1,13 @@
 use crate::vulkan::{
     core::{CommandPool, Context, ShaderCache},
-    pbr::Brdflut,
+    pbr::{Brdflut, HdrCubemap},
 };
 use anyhow::Result;
 use log::info;
 
-// FIXME_BRDFLUT: Add hdr map to this
-// FIXME_BRDFLUT: Move out of world pipeline data and store in scene at high level
 pub struct EnvironmentMapSet {
     pub brdflut: Brdflut,
+    pub hdr: HdrCubemap,
 }
 
 impl EnvironmentMapSet {
@@ -20,8 +19,14 @@ impl EnvironmentMapSet {
         info!("Creating Brdflut");
         let brdflut = Brdflut::new(context, command_pool, shader_cache)?;
 
-        // FIXME_BRDFLUT: move hdr map in here too
+        info!("Creating Hdr cubemap");
+        let hdr = HdrCubemap::new(
+            context,
+            command_pool,
+            "assets/skyboxes/desert.hdr",
+            shader_cache,
+        )?;
 
-        Ok(Self { brdflut })
+        Ok(Self { brdflut, hdr })
     }
 }

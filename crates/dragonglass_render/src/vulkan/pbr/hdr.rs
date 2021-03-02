@@ -22,185 +22,197 @@ struct PushConstantHdr {
     mvp: glm::Mat4,
 }
 
-pub fn hdr_cubemap(
-    context: &Context,
-    command_pool: &CommandPool,
-    path: impl AsRef<Path>,
-    shader_cache: &mut ShaderCache,
-) -> Result<(Cubemap, Sampler)> {
-    let hdr_description = ImageDescription::from_hdr(path)?;
-    let hdr_texture = Texture::new(context, command_pool, &hdr_description)?;
+pub struct HdrCubemap {
+    pub cubemap: Cubemap,
+    pub sampler: Sampler,
+}
 
-    let sampler_info = vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::LINEAR)
-        .min_filter(vk::Filter::LINEAR)
-        .address_mode_u(vk::SamplerAddressMode::REPEAT)
-        .address_mode_v(vk::SamplerAddressMode::REPEAT)
-        .address_mode_w(vk::SamplerAddressMode::REPEAT)
-        .anisotropy_enable(true)
-        .max_anisotropy(16.0)
-        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-        .unnormalized_coordinates(false)
-        .compare_enable(false)
-        .compare_op(vk::CompareOp::ALWAYS)
-        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-        .mip_lod_bias(0.0)
-        .min_lod(0.0)
-        .max_lod(hdr_description.mip_levels as _);
-    let hdr_sampler = Sampler::new(context.device.clone(), sampler_info)?;
+impl HdrCubemap {
+    pub fn new(
+        context: &Context,
+        command_pool: &CommandPool,
+        path: impl AsRef<Path>,
+        shader_cache: &mut ShaderCache,
+    ) -> Result<Self> {
+        let hdr_description = ImageDescription::from_hdr(path)?;
+        let hdr_texture = Texture::new(context, command_pool, &hdr_description)?;
 
-    let cubemap_description = ImageDescription::empty(
-        hdr_description.width,
-        hdr_description.width,
-        vk::Format::R32G32B32A32_SFLOAT,
-    );
-    let cubemap = Cubemap::new(context, command_pool, &cubemap_description)?;
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::REPEAT)
+            .address_mode_v(vk::SamplerAddressMode::REPEAT)
+            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(hdr_description.mip_levels as _);
+        let hdr_sampler = Sampler::new(context.device.clone(), sampler_info)?;
 
-    let sampler_info = vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::LINEAR)
-        .min_filter(vk::Filter::LINEAR)
-        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .anisotropy_enable(true)
-        .max_anisotropy(16.0)
-        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-        .unnormalized_coordinates(false)
-        .compare_enable(false)
-        .compare_op(vk::CompareOp::ALWAYS)
-        .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-        .mip_lod_bias(0.0)
-        .min_lod(0.0)
-        .max_lod(cubemap_description.mip_levels as _);
-    let cubemap_sampler = Sampler::new(context.device.clone(), sampler_info)?;
+        let cubemap_description = ImageDescription::empty(
+            hdr_description.width,
+            hdr_description.width,
+            vk::Format::R32G32B32A32_SFLOAT,
+        );
+        let cubemap = Cubemap::new(context, command_pool, &cubemap_description)?;
 
-    let device = context.device.clone();
-    let allocator = context.allocator.clone();
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(cubemap_description.mip_levels as _);
+        let sampler = Sampler::new(context.device.clone(), sampler_info)?;
 
-    let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
-    let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
-    let color_image = rendergraph.image("color")?.handle();
+        let device = context.device.clone();
+        let allocator = context.allocator.clone();
 
-    let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
-    let descriptor_pool = descriptor_pool(device.clone())?;
-    let descriptor_set =
-        descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
-    update_descriptor_set(
-        &device.handle,
-        descriptor_set,
-        hdr_texture.view.handle,
-        hdr_sampler.handle,
-    );
+        let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+        let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
+        let color_image = rendergraph.image("color")?.handle();
 
-    transition_cubemap_to_transfer_dst(
-        command_pool,
-        cubemap.image.handle,
-        cubemap_description.mip_levels,
-    )?;
+        let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
+        let descriptor_pool = descriptor_pool(device.clone())?;
+        let descriptor_set =
+            descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
+        update_descriptor_set(
+            &device.handle,
+            descriptor_set,
+            hdr_texture.view.handle,
+            hdr_sampler.handle,
+        );
 
-    let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
-    let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
-    let matrices = cubemap_matrices();
-    let (pipeline, pipeline_layout) = pipeline(
-        device.clone(),
-        shader_cache,
-        descriptor_set_layout.clone(),
-        offscreen_renderpass,
-    )?;
+        transition_cubemap_to_transfer_dst(
+            command_pool,
+            cubemap.image.handle,
+            cubemap_description.mip_levels,
+        )?;
 
-    for mip_level in 0..cubemap_description.mip_levels {
-        for (face_index, matrix) in matrices.iter().enumerate() {
-            let dimension = hdr_description.width as f32 * 0.5_f32.powf(mip_level as _);
-            let extent = vk::Extent2D::builder()
-                .width(dimension as _)
-                .height(dimension as _)
-                .build();
+        let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
+        let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 10_f32);
+        let matrices = cubemap_matrices();
+        let (pipeline, pipeline_layout) = pipeline(
+            device.clone(),
+            shader_cache,
+            descriptor_set_layout.clone(),
+            offscreen_renderpass,
+        )?;
 
-            let pipeline_layout_handle = pipeline_layout.handle.clone();
-            let push_constants_hdr = PushConstantHdr {
-                mvp: projection * matrix,
-            };
+        for mip_level in 0..cubemap_description.mip_levels {
+            for (face_index, matrix) in matrices.iter().enumerate() {
+                let dimension = hdr_description.width as f32 * 0.5_f32.powf(mip_level as _);
+                let extent = vk::Extent2D::builder()
+                    .width(dimension as _)
+                    .height(dimension as _)
+                    .build();
 
-            command_pool.execute_once(|command_buffer| {
-                rendergraph.execute_pass(command_buffer, "offscreen", 0, |_, command_buffer| {
-                    device.update_viewport(command_buffer, extent, true)?;
-                    unsafe {
-                        device.handle.cmd_push_constants(
-                            command_buffer,
-                            pipeline_layout.handle,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                            0,
-                            byte_slice_from(&push_constants_hdr),
-                        );
-                        device.handle.cmd_bind_pipeline(
-                            command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline.handle,
-                        );
-                        device.handle.cmd_bind_descriptor_sets(
-                            command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline_layout_handle,
-                            0,
-                            &[descriptor_set],
-                            &[],
-                        );
-                    }
-                    cube.draw(&device.handle, command_buffer)?;
+                let pipeline_layout_handle = pipeline_layout.handle.clone();
+                let push_constants_hdr = PushConstantHdr {
+                    mvp: projection * matrix,
+                };
+
+                command_pool.execute_once(|command_buffer| {
+                    rendergraph.execute_pass(
+                        command_buffer,
+                        "offscreen",
+                        0,
+                        |_, command_buffer| {
+                            device.update_viewport(command_buffer, extent, true)?;
+                            unsafe {
+                                device.handle.cmd_push_constants(
+                                    command_buffer,
+                                    pipeline_layout.handle,
+                                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                                    0,
+                                    byte_slice_from(&push_constants_hdr),
+                                );
+                                device.handle.cmd_bind_pipeline(
+                                    command_buffer,
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    pipeline.handle,
+                                );
+                                device.handle.cmd_bind_descriptor_sets(
+                                    command_buffer,
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    pipeline_layout_handle,
+                                    0,
+                                    &[descriptor_set],
+                                    &[],
+                                );
+                            }
+                            cube.draw(&device.handle, command_buffer)?;
+                            Ok(())
+                        },
+                    )?;
                     Ok(())
                 })?;
-                Ok(())
-            })?;
 
-            transition_backbuffer_to_transfer_src(command_pool, color_image)?;
+                transition_backbuffer_to_transfer_src(command_pool, color_image)?;
 
-            let src_subresource = vk::ImageSubresourceLayers::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_array_layer(0)
-                .mip_level(0)
-                .layer_count(1)
-                .build();
+                let src_subresource = vk::ImageSubresourceLayers::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_array_layer(0)
+                    .mip_level(0)
+                    .layer_count(1)
+                    .build();
 
-            let dst_subresource = vk::ImageSubresourceLayers::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_array_layer(face_index as _)
-                .mip_level(mip_level)
-                .layer_count(1)
-                .build();
+                let dst_subresource = vk::ImageSubresourceLayers::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_array_layer(face_index as _)
+                    .mip_level(mip_level)
+                    .layer_count(1)
+                    .build();
 
-            let extent = vk::Extent3D::builder()
-                .width(dimension as _)
-                .height(dimension as _)
-                .depth(1)
-                .build();
+                let extent = vk::Extent3D::builder()
+                    .width(dimension as _)
+                    .height(dimension as _)
+                    .depth(1)
+                    .build();
 
-            let region = vk::ImageCopy::builder()
-                .src_subresource(src_subresource)
-                .dst_subresource(dst_subresource)
-                .extent(extent)
-                .build();
+                let region = vk::ImageCopy::builder()
+                    .src_subresource(src_subresource)
+                    .dst_subresource(dst_subresource)
+                    .extent(extent)
+                    .build();
 
-            let copy_info = ImageToImageCopyBuilder::default()
-                .source(color_image)
-                .destination(cubemap.image.handle)
-                .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                .regions(vec![region])
-                .build()
-                .map_err(|error| anyhow!("{}", error))?;
-            command_pool.copy_image_to_image(&copy_info)?;
+                let copy_info = ImageToImageCopyBuilder::default()
+                    .source(color_image)
+                    .destination(cubemap.image.handle)
+                    .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .regions(vec![region])
+                    .build()
+                    .map_err(|error| anyhow!("{}", error))?;
+                command_pool.copy_image_to_image(&copy_info)?;
 
-            transition_backbuffer_to_color_attachment(command_pool, color_image)?;
+                transition_backbuffer_to_color_attachment(command_pool, color_image)?;
+            }
         }
+
+        transition_cubemap_to_shader_read(
+            command_pool,
+            cubemap.image.handle,
+            cubemap_description.mip_levels,
+        )?;
+
+        Ok(HdrCubemap { cubemap, sampler })
     }
-
-    transition_cubemap_to_shader_read(
-        command_pool,
-        cubemap.image.handle,
-        cubemap_description.mip_levels,
-    )?;
-
-    Ok((cubemap, cubemap_sampler))
 }
 
 fn rendergraph(

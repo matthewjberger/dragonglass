@@ -1,9 +1,9 @@
 use crate::vulkan::{
     core::{
-        CommandPool, Context, Cubemap, Device, Image, ImageNode, RawImage, RenderGraph, Sampler,
-        ShaderCache, Swapchain, SwapchainProperties,
+        CommandPool, Context, Device, Image, ImageNode, RawImage, RenderGraph, ShaderCache,
+        Swapchain, SwapchainProperties,
     },
-    pbr::{hdr_cubemap, EnvironmentMapSet},
+    pbr::{EnvironmentMapSet, HdrCubemap},
     render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
 };
 use anyhow::Result;
@@ -22,8 +22,6 @@ pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub samples: vk::SampleCountFlags,
-    pub skybox: Cubemap,
-    pub skybox_sampler: Sampler,
 }
 
 impl Scene {
@@ -43,19 +41,11 @@ impl Scene {
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
         let mut shader_cache = ShaderCache::default();
 
-        let (skybox, skybox_sampler) = hdr_cubemap(
-            context,
-            &transient_command_pool,
-            "assets/skyboxes/desert.hdr",
-            &mut shader_cache,
-        )?;
+        let environment_maps =
+            EnvironmentMapSet::new(context, &transient_command_pool, &mut shader_cache)?;
 
-        let skybox_render = SkyboxRender::new(
-            context,
-            &transient_command_pool,
-            skybox.view.handle,
-            skybox_sampler.handle,
-        )?;
+        let skybox_render =
+            SkyboxRender::new(context, &transient_command_pool, &environment_maps.hdr)?;
 
         let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
         let gui_render = GuiRender::new(
@@ -65,9 +55,6 @@ impl Scene {
             imgui,
             &transient_command_pool,
         )?;
-
-        let environment_maps =
-            EnvironmentMapSet::new(context, &transient_command_pool, &mut shader_cache)?;
 
         let mut scene = Self {
             environment_maps,
@@ -79,8 +66,6 @@ impl Scene {
             transient_command_pool,
             shader_cache,
             samples,
-            skybox,
-            skybox_sampler,
         };
         scene.create_pipelines(context)?;
         Ok(scene)
@@ -225,19 +210,14 @@ impl Scene {
     }
 
     pub fn load_skybox(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
-        let (skybox, skybox_sampler) = hdr_cubemap(
+        self.environment_maps.hdr = HdrCubemap::new(
             context,
             &self.transient_command_pool,
             path,
             &mut self.shader_cache,
         )?;
-        self.skybox_render.update_descriptor_set(
-            context.device.clone(),
-            skybox.view.handle,
-            self.skybox_sampler.handle,
-        );
-        self.skybox = skybox;
-        self.skybox_sampler = skybox_sampler;
+        self.skybox_render
+            .update_descriptor_set(context.device.clone(), &self.environment_maps.hdr);
         Ok(())
     }
 
