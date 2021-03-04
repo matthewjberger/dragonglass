@@ -6,20 +6,23 @@ mod physical_device;
 
 use anyhow::{ensure, Context as AnyhowContext, Result};
 use ash::{
-    extensions::khr::{Surface as AshSurface, Swapchain},
+    extensions::{
+        ext::DebugUtils,
+        khr::{Surface as AshSurface, Swapchain},
+    },
     version::{DeviceV1_0, InstanceV1_0},
     vk::{self, SurfaceKHR},
 };
 use ash_window::{create_surface, enumerate_required_extensions};
 use raw_window_handle::HasRawWindowHandle;
-use std::os::raw::c_char;
-use std::sync::Arc;
+use std::{os::raw::c_char, sync::Arc};
 use vk_mem::{Allocator, AllocatorCreateInfo};
 
 // The order the struct members are declared in
 // determines the order they are 'Drop'ped in
 // when this struct is dropped
 pub struct Context {
+    pub debug: Option<DebugUtils>,
     pub allocator: Arc<vk_mem::Allocator>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
@@ -77,7 +80,14 @@ impl Context {
 
         let allocator = Arc::new(Allocator::new(&allocator_create_info)?);
 
+        let debug = if Self::debug_enabled() {
+            Some(DebugUtils::new(&entry, &instance.handle))
+        } else {
+            None
+        };
+
         Ok(Self {
+            debug,
             allocator,
             device,
             physical_device,
@@ -88,11 +98,18 @@ impl Context {
     }
 
     fn instance_extensions(window_handle: &impl HasRawWindowHandle) -> Result<Vec<*const i8>> {
-        let extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
+        let mut extensions: Vec<*const i8> = enumerate_required_extensions(window_handle)?
             .iter()
             .map(|extension| extension.as_ptr())
             .collect();
+        if Self::debug_enabled() {
+            extensions.push(DebugUtils::name().as_ptr());
+        }
         Ok(extensions)
+    }
+
+    const fn debug_enabled() -> bool {
+        true
     }
 
     fn layers() -> Result<Vec<*const i8>> {

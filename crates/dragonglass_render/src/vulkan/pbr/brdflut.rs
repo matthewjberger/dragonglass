@@ -6,7 +6,8 @@ use crate::vulkan::{
     render::FullscreenRender,
 };
 use anyhow::{anyhow, Result};
-use ash::vk;
+use ash::vk::{self, Handle, ObjectType};
+use std::ffi::CStr;
 
 pub struct Brdflut {
     pub image: Box<dyn Image>,
@@ -76,6 +77,18 @@ impl Brdflut {
         })?;
 
         let (image, view) = rendergraph.take_image(&color)?;
+
+        if let Some(debug) = context.debug.as_ref() {
+            // TODO: This can be wrapped up in context
+            let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(vk::ObjectType::IMAGE)
+                .object_name(CStr::from_bytes_with_nul(b"brdflut\0")?)
+                .object_handle(image.handle().as_raw())
+                .build();
+            unsafe {
+                debug.debug_utils_set_object_name(context.device.handle.handle(), &name_info)?;
+            }
+        }
 
         Ok(Brdflut {
             image,

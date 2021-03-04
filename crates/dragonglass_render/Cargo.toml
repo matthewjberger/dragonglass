@@ -33,3 +33,4 @@ simplelog = { version = "0.8.0", features = ["termcolor"] }
 [features]
 default = ["vulkan"]
 vulkan = ["ash", "ash-window", "vk-mem"]
+debug = []
