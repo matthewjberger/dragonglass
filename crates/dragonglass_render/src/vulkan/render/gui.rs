@@ -7,7 +7,10 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::{
+    version::DeviceV1_0,
+    vk::{self, Handle},
+};
 use imgui::{Context as ImguiContext, DrawCmd, DrawCmdParams, DrawData, DrawVert};
 use log::debug;
 use nalgebra_glm as glm;
@@ -59,6 +62,14 @@ impl GuiRender {
             };
             Texture::new(context, command_pool, &atlas_texture_description)?
         };
+
+        context
+            .debug
+            .name_image("imgui font", font_texture.image.handle.as_raw())?;
+
+        context
+            .debug
+            .name_image("imgui font view", font_texture.view.handle.as_raw())?;
 
         let font_texture_sampler = Sampler::default(context.device.clone())?;
         Self::update_descriptor_set(

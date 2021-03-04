@@ -3,7 +3,11 @@ use crate::vulkan::core::{
     SwapchainProperties,
 };
 use anyhow::{bail, Context as AnyhowContext, Result};
-use ash::{prelude::VkResult, version::DeviceV1_0, vk};
+use ash::{
+    prelude::VkResult,
+    version::DeviceV1_0,
+    vk::{self, Handle},
+};
 use std::sync::Arc;
 
 pub struct Frame {
@@ -25,7 +29,11 @@ impl Frame {
         frames_in_flight: usize,
     ) -> Result<Self> {
         let frame_locks = (0..frames_in_flight)
-            .map(|_| FrameLock::new(context.device.clone()))
+            .map(|index| {
+                let frame_lock = FrameLock::new(context.device.clone())?;
+                frame_lock.name_objects(&context, index)?;
+                Ok(frame_lock)
+            })
             .collect::<Result<Vec<_>>>()?;
 
         let graphics_queue_index = context.physical_device.graphics_queue_family_index;
@@ -225,5 +233,24 @@ impl FrameLock {
             in_flight: Fence::new(device, vk::FenceCreateFlags::SIGNALED)?,
         };
         Ok(handles)
+    }
+
+    pub fn name_objects(&self, context: &Context, index: usize) -> Result<()> {
+        context.debug.name_semaphore(
+            &format!("image available semaphore {}", index),
+            self.image_available.handle.as_raw(),
+        )?;
+
+        context.debug.name_semaphore(
+            &format!("render finished semaphore {}", index),
+            self.render_finished.handle.as_raw(),
+        )?;
+
+        context.debug.name_fence(
+            &format!("in flight fence {}", index),
+            self.in_flight.handle.as_raw(),
+        )?;
+
+        Ok(())
     }
 }

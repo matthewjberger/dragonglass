@@ -12,7 +12,10 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::{
+    version::DeviceV1_0,
+    vk::{self, Handle},
+};
 use nalgebra_glm as glm;
 use std::{mem, path::Path, sync::Arc};
 use vk_mem::Allocator;
@@ -210,6 +213,14 @@ impl HdrCubemap {
             cubemap.image.handle,
             cubemap_description.mip_levels,
         )?;
+
+        context
+            .debug
+            .name_image("hdr_cubemap", cubemap.image.handle.as_raw())?;
+
+        context
+            .debug
+            .name_image_view("hdr_cubemap_view", cubemap.view.handle.as_raw())?;
 
         Ok(HdrCubemap { cubemap, sampler })
     }

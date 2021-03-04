@@ -10,19 +10,86 @@ use ash::{
         ext::DebugUtils,
         khr::{Surface as AshSurface, Swapchain},
     },
-    version::{DeviceV1_0, InstanceV1_0},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::{self, SurfaceKHR},
 };
 use ash_window::{create_surface, enumerate_required_extensions};
 use raw_window_handle::HasRawWindowHandle;
-use std::{os::raw::c_char, sync::Arc};
+use std::{ffi::CStr, os::raw::c_char, sync::Arc};
 use vk_mem::{Allocator, AllocatorCreateInfo};
+
+pub struct VulkanDebug {
+    pub debug: Option<DebugUtils>,
+    device: Arc<Device>,
+}
+
+impl VulkanDebug {
+    pub fn new(
+        entry: &impl EntryV1_0,
+        instance: &impl InstanceV1_0,
+        device: Arc<Device>,
+    ) -> Result<Self> {
+        let debug = if Self::debug_enabled() {
+            Some(DebugUtils::new(entry, instance))
+        } else {
+            None
+        };
+        Ok(Self { debug, device })
+    }
+
+    const fn debug_enabled() -> bool {
+        true
+    }
+
+    pub fn extension_name() -> &'static CStr {
+        DebugUtils::name()
+    }
+
+    pub fn name_image(&self, name: &str, handle: u64) -> Result<()> {
+        self.name_object(name, handle, vk::ObjectType::IMAGE)
+    }
+
+    pub fn name_image_view(&self, name: &str, handle: u64) -> Result<()> {
+        self.name_object(name, handle, vk::ObjectType::IMAGE_VIEW)
+    }
+
+    pub fn name_buffer(&self, name: &str, handle: u64) -> Result<()> {
+        self.name_object(name, handle, vk::ObjectType::BUFFER)
+    }
+
+    pub fn name_framebuffer(&self, name: &str, handle: u64) -> Result<()> {
+        self.name_object(name, handle, vk::ObjectType::FRAMEBUFFER)
+    }
+
+    pub fn name_semaphore(&self, name: &str, handle: u64) -> Result<()> {
+        self.name_object(name, handle, vk::ObjectType::SEMAPHORE)
+    }
+
+    pub fn name_fence(&self, name: &str, handle: u64) -> Result<()> {
+        self.name_object(name, handle, vk::ObjectType::FENCE)
+    }
+
+    pub fn name_object(&self, name: &str, handle: u64, object_type: vk::ObjectType) -> Result<()> {
+        let object_name = format!("{}\0", name);
+        if let Some(debug) = self.debug.as_ref() {
+            let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(object_type)
+                .object_name(CStr::from_bytes_with_nul(object_name.as_bytes())?)
+                .object_handle(handle)
+                .build();
+            unsafe {
+                debug.debug_utils_set_object_name(self.device.handle.handle(), &name_info)?;
+            }
+        }
+        Ok(())
+    }
+}
 
 // The order the struct members are declared in
 // determines the order they are 'Drop'ped in
 // when this struct is dropped
 pub struct Context {
-    pub debug: Option<DebugUtils>,
+    pub debug: VulkanDebug,
     pub allocator: Arc<vk_mem::Allocator>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
@@ -80,11 +147,7 @@ impl Context {
 
         let allocator = Arc::new(Allocator::new(&allocator_create_info)?);
 
-        let debug = if Self::debug_enabled() {
-            Some(DebugUtils::new(&entry, &instance.handle))
-        } else {
-            None
-        };
+        let debug = VulkanDebug::new(&entry, &instance.handle, device.clone())?;
 
         Ok(Self {
             debug,
@@ -102,14 +165,10 @@ impl Context {
             .iter()
             .map(|extension| extension.as_ptr())
             .collect();
-        if Self::debug_enabled() {
+        if VulkanDebug::debug_enabled() {
             extensions.push(DebugUtils::name().as_ptr());
         }
         Ok(extensions)
-    }
-
-    const fn debug_enabled() -> bool {
-        true
     }
 
     fn layers() -> Result<Vec<*const i8>> {
