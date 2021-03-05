@@ -77,13 +77,10 @@ impl Brdflut {
 
         let (image, view) = rendergraph.take_image(&color)?;
 
-        context
-            .debug
-            .name_image("brdflut", image.handle().as_raw())?;
-
-        context
-            .debug
-            .name_image_view("brdflut_view", view.handle.as_raw())?;
+        if let Ok(debug) = context.debug() {
+            debug.name_image("brdflut", image.handle().as_raw())?;
+            debug.name_image_view("brdflut_view", view.handle.as_raw())?;
+        }
 
         Ok(Brdflut {
             image,

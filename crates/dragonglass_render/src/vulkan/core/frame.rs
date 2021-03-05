@@ -236,21 +236,22 @@ impl FrameLock {
     }
 
     pub fn name_objects(&self, context: &Context, index: usize) -> Result<()> {
-        context.debug.name_semaphore(
-            &format!("image available semaphore {}", index),
-            self.image_available.handle.as_raw(),
-        )?;
+        if let Ok(debug) = context.debug() {
+            debug.name_semaphore(
+                &format!("image available semaphore {}", index),
+                self.image_available.handle.as_raw(),
+            )?;
 
-        context.debug.name_semaphore(
-            &format!("render finished semaphore {}", index),
-            self.render_finished.handle.as_raw(),
-        )?;
+            debug.name_semaphore(
+                &format!("render finished semaphore {}", index),
+                self.render_finished.handle.as_raw(),
+            )?;
 
-        context.debug.name_fence(
-            &format!("in flight fence {}", index),
-            self.in_flight.handle.as_raw(),
-        )?;
-
+            debug.name_fence(
+                &format!("in flight fence {}", index),
+                self.in_flight.handle.as_raw(),
+            )?;
+        }
         Ok(())
     }
 }

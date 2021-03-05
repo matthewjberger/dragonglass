@@ -214,13 +214,10 @@ impl HdrCubemap {
             cubemap_description.mip_levels,
         )?;
 
-        context
-            .debug
-            .name_image("hdr_cubemap", cubemap.image.handle.as_raw())?;
-
-        context
-            .debug
-            .name_image_view("hdr_cubemap_view", cubemap.view.handle.as_raw())?;
+        if let Ok(debug) = context.debug() {
+            debug.name_image("hdr_cubemap", cubemap.image.handle.as_raw())?;
+            debug.name_image_view("hdr_cubemap_view", cubemap.view.handle.as_raw())?;
+        }
 
         Ok(HdrCubemap { cubemap, sampler })
     }

@@ -20,7 +20,7 @@ use vk_mem::{Allocator, AllocatorCreateInfo};
 // determines the order they are 'Drop'ped in
 // when this struct is dropped
 pub struct Context {
-    pub debug: VulkanDebug,
+    pub debug: Option<VulkanDebug>,
     pub allocator: Arc<vk_mem::Allocator>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
@@ -78,7 +78,11 @@ impl Context {
 
         let allocator = Arc::new(Allocator::new(&allocator_create_info)?);
 
-        let debug = VulkanDebug::new(&entry, &instance.handle, device.clone())?;
+        let debug = if VulkanDebug::enabled() {
+            Some(VulkanDebug::new(&entry, &instance.handle, device.clone())?)
+        } else {
+            None
+        };
 
         Ok(Self {
             debug,
@@ -96,15 +100,17 @@ impl Context {
             .iter()
             .map(|extension| extension.as_ptr())
             .collect();
-        if VulkanDebug::debug_enabled() {
+        if VulkanDebug::enabled() {
             extensions.push(VulkanDebug::extension_name().as_ptr());
         }
         Ok(extensions)
     }
 
     fn layers() -> Result<Vec<*const i8>> {
-        let layers = Vec::new();
-        // Add layers here
+        let mut layers = Vec::new();
+        if VulkanDebug::enabled() {
+            layers.push(VulkanDebug::layer_name()?.as_ptr());
+        }
         Ok(layers)
     }
 
@@ -118,6 +124,12 @@ impl Context {
             .sampler_anisotropy(true)
             .fill_mode_non_solid(true)
             .wide_lines(true)
+    }
+
+    pub fn debug(&self) -> Result<&VulkanDebug> {
+        self.debug
+            .as_ref()
+            .context("Vulkan debug object not found in Vulkan context!")
     }
 
     pub fn surface(&self) -> Result<&Surface> {
