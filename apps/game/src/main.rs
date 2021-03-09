@@ -31,12 +31,7 @@ pub struct Game {
 
 impl ApplicationRunner for Game {
     fn initialize(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
-        let (player_path, player_handle) = (
-            "assets/models/DamagedHelmet.glb",
-            "mesh_helmet_LP_13930damagedHelmet",
-        );
-        let level_path = "assets/models/blocklevel.glb";
-
+        // Load light 1
         {
             let position = glm::vec3(-2.0, 5.0, 0.0);
             let mut transform = Transform {
@@ -59,6 +54,7 @@ impl ApplicationRunner for Game {
                 .add_node(light_entity);
         }
 
+        // Load light 2
         {
             let position = glm::vec3(2.0, 5.0, 0.0);
             let mut transform = Transform {
@@ -81,28 +77,29 @@ impl ApplicationRunner for Game {
                 .add_node(light_entity);
         }
 
-        application.load_asset(player_path)?;
-        application.load_asset(level_path)?;
-        // application.load_asset("assets/models/room.glb")?;
+        // Load player
+        let position = glm::vec3(0.0, 40.0, 0.0);
+        let transform = Transform {
+            translation: position,
+            ..Default::default()
+        };
+
+        {
+            let player_entity = application.ecs.spawn((transform,));
+            application
+                .world
+                .scene
+                .default_scenegraph_mut()?
+                .add_node(player_entity);
+            self.player = Some(player_entity);
+        }
+
+        // Load the level
+        application.load_asset("assets/models/blocklevel.glb")?;
+
         application.reload_world()?;
 
-        log::info!(
-            "Player -> Level: {}",
-            PLAYER_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP)
-        );
-        log::info!(
-            "Player -> Player: {}",
-            PLAYER_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP)
-        );
-        log::info!(
-            "Level -> Player: {}",
-            LEVEL_COLLISION_GROUP.test(PLAYER_COLLISION_GROUP)
-        );
-        log::info!(
-            "Level -> Level: {}",
-            LEVEL_COLLISION_GROUP.test(LEVEL_COLLISION_GROUP)
-        );
-
+        // Add static box colliders to level meshes
         let level_mesh_names = vec![
             "Cube.006",
             "Cube.002",
@@ -116,16 +113,6 @@ impl ApplicationRunner for Game {
         ];
         let mut level_meshes = Vec::new();
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
-            if mesh.name == player_handle {
-                self.player = Some(entity);
-                {
-                    {
-                        let mut transform = application.ecs.get_mut::<Transform>(entity)?;
-                        transform.translation.y = 40.0;
-                        transform.scale = glm::vec3(0.5, 0.5, 0.5);
-                    }
-                }
-            }
             if level_mesh_names.iter().any(|x| **x == mesh.name) {
                 level_meshes.push(entity);
             }
@@ -138,10 +125,23 @@ impl ApplicationRunner for Game {
             // add_trimesh_collider(application, entity, LEVEL_COLLISION_GROUP)?;
         }
 
+        // Setup player
         if let Some(entity) = self.player.as_ref() {
             activate_first_person(application, *entity)?;
-            add_rigid_body(application, *entity, BodyStatus::Dynamic)?;
-            add_box_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
+            let rigid_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+                .translation(
+                    transform.translation.x,
+                    transform.translation.y,
+                    transform.translation.z,
+                )
+                .lock_rotations()
+                .build();
+            let handle = application.physics_world.bodies.insert(rigid_body);
+            application
+                .ecs
+                .insert_one(*entity, RigidBody::new(handle))?;
+
+            add_cylinder_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
         }
 
         Ok(())
@@ -210,12 +210,7 @@ fn add_rigid_body(
 
         // Insert a corresponding rigid body
         let rigid_body = RigidBodyBuilder::new(body_status)
-            .translation(
-                transform.translation.x,
-                transform.translation.y,
-                transform.translation.z,
-            )
-            .rotation(transform.rotation.as_vector().xyz())
+            .position(transform.as_isometry())
             .build();
         application.physics_world.bodies.insert(rigid_body)
     };
@@ -236,6 +231,24 @@ fn add_box_collider(
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
     let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
+        .collision_groups(collision_groups)
+        .build();
+    application.physics_world.colliders.insert(
+        collider,
+        rigid_body_handle,
+        &mut application.physics_world.bodies,
+    );
+    Ok(())
+}
+
+fn add_cylinder_collider(
+    application: &mut Application,
+    entity: Entity,
+    collision_groups: InteractionGroups,
+) -> Result<()> {
+    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
+    let (half_height, radius) = (1.0, 0.5);
+    let collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
         .build();
     application.physics_world.colliders.insert(
