@@ -423,12 +423,6 @@ impl Transform {
         glm::quat_rotate_vec3(&self.rotation.normalize(), &(-glm::Vec3::z()))
     }
 
-    pub fn rotate(&mut self, increment: &glm::Vec3) {
-        self.translation = glm::rotate_x_vec3(&self.translation, increment.x);
-        self.translation = glm::rotate_y_vec3(&self.translation, increment.y);
-        self.translation = glm::rotate_z_vec3(&self.translation, increment.z);
-    }
-
     pub fn look_at(&mut self, target: &glm::Vec3, up: &glm::Vec3) {
         self.rotation = glm::quat_conjugate(&glm::quat_look_at(target, up));
     }

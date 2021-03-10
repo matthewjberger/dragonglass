@@ -17,6 +17,7 @@ use ncollide3d::{
 };
 use std::{collections::HashMap, path::PathBuf};
 use winit::{
+    dpi::PhysicalPosition,
     dpi::PhysicalSize,
     event::MouseButton,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -271,6 +272,7 @@ pub fn run_application(
     create_logger()?;
 
     let (event_loop, window) = configuration.create_window()?;
+
     let mut gui = Gui::new(&window);
 
     let logical_size = window.inner_size();
@@ -374,5 +376,14 @@ fn run_loop(
     }
 
     runner.handle_events(application, event)?;
+
+    // FIXME_CAMERA
+    // Reset cursor to center of window
+    let center = application.system.window_center();
+    // FIXME_CAMERA
+    window.set_cursor_grab(true)?;
+    window.set_cursor_visible(false);
+    window.set_cursor_position(PhysicalPosition::new(center.x, center.y))?;
+
     Ok(())
 }

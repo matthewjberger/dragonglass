@@ -8,7 +8,7 @@ use dragonglass::{
     },
 };
 use imgui::{im_str, Condition, Ui, Window};
-use nalgebra::Point3;
+use nalgebra::{Point3, UnitQuaternion};
 use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::BodyStatus,
@@ -27,6 +27,61 @@ const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b
 #[derive(Default)]
 pub struct Game {
     player: Option<Entity>,
+    yaw: f32,
+    pitch: f32,
+}
+
+impl Game {
+    fn update_player(&mut self, application: &mut Application, entity: Entity) -> Result<()> {
+        let mouse_delta = application.input.mouse.position_delta;
+        let speed = 6.0 * application.system.delta_time as f32;
+        {
+            let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+            let mut translation = glm::vec3(0.0, 0.0, 0.0);
+
+            if application.input.is_key_pressed(VirtualKeyCode::W) {
+                translation = speed * transform.forward();
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::A) {
+                translation = -speed * transform.right();
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::S) {
+                translation = -speed * transform.forward();
+            }
+
+            if application.input.is_key_pressed(VirtualKeyCode::D) {
+                translation = speed * transform.right();
+            }
+
+            transform.translation += translation;
+
+            let mouse_speed = 10.0 * application.system.delta_time as f32;
+            self.yaw -= mouse_delta.x * mouse_speed;
+            if self.yaw > 360.0 {
+                self.yaw = 0.0;
+            } else if self.yaw < 0.0 {
+                self.yaw = 360.0;
+            }
+
+            self.pitch -= mouse_delta.y * mouse_speed;
+            if self.pitch > 89.0 {
+                self.pitch = 89.0;
+            } else if self.pitch < -89.0 {
+                self.pitch = -89.0;
+            }
+
+            transform.rotation = glm::to_quat(&glm::rotate(
+                &glm::Mat4::identity(),
+                self.pitch.to_radians(),
+                &glm::Vec3::y(),
+            ));
+        }
+
+        sync_rigid_body_to_transform(application, entity)?;
+        Ok(())
+    }
 }
 
 impl ApplicationRunner for Game {
@@ -158,9 +213,13 @@ impl ApplicationRunner for Game {
     }
 
     fn update(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
+        if application.input.is_key_pressed(VirtualKeyCode::Escape) {
+            application.system.exit_requested = true;
+        }
+
         sync_all_rigid_bodies(application);
         if let Some(player) = self.player.as_ref() {
-            update_player(application, *player)?;
+            self.update_player(application, *player)?;
         }
         Ok(())
     }
@@ -336,34 +395,6 @@ fn sync_all_rigid_bodies(application: &mut Application) {
             transform.rotation = *position.rotation.quaternion();
         }
     }
-}
-
-fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
-    let speed = 6.0 * application.system.delta_time as f32;
-    {
-        let mut transform = application.ecs.get_mut::<Transform>(entity)?;
-        let mut translation = glm::vec3(0.0, 0.0, 0.0);
-
-        if application.input.is_key_pressed(VirtualKeyCode::W) {
-            translation = speed * transform.forward();
-        }
-
-        if application.input.is_key_pressed(VirtualKeyCode::A) {
-            translation = -speed * transform.right();
-        }
-
-        if application.input.is_key_pressed(VirtualKeyCode::S) {
-            translation = -speed * transform.forward();
-        }
-
-        if application.input.is_key_pressed(VirtualKeyCode::D) {
-            translation = speed * transform.right();
-        }
-
-        transform.translation += translation;
-    }
-    sync_rigid_body_to_transform(application, entity)?;
-    Ok(())
 }
 
 fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
