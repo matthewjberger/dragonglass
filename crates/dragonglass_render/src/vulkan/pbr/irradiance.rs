@@ -21,19 +21,19 @@ use std::{mem, path::Path, sync::Arc};
 use vk_mem::Allocator;
 
 #[allow(dead_code)]
-struct PushConstantPrefilter {
+struct PushConstantIrradiance {
     mvp: glm::Mat4,
-    roughness: f32,
-    num_samples: u32,
+    delta_phi: f32,
+    delta_theta: f32,
 }
 
-pub struct PrefilterCubemap {
+pub struct IrradianceCubemap {
     // TODO: Cubemaps may need to include their own sampler
     pub cubemap: Cubemap,
     pub sampler: Sampler,
 }
 
-impl PrefilterCubemap {
+impl IrradianceCubemap {
     pub fn new(
         context: &Context,
         command_pool: &CommandPool,
@@ -115,11 +115,10 @@ impl PrefilterCubemap {
                 .build();
             for (face_index, matrix) in matrices.iter().enumerate() {
                 let pipeline_layout_handle = pipeline_layout.handle.clone();
-                let push_constants = PushConstantPrefilter {
+                let push_constants = PushConstantIrradiance {
                     mvp: projection * matrix,
-                    roughness: mip_level as f32
-                        / (output_cubemap_description.mip_levels - 1) as f32,
-                    num_samples: 32, // TODO: make this sit at the top of the file
+                    delta_phi: 2_f32.to_radians(),
+                    delta_theta: (0.5_f32 * std::f32::consts::PI) / 64_f32,
                 };
 
                 command_pool.execute_once(|command_buffer| {
@@ -207,9 +206,9 @@ impl PrefilterCubemap {
         )?;
 
         if let Ok(debug) = context.debug() {
-            debug.name_image("prefilter_cubemap", output_cubemap.image.handle.as_raw())?;
+            debug.name_image("irradiance_cubemap", output_cubemap.image.handle.as_raw())?;
             debug.name_image_view(
-                "prefilter_cubemap_view",
+                "irradiance_cubemap_view",
                 output_cubemap.view.handle.as_raw(),
             )?;
         }
@@ -308,7 +307,7 @@ pub fn update_descriptor_set(
 fn shader_paths() -> Result<ShaderPathSet> {
     let shader_path_set = ShaderPathSetBuilder::default()
         .vertex("assets/shaders/environment/filtercube.vert.spv")
-        .fragment("assets/shaders/environment/prefilterenvmap.frag.spv")
+        .fragment("assets/shaders/environment/irradiancecube.frag.spv")
         .build()
         .map_err(|error| anyhow!("{}", error))?;
     Ok(shader_path_set)
@@ -340,7 +339,7 @@ fn pipeline(
 ) -> Result<(Pipeline, PipelineLayout)> {
     let push_constant_range = vk::PushConstantRange::builder()
         .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-        .size(mem::size_of::<PushConstantPrefilter>() as u32)
+        .size(mem::size_of::<PushConstantIrradiance>() as u32)
         .build();
     let shader_paths = shader_paths()?;
     let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
