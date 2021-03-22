@@ -1,15 +1,16 @@
 use crate::vulkan::{
+    core::Cubemap,
     core::{CommandPool, Context, ShaderCache},
-    pbr::{Brdflut, HdrCubemap, IrradianceCubemap, PrefilterCubemap},
+    pbr::{load_hdr_map, load_irradiance_map, load_prefilter_map, Brdflut},
 };
 use anyhow::Result;
 use log::info;
 
 pub struct EnvironmentMapSet {
     pub brdflut: Brdflut,
-    pub hdr: HdrCubemap,
-    pub prefilter: PrefilterCubemap,
-    pub irradiance: IrradianceCubemap,
+    pub hdr: Cubemap,
+    pub prefilter: Cubemap,
+    pub irradiance: Cubemap,
 }
 
 impl EnvironmentMapSet {
@@ -22,7 +23,7 @@ impl EnvironmentMapSet {
         let brdflut = Brdflut::new(context, command_pool, shader_cache)?;
 
         info!("Creating Hdr cubemap");
-        let hdr = HdrCubemap::new(
+        let hdr = load_hdr_map(
             context,
             command_pool,
             "assets/skyboxes/desert.hdr",
@@ -30,10 +31,10 @@ impl EnvironmentMapSet {
         )?;
 
         info!("Creating Prefilter cubemap");
-        let prefilter = PrefilterCubemap::new(context, command_pool, shader_cache, &hdr.cubemap)?;
+        let prefilter = load_prefilter_map(context, command_pool, shader_cache, &hdr)?;
 
         info!("Creating Irradiance cubemap");
-        let irradiance = IrradianceCubemap::new(context, command_pool, shader_cache, &hdr.cubemap)?;
+        let irradiance = load_irradiance_map(context, command_pool, shader_cache, &hdr)?;
 
         Ok(Self {
             brdflut,

@@ -3,7 +3,7 @@ use crate::vulkan::{
         CommandPool, Context, Device, Image, ImageNode, RawImage, RenderGraph, ShaderCache,
         ShaderPathSetBuilder, Swapchain, SwapchainProperties,
     },
-    pbr::{EnvironmentMapSet, HdrCubemap},
+    pbr::{load_hdr_map, EnvironmentMapSet},
     render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
 };
 use anyhow::{anyhow, Result};
@@ -217,7 +217,7 @@ impl Scene {
     }
 
     pub fn load_skybox(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
-        self.environment_maps.hdr = HdrCubemap::new(
+        self.environment_maps.hdr = load_hdr_map(
             context,
             &self.transient_command_pool,
             path,

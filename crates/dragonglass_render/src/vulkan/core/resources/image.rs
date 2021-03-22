@@ -612,6 +612,7 @@ impl Texture {
 pub struct Cubemap {
     pub image: AllocatedImage,
     pub view: ImageView,
+    pub sampler: Sampler,
 }
 
 impl Cubemap {
@@ -625,8 +626,12 @@ impl Cubemap {
             image.upload_data(context, command_pool, description)?;
         }
         let view = Self::image_view(context.device.clone(), &image, description)?;
-        let texture = Self { image, view };
-        Ok(texture)
+        let sampler = Self::sampler(context.device.clone(), description.mip_levels as _)?;
+        Ok(Self {
+            image,
+            view,
+            sampler,
+        })
     }
 
     fn image_view(
@@ -647,5 +652,25 @@ impl Cubemap {
             .subresource_range(subresource_range.build());
 
         ImageView::new(device, create_info)
+    }
+
+    fn sampler(device: Arc<Device>, mip_levels: f32) -> Result<Sampler> {
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(mip_levels);
+        Sampler::new(device, sampler_info)
     }
 }

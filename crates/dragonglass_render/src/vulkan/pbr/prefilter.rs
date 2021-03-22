@@ -5,8 +5,8 @@ use crate::{
             transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
             Device, GraphicsPipelineSettingsBuilder, ImageDescription,
             ImageLayoutTransitionBuilder, ImageNode, ImageToImageCopyBuilder, Pipeline,
-            PipelineLayout, RenderGraph, RenderPass, Sampler, ShaderCache, ShaderPathSet,
-            ShaderPathSetBuilder, Texture,
+            PipelineLayout, RenderGraph, RenderPass, ShaderCache, ShaderPathSet,
+            ShaderPathSetBuilder,
         },
         geometry::Cube,
     },
@@ -17,7 +17,7 @@ use ash::{
     vk::{self, Handle},
 };
 use nalgebra_glm as glm;
-use std::{mem, path::Path, sync::Arc};
+use std::{mem, sync::Arc};
 use vk_mem::Allocator;
 
 #[allow(dead_code)]
@@ -27,198 +27,157 @@ struct PushConstantPrefilter {
     num_samples: u32,
 }
 
-pub struct PrefilterCubemap {
-    // TODO: Cubemaps may need to include their own sampler
-    pub cubemap: Cubemap,
-    pub sampler: Sampler,
-}
+pub fn load_prefilter_map(
+    context: &Context,
+    command_pool: &CommandPool,
+    shader_cache: &mut ShaderCache,
+    cubemap: &Cubemap,
+) -> Result<Cubemap> {
+    let output_dimension = 512;
+    let output_cubemap_description = ImageDescription::empty(
+        output_dimension,
+        output_dimension,
+        vk::Format::R16G16B16A16_SFLOAT,
+    );
+    let output_cubemap = Cubemap::new(context, command_pool, &output_cubemap_description)?;
 
-impl PrefilterCubemap {
-    pub fn new(
-        context: &Context,
-        command_pool: &CommandPool,
-        shader_cache: &mut ShaderCache,
-        cubemap: &Cubemap,
-    ) -> Result<Self> {
-        let output_dimension = 512;
-        let output_cubemap_description = ImageDescription::empty(
-            output_dimension,
-            output_dimension,
-            vk::Format::R16G16B16A16_SFLOAT,
-        );
-        let output_cubemap = Cubemap::new(context, command_pool, &output_cubemap_description)?;
+    let device = context.device.clone();
+    let allocator = context.allocator.clone();
 
-        // TODO: Remove this and use the input cubemap's sampler
-        let sampler_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .anisotropy_enable(true)
-            .max_anisotropy(16.0)
-            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-            .unnormalized_coordinates(false)
-            .compare_enable(false)
-            .compare_op(vk::CompareOp::ALWAYS)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .mip_lod_bias(0.0)
-            .min_lod(0.0)
-            .max_lod(output_cubemap_description.mip_levels as _);
-        let sampler = Sampler::new(context.device.clone(), sampler_info)?;
+    let rendergraph = rendergraph(
+        device.clone(),
+        allocator.clone(),
+        &output_cubemap_description,
+    )?;
 
-        let device = context.device.clone();
-        let allocator = context.allocator.clone();
+    let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
+    let color_image = rendergraph.image("color")?.handle();
 
-        let rendergraph = rendergraph(
-            device.clone(),
-            allocator.clone(),
-            &output_cubemap_description,
-        )?;
+    let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
+    let descriptor_pool = descriptor_pool(device.clone())?;
+    let descriptor_set =
+        descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
 
-        let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
-        let color_image = rendergraph.image("color")?.handle();
+    update_descriptor_set(&device.handle, descriptor_set, &cubemap);
 
-        let descriptor_set_layout = Arc::new(descriptor_set_layout(device.clone())?);
-        let descriptor_pool = descriptor_pool(device.clone())?;
-        let descriptor_set =
-            descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
+    transition_cubemap_to_transfer_dst(
+        command_pool,
+        output_cubemap.image.handle,
+        output_cubemap_description.mip_levels,
+    )?;
 
-        update_descriptor_set(
-            &device.handle,
-            descriptor_set,
-            cubemap.view.handle,
-            sampler.handle,
-        );
+    let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
+    let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 512_f32);
+    let matrices = cubemap_matrices();
+    let (pipeline, pipeline_layout) = pipeline(
+        device.clone(),
+        shader_cache,
+        descriptor_set_layout.clone(),
+        offscreen_renderpass,
+    )?;
 
-        transition_cubemap_to_transfer_dst(
-            command_pool,
-            output_cubemap.image.handle,
-            output_cubemap_description.mip_levels,
-        )?;
+    for mip_level in 0..output_cubemap_description.mip_levels {
+        let dimension = output_cubemap_description.width as f32 * 0.5_f32.powf(mip_level as _);
+        let extent = vk::Extent2D::builder()
+            .width(dimension as _)
+            .height(dimension as _)
+            .build();
+        for (face_index, matrix) in matrices.iter().enumerate() {
+            let pipeline_layout_handle = pipeline_layout.handle.clone();
+            let push_constants = PushConstantPrefilter {
+                mvp: projection * matrix,
+                roughness: mip_level as f32 / (output_cubemap_description.mip_levels - 1) as f32,
+                num_samples: 32, // TODO: make this sit at the top of the file
+            };
 
-        let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
-        let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 512_f32);
-        let matrices = cubemap_matrices();
-        let (pipeline, pipeline_layout) = pipeline(
-            device.clone(),
-            shader_cache,
-            descriptor_set_layout.clone(),
-            offscreen_renderpass,
-        )?;
-
-        for mip_level in 0..output_cubemap_description.mip_levels {
-            let dimension = output_cubemap_description.width as f32 * 0.5_f32.powf(mip_level as _);
-            let extent = vk::Extent2D::builder()
-                .width(dimension as _)
-                .height(dimension as _)
-                .build();
-            for (face_index, matrix) in matrices.iter().enumerate() {
-                let pipeline_layout_handle = pipeline_layout.handle.clone();
-                let push_constants = PushConstantPrefilter {
-                    mvp: projection * matrix,
-                    roughness: mip_level as f32
-                        / (output_cubemap_description.mip_levels - 1) as f32,
-                    num_samples: 32, // TODO: make this sit at the top of the file
-                };
-
-                command_pool.execute_once(|command_buffer| {
-                    rendergraph.execute_pass(
-                        command_buffer,
-                        "offscreen",
-                        0,
-                        |_, command_buffer| {
-                            device.update_viewport(command_buffer, extent, true)?;
-                            unsafe {
-                                device.handle.cmd_push_constants(
-                                    command_buffer,
-                                    pipeline_layout.handle,
-                                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                                    0,
-                                    byte_slice_from(&push_constants),
-                                );
-                                device.handle.cmd_bind_pipeline(
-                                    command_buffer,
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    pipeline.handle,
-                                );
-                                device.handle.cmd_bind_descriptor_sets(
-                                    command_buffer,
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    pipeline_layout_handle,
-                                    0,
-                                    &[descriptor_set],
-                                    &[],
-                                );
-                            }
-                            cube.draw(&device.handle, command_buffer)?;
-                            Ok(())
-                        },
-                    )?;
+            command_pool.execute_once(|command_buffer| {
+                rendergraph.execute_pass(command_buffer, "offscreen", 0, |_, command_buffer| {
+                    device.update_viewport(command_buffer, extent, true)?;
+                    unsafe {
+                        device.handle.cmd_push_constants(
+                            command_buffer,
+                            pipeline_layout.handle,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                            0,
+                            byte_slice_from(&push_constants),
+                        );
+                        device.handle.cmd_bind_pipeline(
+                            command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline.handle,
+                        );
+                        device.handle.cmd_bind_descriptor_sets(
+                            command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            pipeline_layout_handle,
+                            0,
+                            &[descriptor_set],
+                            &[],
+                        );
+                    }
+                    cube.draw(&device.handle, command_buffer)?;
                     Ok(())
                 })?;
+                Ok(())
+            })?;
 
-                transition_backbuffer_to_transfer_src(command_pool, color_image)?;
+            transition_backbuffer_to_transfer_src(command_pool, color_image)?;
 
-                let src_subresource = vk::ImageSubresourceLayers::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_array_layer(0)
-                    .mip_level(0)
-                    .layer_count(1)
-                    .build();
+            let src_subresource = vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_array_layer(0)
+                .mip_level(0)
+                .layer_count(1)
+                .build();
 
-                let dst_subresource = vk::ImageSubresourceLayers::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_array_layer(face_index as _)
-                    .mip_level(mip_level)
-                    .layer_count(1)
-                    .build();
+            let dst_subresource = vk::ImageSubresourceLayers::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_array_layer(face_index as _)
+                .mip_level(mip_level)
+                .layer_count(1)
+                .build();
 
-                let extent = vk::Extent3D::builder()
-                    .width(dimension as _)
-                    .height(dimension as _)
-                    .depth(1)
-                    .build();
+            let extent = vk::Extent3D::builder()
+                .width(dimension as _)
+                .height(dimension as _)
+                .depth(1)
+                .build();
 
-                let region = vk::ImageCopy::builder()
-                    .src_subresource(src_subresource)
-                    .dst_subresource(dst_subresource)
-                    .extent(extent)
-                    .build();
+            let region = vk::ImageCopy::builder()
+                .src_subresource(src_subresource)
+                .dst_subresource(dst_subresource)
+                .extent(extent)
+                .build();
 
-                let copy_info = ImageToImageCopyBuilder::default()
-                    .source(color_image)
-                    .destination(output_cubemap.image.handle)
-                    .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                    .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .regions(vec![region])
-                    .build()
-                    .map_err(|error| anyhow!("{}", error))?;
-                command_pool.copy_image_to_image(&copy_info)?;
+            let copy_info = ImageToImageCopyBuilder::default()
+                .source(color_image)
+                .destination(output_cubemap.image.handle)
+                .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                .regions(vec![region])
+                .build()
+                .map_err(|error| anyhow!("{}", error))?;
+            command_pool.copy_image_to_image(&copy_info)?;
 
-                transition_backbuffer_to_color_attachment(command_pool, color_image)?;
-            }
+            transition_backbuffer_to_color_attachment(command_pool, color_image)?;
         }
-
-        transition_cubemap_to_shader_read(
-            command_pool,
-            output_cubemap.image.handle,
-            output_cubemap_description.mip_levels,
-        )?;
-
-        if let Ok(debug) = context.debug() {
-            debug.name_image("prefilter_cubemap", output_cubemap.image.handle.as_raw())?;
-            debug.name_image_view(
-                "prefilter_cubemap_view",
-                output_cubemap.view.handle.as_raw(),
-            )?;
-        }
-
-        Ok(Self {
-            cubemap: output_cubemap,
-            sampler,
-        })
     }
+
+    transition_cubemap_to_shader_read(
+        command_pool,
+        output_cubemap.image.handle,
+        output_cubemap_description.mip_levels,
+    )?;
+
+    if let Ok(debug) = context.debug() {
+        debug.name_image("prefilter_cubemap", output_cubemap.image.handle.as_raw())?;
+        debug.name_image_view(
+            "prefilter_cubemap_view",
+            output_cubemap.view.handle.as_raw(),
+        )?;
+    }
+
+    Ok(output_cubemap)
 }
 
 fn rendergraph(
@@ -282,13 +241,12 @@ fn descriptor_pool(device: Arc<Device>) -> Result<DescriptorPool> {
 pub fn update_descriptor_set(
     device: &ash::Device,
     descriptor_set: vk::DescriptorSet,
-    image_view: vk::ImageView,
-    sampler: vk::Sampler,
+    cubemap: &Cubemap,
 ) {
     let image_info = vk::DescriptorImageInfo::builder()
         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        .image_view(image_view)
-        .sampler(sampler)
+        .image_view(cubemap.view.handle)
+        .sampler(cubemap.sampler.handle)
         .build();
     let image_infos = [image_info];
 

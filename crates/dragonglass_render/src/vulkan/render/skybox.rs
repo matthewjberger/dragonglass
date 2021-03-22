@@ -2,12 +2,11 @@ use crate::{
     byte_slice_from,
     vulkan::{
         core::{
-            CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device,
+            CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout, Device,
             GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
             ShaderPathSet, ShaderPathSetBuilder,
         },
         geometry::Cube,
-        pbr::HdrCubemap,
     },
 };
 use anyhow::{anyhow, Context as AnyhowContext, Result};
@@ -34,7 +33,7 @@ pub struct SkyboxRender {
 }
 
 impl SkyboxRender {
-    pub fn new(context: &Context, command_pool: &CommandPool, hdr: &HdrCubemap) -> Result<Self> {
+    pub fn new(context: &Context, command_pool: &CommandPool, cubemap: &Cubemap) -> Result<Self> {
         let cube = Cube::new(context.allocator.clone(), command_pool)?;
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(context.device.clone())?);
         let descriptor_pool = Self::descriptor_pool(context.device.clone())?;
@@ -51,7 +50,7 @@ impl SkyboxRender {
             descriptor_set_layout,
             device: context.device.clone(),
         };
-        rendering.update_descriptor_set(context.device.clone(), hdr);
+        rendering.update_descriptor_set(context.device.clone(), cubemap);
         Ok(rendering)
     }
 
@@ -180,11 +179,11 @@ impl SkyboxRender {
         DescriptorPool::new(device, pool_info)
     }
 
-    pub fn update_descriptor_set(&self, device: Arc<Device>, hdr: &HdrCubemap) {
+    pub fn update_descriptor_set(&self, device: Arc<Device>, cubemap: &Cubemap) {
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(hdr.cubemap.view.handle)
-            .sampler(hdr.sampler.handle)
+            .image_view(cubemap.view.handle)
+            .sampler(cubemap.sampler.handle)
             .build();
         let image_infos = [image_info];
 
