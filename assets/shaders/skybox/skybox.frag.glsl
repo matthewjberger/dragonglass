@@ -38,6 +38,6 @@ vec4 srgb_to_linear(vec4 srgbIn)
 
 void main()
 {
-    vec3 envColor = srgb_to_linear(tonemap(texture(environmentMap, vert_texcoord))).rgb;
+    vec3 envColor = srgb_to_linear(tonemap(textureLod(environmentMap, vert_texcoord, 1.0))).rgb;
     outColor = vec4(envColor, 1.0);
 }
