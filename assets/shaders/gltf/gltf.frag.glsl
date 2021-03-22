@@ -10,6 +10,8 @@ layout(location=4) in vec3 inColor0;
 
 layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
 layout(binding=3) uniform sampler2D brdflut;
+layout(binding=4) uniform samplerCube prefilter;
+layout(binding=5) uniform samplerCube irradiance;
 
 layout(push_constant) uniform Material{
     vec4 baseColorFactor;
@@ -201,6 +203,19 @@ void main()
         vec4 emissiveMap = texture(textures[material.emissiveTextureIndex], tex_coord);
         color += srgb_to_linear(emissiveMap).rgb * material.emissiveFactor;
     }
+
+    color = vec3(1.0);
+
+    // glass
+    // vec3 I = normalize(inPosition - uboView.cameraPosition);
+    // float refractive_index = 1.00 / 1.52;
+    // vec3 R = refract(I, normalize(inNormal), refractive_index);
+    // color = textureLod(prefilter, R, 0.0).rgb;
+
+    // mirror
+    // vec3 I = normalize(inPosition - uboView.cameraPosition);
+    // vec3 R = reflect(I, normalize(inNormal));
+    // color = textureLod(prefilter, R, 0.0).rgb;
   
     color = pow(color, vec3(1.0 / 2.2));
     outColor = vec4(color, baseColor.a);

@@ -220,6 +220,7 @@ impl Scene {
     }
 
     pub fn load_skybox(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
+        // TODO: Reload environment map set
         self.environment_maps.hdr = load_hdr_map(
             context,
             &self.transient_command_pool,
