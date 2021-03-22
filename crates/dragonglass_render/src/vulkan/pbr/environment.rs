@@ -1,6 +1,6 @@
 use crate::vulkan::{
     core::{CommandPool, Context, ShaderCache},
-    pbr::{Brdflut, HdrCubemap},
+    pbr::{Brdflut, HdrCubemap, PrefilterCubemap},
 };
 use anyhow::Result;
 use log::info;
@@ -8,6 +8,7 @@ use log::info;
 pub struct EnvironmentMapSet {
     pub brdflut: Brdflut,
     pub hdr: HdrCubemap,
+    pub prefilter: PrefilterCubemap,
 }
 
 impl EnvironmentMapSet {
@@ -27,6 +28,13 @@ impl EnvironmentMapSet {
             shader_cache,
         )?;
 
-        Ok(Self { brdflut, hdr })
+        info!("Creating Prefilter cubemap");
+        let prefilter = PrefilterCubemap::new(context, command_pool, shader_cache, &hdr.cubemap)?;
+
+        Ok(Self {
+            brdflut,
+            hdr,
+            prefilter,
+        })
     }
 }

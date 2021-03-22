@@ -21,50 +21,34 @@ use std::{mem, path::Path, sync::Arc};
 use vk_mem::Allocator;
 
 #[allow(dead_code)]
-struct PushConstantHdr {
+struct PushConstantPrefilter {
     mvp: glm::Mat4,
+    roughness: f32,
+    num_samples: u32,
 }
 
-pub struct HdrCubemap {
+pub struct PrefilterCubemap {
+    // TODO: Cubemaps may need to include their own sampler
     pub cubemap: Cubemap,
     pub sampler: Sampler,
 }
 
-impl HdrCubemap {
+impl PrefilterCubemap {
     pub fn new(
         context: &Context,
         command_pool: &CommandPool,
-        path: impl AsRef<Path>,
         shader_cache: &mut ShaderCache,
+        cubemap: &Cubemap,
     ) -> Result<Self> {
-        let hdr_description = ImageDescription::from_hdr(path)?;
-        let hdr_texture = Texture::new(context, command_pool, &hdr_description)?;
-
-        let sampler_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::REPEAT)
-            .address_mode_v(vk::SamplerAddressMode::REPEAT)
-            .address_mode_w(vk::SamplerAddressMode::REPEAT)
-            .anisotropy_enable(true)
-            .max_anisotropy(16.0)
-            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-            .unnormalized_coordinates(false)
-            .compare_enable(false)
-            .compare_op(vk::CompareOp::ALWAYS)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .mip_lod_bias(0.0)
-            .min_lod(0.0)
-            .max_lod(hdr_description.mip_levels as _);
-        let hdr_sampler = Sampler::new(context.device.clone(), sampler_info)?;
-
-        let cubemap_description = ImageDescription::empty(
-            hdr_description.width,
-            hdr_description.width,
-            vk::Format::R32G32B32A32_SFLOAT,
+        let output_dimension = 512;
+        let output_cubemap_description = ImageDescription::empty(
+            output_dimension,
+            output_dimension,
+            vk::Format::R16G16B16A16_SFLOAT,
         );
-        let cubemap = Cubemap::new(context, command_pool, &cubemap_description)?;
+        let output_cubemap = Cubemap::new(context, command_pool, &output_cubemap_description)?;
 
+        // TODO: Remove this and use the input cubemap's sampler
         let sampler_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::LINEAR)
             .min_filter(vk::Filter::LINEAR)
@@ -80,13 +64,18 @@ impl HdrCubemap {
             .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
             .mip_lod_bias(0.0)
             .min_lod(0.0)
-            .max_lod(cubemap_description.mip_levels as _);
+            .max_lod(output_cubemap_description.mip_levels as _);
         let sampler = Sampler::new(context.device.clone(), sampler_info)?;
 
         let device = context.device.clone();
         let allocator = context.allocator.clone();
 
-        let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+        let rendergraph = rendergraph(
+            device.clone(),
+            allocator.clone(),
+            &output_cubemap_description,
+        )?;
+
         let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
         let color_image = rendergraph.image("color")?.handle();
 
@@ -94,17 +83,18 @@ impl HdrCubemap {
         let descriptor_pool = descriptor_pool(device.clone())?;
         let descriptor_set =
             descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
+
         update_descriptor_set(
             &device.handle,
             descriptor_set,
-            hdr_texture.view.handle,
-            hdr_sampler.handle,
+            cubemap.view.handle,
+            sampler.handle,
         );
 
         transition_cubemap_to_transfer_dst(
             command_pool,
-            cubemap.image.handle,
-            cubemap_description.mip_levels,
+            output_cubemap.image.handle,
+            output_cubemap_description.mip_levels,
         )?;
 
         let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
@@ -117,17 +107,19 @@ impl HdrCubemap {
             offscreen_renderpass,
         )?;
 
-        for mip_level in 0..cubemap_description.mip_levels {
+        for mip_level in 0..output_cubemap_description.mip_levels {
+            let dimension = output_cubemap_description.width as f32 * 0.5_f32.powf(mip_level as _);
+            let extent = vk::Extent2D::builder()
+                .width(dimension as _)
+                .height(dimension as _)
+                .build();
             for (face_index, matrix) in matrices.iter().enumerate() {
-                let dimension = hdr_description.width as f32 * 0.5_f32.powf(mip_level as _);
-                let extent = vk::Extent2D::builder()
-                    .width(dimension as _)
-                    .height(dimension as _)
-                    .build();
-
                 let pipeline_layout_handle = pipeline_layout.handle.clone();
-                let push_constants_hdr = PushConstantHdr {
+                let push_constants = PushConstantPrefilter {
                     mvp: projection * matrix,
+                    roughness: mip_level as f32
+                        / (output_cubemap_description.mip_levels - 1) as f32,
+                    num_samples: 32, // TODO: make this sit at the top of the file
                 };
 
                 command_pool.execute_once(|command_buffer| {
@@ -143,7 +135,7 @@ impl HdrCubemap {
                                     pipeline_layout.handle,
                                     vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                                     0,
-                                    byte_slice_from(&push_constants_hdr),
+                                    byte_slice_from(&push_constants),
                                 );
                                 device.handle.cmd_bind_pipeline(
                                     command_buffer,
@@ -196,7 +188,7 @@ impl HdrCubemap {
 
                 let copy_info = ImageToImageCopyBuilder::default()
                     .source(color_image)
-                    .destination(cubemap.image.handle)
+                    .destination(output_cubemap.image.handle)
                     .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                     .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .regions(vec![region])
@@ -210,23 +202,29 @@ impl HdrCubemap {
 
         transition_cubemap_to_shader_read(
             command_pool,
-            cubemap.image.handle,
-            cubemap_description.mip_levels,
+            output_cubemap.image.handle,
+            output_cubemap_description.mip_levels,
         )?;
 
         if let Ok(debug) = context.debug() {
-            debug.name_image("hdr_cubemap", cubemap.image.handle.as_raw())?;
-            debug.name_image_view("hdr_cubemap_view", cubemap.view.handle.as_raw())?;
+            debug.name_image("prefilter_cubemap", output_cubemap.image.handle.as_raw())?;
+            debug.name_image_view(
+                "prefilter_cubemap_view",
+                output_cubemap.view.handle.as_raw(),
+            )?;
         }
 
-        Ok(Self { cubemap, sampler })
+        Ok(Self {
+            cubemap: output_cubemap,
+            sampler,
+        })
     }
 }
 
 fn rendergraph(
     device: Arc<Device>,
     allocator: Arc<Allocator>,
-    hdr_description: &ImageDescription,
+    output_cubemap_description: &ImageDescription,
 ) -> Result<RenderGraph> {
     let offscreen = "offscreen";
     let color = "color";
@@ -235,10 +233,10 @@ fn rendergraph(
         vec![ImageNode {
             name: color.to_string(),
             extent: vk::Extent2D::builder()
-                .width(hdr_description.width)
-                .height(hdr_description.width) // Width instead of height to make it a square
+                .width(output_cubemap_description.width)
+                .height(output_cubemap_description.height)
                 .build(),
-            format: vk::Format::R32G32B32A32_SFLOAT,
+            format: output_cubemap_description.format,
             clear_value: vk::ClearValue {
                 color: vk::ClearColorValue {
                     float32: [1.0, 1.0, 1.0, 1.0],
@@ -310,7 +308,7 @@ pub fn update_descriptor_set(
 fn shader_paths() -> Result<ShaderPathSet> {
     let shader_path_set = ShaderPathSetBuilder::default()
         .vertex("assets/shaders/environment/filtercube.vert.spv")
-        .fragment("assets/shaders/environment/equirectangular_to_cubemap.frag.spv")
+        .fragment("assets/shaders/environment/prefilterenvmap.frag.spv")
         .build()
         .map_err(|error| anyhow!("{}", error))?;
     Ok(shader_path_set)
@@ -342,7 +340,7 @@ fn pipeline(
 ) -> Result<(Pipeline, PipelineLayout)> {
     let push_constant_range = vk::PushConstantRange::builder()
         .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-        .size(mem::size_of::<PushConstantHdr>() as u32)
+        .size(mem::size_of::<PushConstantPrefilter>() as u32)
         .build();
     let shader_paths = shader_paths()?;
     let shader_set = shader_cache.create_shader_set(device.clone(), &shader_paths)?;
