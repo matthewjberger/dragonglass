@@ -1,4 +1,5 @@
-pub use self::backend::VulkanRenderBackend;
+pub use self::device::VulkanRenderBackend;
 
-mod backend;
-mod render;
+mod device;
+mod scene;
+mod world;

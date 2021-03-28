@@ -1,6 +1,10 @@
-use crate::vulkan::backend::Scene;
-use crate::vulkan::render::{Light, WorldPipelineData, WorldUniformBuffer};
-use crate::Render;
+use crate::{
+    vulkan::{
+        scene::Scene,
+        world::{Light, WorldPipelineData, WorldUniformBuffer},
+    },
+    Render,
+};
 use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use dragonglass_physics::PhysicsWorld;

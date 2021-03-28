@@ -204,7 +204,7 @@ void main()
         color += srgb_to_linear(emissiveMap).rgb * material.emissiveFactor;
     }
 
-    color = vec3(1.0);
+    // color = vec3(1.0);
 
     // glass
     // vec3 I = normalize(inPosition - uboView.cameraPosition);

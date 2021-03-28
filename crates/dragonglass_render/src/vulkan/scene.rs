@@ -1,4 +1,4 @@
-use crate::vulkan::render::WorldRender;
+use crate::vulkan::world::WorldRender;
 use anyhow::{anyhow, Result};
 use ash::vk;
 use dragonglass_vulkan::{
@@ -45,11 +45,8 @@ impl Scene {
         let environment_maps =
             EnvironmentMapSet::new(context, &transient_command_pool, &mut shader_cache)?;
 
-        let skybox_render = SkyboxRender::new(
-            context,
-            &transient_command_pool,
-            &environment_maps.prefilter,
-        )?;
+        let skybox_render =
+            SkyboxRender::new(context, &transient_command_pool, &environment_maps.hdr)?;
 
         let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
         let gui_render = GuiRender::new(
