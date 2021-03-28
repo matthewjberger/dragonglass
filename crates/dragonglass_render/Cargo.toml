@@ -21,17 +21,7 @@ rapier3d = "0.4.2"
 raw-window-handle = "0.3.3"
 shader-compilation = { path = "../shader-compilation" }
 
-# Opted into by features
-ash = { version = "0.31.0", optional = true }
-ash-window = { version = "0.5.0", optional = true }
-vk-mem = { git = "https://github.com/gwihlidal/vk-mem-rs", optional = true }
-
 [build-dependencies]
 log = "0.4.11"
 shader-compilation = { path = "../shader-compilation" }
 simplelog = { version = "0.8.0", features = ["termcolor"] }
-
-[features]
-default = ["vulkan"]
-vulkan = ["ash", "ash-window", "vk-mem"]
-debug = []

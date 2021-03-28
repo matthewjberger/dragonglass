@@ -15,7 +15,12 @@ fn main() -> Result<()> {
 
 fn init_logger() -> Result<()> {
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::max(), Config::default(), TerminalMode::Mixed),
+        TermLogger::new(
+            LevelFilter::max(),
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
         WriteLogger::new(
             LevelFilter::Info,
             Config::default(),

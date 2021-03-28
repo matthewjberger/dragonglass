@@ -5,7 +5,6 @@ use imgui::{Context as ImguiContext, DrawData};
 use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 
-#[cfg(feature = "vulkan")]
 use crate::vulkan::VulkanRenderBackend;
 
 pub enum Backend {
@@ -37,7 +36,6 @@ impl dyn Render {
         imgui: &mut ImguiContext,
     ) -> Result<impl Render> {
         match backend {
-            #[cfg(feature = "vulkan")]
             Backend::Vulkan => VulkanRenderBackend::new(window_handle, dimensions, imgui),
         }
     }

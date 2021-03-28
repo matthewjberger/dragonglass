@@ -1,8 +1,8 @@
 use crate::byte_slice_from;
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
 use dragonglass_physics::{PhysicsWorld, RigidBody};
 use dragonglass_vulkan::{
+    ash::{version::DeviceV1_0, vk},
     core::{
         CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
         GeometryBuffer, GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline,

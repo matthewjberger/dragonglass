@@ -5,5 +5,4 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-nalgebra-glm = "0.9.0"
 rapier3d = "0.4.2"
