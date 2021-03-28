@@ -507,6 +507,7 @@ dependencies = [
  "dragonglass_app",
  "dragonglass_physics",
  "dragonglass_render",
+ "dragonglass_vulkan",
  "dragonglass_world",
 ]
 
@@ -539,6 +540,30 @@ dependencies = [
 
 [[package]]
 name = "dragonglass_render"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash",
+ "ash-window",
+ "derive_builder",
+ "dragonglass_physics",
+ "dragonglass_world",
+ "hecs",
+ "image",
+ "imgui",
+ "log",
+ "nalgebra-glm",
+ "ncollide3d",
+ "petgraph",
+ "rapier3d",
+ "raw-window-handle",
+ "shader-compilation",
+ "simplelog 0.8.0",
+ "vk-mem",
+]
+
+[[package]]
+name = "dragonglass_vulkan"
 version = "0.1.0"
 dependencies = [
  "anyhow",
