@@ -547,6 +547,7 @@ dependencies = [
  "ash-window",
  "derive_builder",
  "dragonglass_physics",
+ "dragonglass_vulkan",
  "dragonglass_world",
  "hecs",
  "image",

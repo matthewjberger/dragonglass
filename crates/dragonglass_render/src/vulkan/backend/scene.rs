@@ -1,13 +1,14 @@
-use crate::vulkan::{
+use crate::vulkan::render::WorldRender;
+use anyhow::{anyhow, Result};
+use ash::vk;
+use dragonglass_vulkan::{
     core::{
         CommandPool, Context, Device, Image, ImageNode, RawImage, RenderGraph, ShaderCache,
         ShaderPathSetBuilder, Swapchain, SwapchainProperties,
     },
     pbr::{load_hdr_map, EnvironmentMapSet},
-    render::{FullscreenRender, GuiRender, SkyboxRender, WorldRender},
+    render::{FullscreenRender, GuiRender, SkyboxRender},
 };
-use anyhow::{anyhow, Result};
-use ash::vk;
 use dragonglass_world::World;
 use imgui::Context as ImguiContext;
 use std::{path::Path, sync::Arc};
