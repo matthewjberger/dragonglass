@@ -26,7 +26,7 @@ impl EnvironmentMapSet {
         let hdr = load_hdr_map(
             context,
             command_pool,
-            "assets/skyboxes/desert.hdr",
+            "assets/skyboxes/night.hdr",
             shader_cache,
         )?;
 
