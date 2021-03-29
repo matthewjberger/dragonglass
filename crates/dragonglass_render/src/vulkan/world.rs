@@ -566,8 +566,8 @@ impl WorldRender {
 
     fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/gltf/gltf.vert.spv")
-            .fragment("assets/shaders/gltf/gltf.frag.spv")
+            .vertex("assets/shaders/model/model.vert.spv")
+            .fragment("assets/shaders/model/model.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)

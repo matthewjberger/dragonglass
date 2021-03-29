@@ -37,7 +37,7 @@ impl Editor {
     fn setup_file_reloading(&mut self) -> Result<()> {
         let reload_shaders = self.reload_shaders.clone();
         let mut hotwatch = Hotwatch::new()?;
-        hotwatch.watch("assets/shaders/gltf", move |event: Event| {
+        hotwatch.watch("assets/shaders/model", move |event: Event| {
             if let Event::Write(path) = event {
                 if let Some(extension) = path.extension() {
                     // Don't need to reload shaders again

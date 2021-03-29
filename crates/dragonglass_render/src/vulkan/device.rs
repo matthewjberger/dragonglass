@@ -76,12 +76,12 @@ impl Render for VulkanRenderBackend {
         self.scene
             .shader_cache
             .shaders
-            .remove("assets/shaders/gltf/gltf.vert.spv");
+            .remove("assets/shaders/model/model.vert.spv");
         self.scene
             .shader_cache
             .shaders
-            .remove("assets/shaders/gltf/gltf.frag.spv");
-        if compile_shaders("assets/shaders/gltf/*.glsl").is_err() {
+            .remove("assets/shaders/model/model.frag.spv");
+        if compile_shaders("assets/shaders/model/*.glsl").is_err() {
             error!("Failed to recompile asset shaders!");
             return Ok(());
         }
