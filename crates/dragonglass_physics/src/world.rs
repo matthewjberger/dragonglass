@@ -1,14 +1,9 @@
-use crate::Handle;
 use rapier3d::{
     dynamics::{IntegrationParameters, JointSet, RigidBodySet},
     geometry::{BroadPhase, ColliderSet, NarrowPhase},
     na::Vector3,
     pipeline::{PhysicsPipeline, QueryPipeline},
 };
-
-pub struct RigidBody {
-    pub handle: Handle,
-}
 
 pub struct PhysicsWorld {
     pub gravity: Vector3<f32>,
@@ -44,7 +39,7 @@ impl PhysicsWorld {
     }
 
     pub fn update(&mut self, delta_time: f32) {
-        self.integration_parameters.set_dt(delta_time);
+        self.integration_parameters.dt = delta_time;
 
         // We ignore contact events for now.
         let event_handler = ();
@@ -59,8 +54,7 @@ impl PhysicsWorld {
             &mut self.bodies,
             &mut self.colliders,
             &mut self.joints,
-            None,
-            None,
+            &(),
             &event_handler,
         );
     }

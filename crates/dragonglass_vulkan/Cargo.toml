@@ -5,24 +5,24 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.34"
+anyhow = "1.0.40"
 derive_builder = "0.9.0"
 dragonglass_world = { path = "../dragonglass_world" }
-log = "0.4.11"
-image = "0.23.12"
-imgui = "0.6.1"
-nalgebra-glm = "0.9.0"
-ncollide3d = "0.26.1"
+log = "0.4.14"
+image = "0.23.14"
+imgui = "0.7.0"
+nalgebra-glm = "0.11.0"
+ncollide3d = "0.28.0"
 hecs = { git = "https://github.com/Ralith/hecs", features = ["serde"] }
 petgraph = "0.5.1"
 raw-window-handle = "0.3.3"
 shader-compilation = { path = "../shader-compilation" }
 
-ash = "0.31.0"
-ash-window = "0.5.0"
+ash = "0.32.0"
+ash-window = "0.6.0"
 vk-mem = { git = "https://github.com/gwihlidal/vk-mem-rs" }
 
 [build-dependencies]
-log = "0.4.11"
+log = "0.4.14"
 shader-compilation = { path = "../shader-compilation" }
 simplelog = { version = "0.10.0", features = ["termcolor"] }

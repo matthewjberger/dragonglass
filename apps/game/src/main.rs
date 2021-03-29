@@ -8,7 +8,6 @@ use dragonglass::{
     },
 };
 use imgui::{im_str, Condition, Ui, Window};
-use nalgebra::Point3;
 use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::BodyStatus,
@@ -122,7 +121,6 @@ impl ApplicationRunner for Game {
         for entity in level_meshes.into_iter() {
             add_rigid_body(application, entity, BodyStatus::Static)?;
             add_box_collider(application, entity, LEVEL_COLLISION_GROUP)?;
-            // add_trimesh_collider(application, entity, LEVEL_COLLISION_GROUP)?;
         }
 
         // Setup player
@@ -249,49 +247,6 @@ fn add_cylinder_collider(
     let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
     let (half_height, radius) = (1.0, 0.5);
     let collider = ColliderBuilder::cylinder(half_height, radius)
-        .collision_groups(collision_groups)
-        .build();
-    application.physics_world.colliders.insert(
-        collider,
-        rigid_body_handle,
-        &mut application.physics_world.bodies,
-    );
-    Ok(())
-}
-
-fn add_trimesh_collider(
-    application: &mut Application,
-    entity: Entity,
-    collision_groups: InteractionGroups,
-) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
-    let (vertices, indices) = {
-        let mesh = application.ecs.get::<Mesh>(entity)?;
-        let mut indices = Vec::new();
-        let mut vertices = Vec::new();
-        let mut index_offset = 0;
-        for primitive in mesh.primitives.iter() {
-            let vertex_offset = primitive.first_vertex as u32;
-            let world_indices = &application.world.geometry.indices
-                [primitive.first_index..(primitive.first_index + primitive.number_of_indices)];
-            for offset in 0..world_indices.len() / 3 {
-                let index = offset * 3;
-                indices.push(Point3::new(
-                    world_indices[index] - vertex_offset + index_offset,
-                    world_indices[index + 1] - vertex_offset + index_offset,
-                    world_indices[index + 2] - vertex_offset + index_offset,
-                ));
-            }
-            let world_vertices = &application.world.geometry.vertices
-                [primitive.first_vertex..(primitive.first_vertex + primitive.number_of_vertices)];
-            for vertex in world_vertices.iter() {
-                vertices.push(Point3::from(vertex.position));
-            }
-            index_offset += world_vertices.len() as u32;
-        }
-        (vertices, indices)
-    };
-    let collider = ColliderBuilder::trimesh(vertices, indices)
         .collision_groups(collision_groups)
         .build();
     application.physics_world.colliders.insert(

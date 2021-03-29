@@ -5,13 +5,13 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.36"
+anyhow = "1.0.40"
 dragonglass = { path = "../.." }
 hecs = { git = "https://github.com/Ralith/hecs", features = ["serde"] }
-imgui = "0.6.1"
-log = "0.4.11"
-nalgebra = "0.23.2"
-nalgebra-glm = "0.9.0"
-ncollide3d = "0.26.1"
-rapier3d = "0.4.2"
+imgui = "0.7.0"
+log = "0.4.14"
+nalgebra = "0.25.3"
+nalgebra-glm = "0.11.0"
+ncollide3d = "0.28.0"
+rapier3d = "0.6.1"
 winit = "0.24.0"

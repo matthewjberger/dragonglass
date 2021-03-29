@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 glob = "0.3.0"
-log = "0.4.11"
+log = "0.4.14"

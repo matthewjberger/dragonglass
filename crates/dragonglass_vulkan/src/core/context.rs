@@ -36,7 +36,7 @@ impl Context {
         let device_extensions = Self::device_extensions();
         let features = Self::features();
 
-        let entry = ash::Entry::new()?;
+        let entry = unsafe { ash::Entry::new()? };
         let instance = Instance::new(&entry, &instance_extensions, &layers)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;

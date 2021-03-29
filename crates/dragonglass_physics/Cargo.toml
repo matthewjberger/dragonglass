@@ -5,4 +5,4 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-rapier3d = "0.4.2"
+rapier3d = "0.6.1"

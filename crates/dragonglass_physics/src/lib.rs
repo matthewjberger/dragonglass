@@ -1,7 +1,7 @@
 mod world;
 
 pub use self::world::*;
-pub type Handle = rapier3d::data::arena::Index;
+pub type Handle = rapier3d::dynamics::RigidBodyHandle;
 
 pub struct RigidBody {
     pub handle: Handle,

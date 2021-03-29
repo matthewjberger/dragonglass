@@ -1,12 +1,19 @@
 use anyhow::{Context, Result};
-use simplelog::{CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger};
+use simplelog::{
+    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+};
 use std::fs::File;
 
 pub const LOG_FILE: &str = "dragonglass.log";
 
 pub fn create_logger() -> Result<()> {
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed),
+        TermLogger::new(
+            LevelFilter::Info,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
         WriteLogger::new(
             LevelFilter::max(),
             Config::default(),

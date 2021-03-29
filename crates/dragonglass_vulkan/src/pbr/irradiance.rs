@@ -4,7 +4,7 @@ use crate::{
         transition_image, CommandPool, Context, Cubemap, DescriptorPool, DescriptorSetLayout,
         Device, GraphicsPipelineSettingsBuilder, ImageDescription, ImageLayoutTransitionBuilder,
         ImageNode, ImageToImageCopyBuilder, Pipeline, PipelineLayout, RenderGraph, RenderPass,
-        Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
+        ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
     },
     geometry::Cube,
 };
