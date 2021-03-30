@@ -66,7 +66,7 @@ void main()
   gl_Position = uboView.projection * uboView.view * skinnedModel * vec4(inPosition, 1.0);
 
   outPosition = inPosition; 
-  outNormal = mat3(transpose(inverse(skinnedModel))) * inNormal;
+  outNormal = normalize(transpose(inverse(mat3(uboInstance.model * skinMatrix))) * inNormal);
   outUV0 = inUV0;
   outUV1 = inUV1;
   outColor0 = inColor0;

@@ -30,11 +30,11 @@ pub fn load_irradiance_map(
     shader_cache: &mut ShaderCache,
     cubemap: &Cubemap,
 ) -> Result<Cubemap> {
-    let output_dimension = 512;
+    let output_dimension = 64;
     let output_cubemap_description = ImageDescription::empty(
         output_dimension,
         output_dimension,
-        vk::Format::R16G16B16A16_SFLOAT,
+        vk::Format::R32G32B32A32_SFLOAT,
     );
     let output_cubemap = Cubemap::new(context, command_pool, &output_cubemap_description)?;
 

@@ -1,7 +1,6 @@
 use anyhow::Result;
 use dragonglass::{app::Application, world::Transform};
 use nalgebra_glm as glm;
-use winit::event::VirtualKeyCode;
 
 pub(crate) struct Arcball {
     direction: glm::Vec2,
