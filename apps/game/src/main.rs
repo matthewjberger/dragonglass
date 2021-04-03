@@ -1,17 +1,16 @@
 use anyhow::Result;
 use dragonglass::{
-    app::Application,
-    app::{run_application, AppConfig, ApplicationRunner},
+    app::{run_application, AppConfig, Application, ApplicationRunner, Camera},
     physics::RigidBody,
     world::{
-        Camera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera, Projection, Transform,
+        Camera as WorldCamera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera,
+        Projection, Transform,
     },
 };
 use imgui::{im_str, Condition, Ui, Window};
 use nalgebra_glm as glm;
 use rapier3d::{
-    dynamics::BodyStatus,
-    dynamics::RigidBodyBuilder,
+    dynamics::{BodyStatus, RigidBodyBuilder},
     geometry::{ColliderBuilder, InteractionGroups},
 };
 use winit::event::{ElementState, VirtualKeyCode};
@@ -26,10 +25,14 @@ const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b
 #[derive(Default)]
 pub struct Game {
     player: Option<Entity>,
+    camera: Camera,
 }
 
 impl ApplicationRunner for Game {
     fn initialize(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
+        application.set_fullscreen();
+        self.camera.use_fps = true;
+
         // Load light 1
         {
             let position = glm::vec3(-2.0, 5.0, 0.0);
@@ -156,8 +159,13 @@ impl ApplicationRunner for Game {
     }
 
     fn update(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
+        if application.input.is_key_pressed(VirtualKeyCode::Escape) {
+            application.system.exit_requested = true;
+        }
+
         sync_all_rigid_bodies(application);
         if let Some(player) = self.player.as_ref() {
+            self.camera.update(application, *player)?;
             update_player(application, *player)?;
         }
         Ok(())
@@ -335,12 +343,15 @@ fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
 fn activate_first_person(application: &mut Application, entity: Entity) -> Result<()> {
     // Disable active camera
     let camera_entity = application.world.active_camera(&mut application.ecs)?;
-    application.ecs.get_mut::<Camera>(camera_entity)?.enabled = false;
+    application
+        .ecs
+        .get_mut::<WorldCamera>(camera_entity)?
+        .enabled = false;
 
     application.ecs.insert_one(entity, Hidden {})?;
     application.ecs.insert_one(
         entity,
-        Camera {
+        WorldCamera {
             name: "Player Camera".to_string(),
             projection: Projection::Perspective(PerspectiveCamera {
                 aspect_ratio: None,

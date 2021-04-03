@@ -1,11 +1,10 @@
-use crate::camera::Arcball;
 use anyhow::Result;
 use dragonglass::{
-    app::{Application, ApplicationRunner},
-    world::{load_gltf, BoxCollider, BoxColliderVisible, Camera, Mesh, Selected},
+    app::{Application, ApplicationRunner, Camera},
+    world::{load_gltf, BoxCollider, BoxColliderVisible, Camera as WorldCamera, Mesh, Selected},
 };
 use hotwatch::{Event, Hotwatch};
-use imgui::{im_str, Ui};
+use imgui::{im_str, Condition, Ui, Window};
 use log::{error, info, warn};
 use std::{
     ffi::OsStr,
@@ -18,7 +17,7 @@ use std::{
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 pub struct Editor {
-    arcball: Arcball,
+    camera: Camera,
     _hotwatch: Option<Hotwatch>,
     reload_shaders: Arc<AtomicBool>,
 }
@@ -26,7 +25,7 @@ pub struct Editor {
 impl Default for Editor {
     fn default() -> Self {
         Self {
-            arcball: Arcball::default(),
+            camera: Camera::default(),
             _hotwatch: None,
             reload_shaders: Arc::new(AtomicBool::new(false)),
         }
@@ -109,55 +108,62 @@ impl ApplicationRunner for Editor {
     }
 
     fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
-        ui.text(im_str!(
-            "Number of entities: {}",
-            application.ecs.iter().count()
-        ));
-        let number_of_meshes = application.ecs.query::<&Mesh>().iter().count();
-        ui.text(im_str!("Number of meshes: {}", number_of_meshes));
-        ui.text(im_str!(
-            "Number of animations: {}",
-            application.world.animations.len()
-        ));
-        ui.text(im_str!(
-            "Number of textures: {}",
-            application.world.textures.len()
-        ));
-        ui.text(im_str!(
-            "Number of materials: {}",
-            application.world.materials.len()
-        ));
-        ui.text(im_str!(
-            "Number of collision_objects: {}",
-            application.collision_world.collision_objects().count()
-        ));
+        Window::new(im_str!("Scene Info"))
+            .collapsed(true, Condition::FirstUseEver)
+            .build(ui, || {
+                ui.text(im_str!(
+                    "Number of entities: {}",
+                    application.ecs.iter().count()
+                ));
 
-        ui.separator();
-        ui.text(im_str!("Cameras"));
-        let mut change_camera = None;
-        for (index, (entity, camera)) in application.ecs.query::<&Camera>().iter().enumerate() {
-            let label = if camera.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            };
-            let clicked = ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
-            if change_camera.is_none() && clicked {
-                change_camera = Some(entity);
-            }
-        }
-        if let Some(selected_camera_entity) = change_camera {
-            for (entity, camera) in application.ecs.query_mut::<&mut Camera>() {
-                camera.enabled = entity == selected_camera_entity;
-            }
-        }
+                let number_of_meshes = application.ecs.query::<&Mesh>().iter().count();
+                ui.text(im_str!("Number of meshes: {}", number_of_meshes));
+                ui.text(im_str!(
+                    "Number of animations: {}",
+                    application.world.animations.len()
+                ));
+                ui.text(im_str!(
+                    "Number of textures: {}",
+                    application.world.textures.len()
+                ));
+                ui.text(im_str!(
+                    "Number of materials: {}",
+                    application.world.materials.len()
+                ));
+                ui.text(im_str!(
+                    "Number of collision_objects: {}",
+                    application.collision_world.collision_objects().count()
+                ));
 
-        ui.separator();
-        ui.text(im_str!("Selected Entities"));
-        for (entity, _) in application.ecs.query::<&Selected>().iter() {
-            ui.text(im_str!("{:#?}", entity));
-        }
+                ui.separator();
+                ui.text(im_str!("Cameras"));
+                let mut change_camera = None;
+                for (index, (entity, camera)) in
+                    application.ecs.query::<&WorldCamera>().iter().enumerate()
+                {
+                    let label = if camera.enabled {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    };
+                    let clicked =
+                        ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
+                    if change_camera.is_none() && clicked {
+                        change_camera = Some(entity);
+                    }
+                }
+                if let Some(selected_camera_entity) = change_camera {
+                    for (entity, camera) in application.ecs.query_mut::<&mut WorldCamera>() {
+                        camera.enabled = entity == selected_camera_entity;
+                    }
+                }
 
+                ui.separator();
+                ui.text(im_str!("Selected Entities"));
+                for (entity, _) in application.ecs.query::<&Selected>().iter() {
+                    ui.text(im_str!("{:#?}", entity));
+                }
+            });
         Ok(())
     }
 
@@ -187,7 +193,8 @@ impl ApplicationRunner for Editor {
             .world
             .active_camera_is_main(&mut application.ecs)?
         {
-            self.arcball.update(application)?;
+            let camera_entity = application.world.active_camera(&mut application.ecs)?;
+            self.camera.update(application, camera_entity)?;
         }
 
         self.show_hovered_object_collider(application)?;
@@ -202,6 +209,8 @@ impl ApplicationRunner for Editor {
         keycode: VirtualKeyCode,
     ) -> Result<()> {
         match (keycode, keystate) {
+            // (VirtualKeyCode::LAlt, ElementState::Pressed) => self.camera.use_fps = true,
+            // (VirtualKeyCode::LAlt, ElementState::Released) => self.camera.use_fps = false,
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 Self::clear_colliders(application);

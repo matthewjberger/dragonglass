@@ -1,4 +1,3 @@
-mod camera;
 mod editor;
 
 use anyhow::Result;

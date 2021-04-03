@@ -94,6 +94,13 @@ impl Application {
             .set_cursor_position(PhysicalPosition::new(position.x, position.y))?)
     }
 
+    pub fn set_fullscreen(&mut self) {
+        self.window
+            .set_fullscreen(Some(winit::window::Fullscreen::Borderless(
+                self.window.primary_monitor(),
+            )));
+    }
+
     pub fn load_asset(&mut self, path: &str) -> Result<()> {
         load_gltf(path, &mut self.world, &mut self.ecs)?;
         Ok(())
