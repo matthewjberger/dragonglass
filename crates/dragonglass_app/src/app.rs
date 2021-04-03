@@ -17,9 +17,9 @@ use ncollide3d::{
 };
 use std::{collections::HashMap, path::PathBuf};
 use winit::{
+    dpi::PhysicalPosition,
     dpi::PhysicalSize,
-    event::MouseButton,
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, Window, WindowBuilder},
 };
@@ -72,9 +72,28 @@ pub struct Application {
     pub input: Input,
     pub system: System,
     pub renderer: Box<dyn Render>,
+    pub window: Window,
 }
 
 impl Application {
+    pub fn set_cursor_grab(&mut self, grab: bool) -> Result<()> {
+        Ok(self.window.set_cursor_grab(grab)?)
+    }
+
+    pub fn set_cursor_visible(&mut self, visible: bool) {
+        self.window.set_cursor_visible(visible)
+    }
+
+    pub fn center_cursor(&mut self) -> Result<()> {
+        Ok(self.set_cursor_position(&self.system.window_center())?)
+    }
+
+    pub fn set_cursor_position(&mut self, position: &glm::Vec2) -> Result<()> {
+        Ok(self
+            .window
+            .set_cursor_position(PhysicalPosition::new(position.x, position.y))?)
+    }
+
     pub fn load_asset(&mut self, path: &str) -> Result<()> {
         load_gltf(path, &mut self.world, &mut self.ecs)?;
         Ok(())
@@ -293,19 +312,13 @@ pub fn run_application(
         input: Input::default(),
         system: System::new(window_dimensions),
         renderer,
+        window,
     };
 
     runner.initialize(&mut state)?;
 
     event_loop.run(move |event, _, control_flow| {
-        if let Err(error) = run_loop(
-            &mut runner,
-            &window,
-            &mut state,
-            &mut gui,
-            event,
-            control_flow,
-        ) {
+        if let Err(error) = run_loop(&mut runner, &mut state, &mut gui, event, control_flow) {
             error!("Application Error: {}", error);
         }
     });
@@ -313,7 +326,6 @@ pub fn run_application(
 
 fn run_loop(
     runner: &mut impl ApplicationRunner,
-    window: &Window,
     application: &mut Application,
     gui: &mut Gui,
     event: Event<()>,
@@ -322,7 +334,7 @@ fn run_loop(
     *control_flow = ControlFlow::Poll;
 
     application.system.handle_event(&event);
-    gui.handle_event(&event, &window);
+    gui.handle_event(&event, &application.window);
     application
         .input
         .handle_event(&event, application.system.window_center());
@@ -335,7 +347,12 @@ fn run_loop(
             }
         }
         Event::MainEventsCleared => {
-            let draw_data = gui.render_frame(&window, |ui| runner.create_ui(application, ui))?;
+            gui.prepare_frame(&application.window)?;
+            let ui = gui.context.frame();
+            runner.create_ui(application, &ui)?;
+            gui.platform.prepare_render(&ui, &application.window);
+            let draw_data = ui.render();
+
             runner.update(application)?;
             application.update()?;
             application.render(draw_data)?;

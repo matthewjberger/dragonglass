@@ -1,11 +1,11 @@
 use anyhow::Result;
-use imgui::{Context, DrawData, FontConfig, FontSource, Ui};
+use imgui::{Context, FontConfig, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use winit::{event::Event, window::Window};
 
 pub struct Gui {
-    context: Context,
-    platform: WinitPlatform,
+    pub context: Context,
+    pub platform: WinitPlatform,
 }
 
 impl Gui {
@@ -30,27 +30,13 @@ impl Gui {
         Self { context, platform }
     }
 
+    pub fn prepare_frame(&mut self, window: &Window) -> Result<()> {
+        Ok(self.platform.prepare_frame(self.context.io_mut(), window)?)
+    }
+
     pub fn handle_event<T>(&mut self, event: &Event<T>, window: &Window) {
         self.platform
             .handle_event(self.context.io_mut(), window, event);
-    }
-
-    pub fn render_frame(
-        &mut self,
-        window: &Window,
-        mut action: impl FnMut(&Ui) -> Result<()>,
-    ) -> Result<&DrawData> {
-        self.platform.prepare_frame(self.context.io_mut(), window)?;
-
-        let ui = self.context.frame();
-
-        action(&ui)?;
-
-        self.platform.prepare_render(&ui, window);
-
-        let draw_data = ui.render();
-
-        Ok(draw_data)
     }
 
     pub fn context_mut(&mut self) -> &mut Context {
