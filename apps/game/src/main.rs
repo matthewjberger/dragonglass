@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{run_application, AppConfig, Application, ApplicationRunner, Camera},
+    app::{run_application, AppConfig, Application, ApplicationRunner, MouseLook},
     physics::RigidBody,
     world::{
         Camera as WorldCamera, Entity, Hidden, Light, LightKind, Mesh, PerspectiveCamera,
@@ -25,13 +25,13 @@ const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b
 #[derive(Default)]
 pub struct Game {
     player: Option<Entity>,
-    camera: Camera,
+    camera: MouseLook,
 }
 
 impl ApplicationRunner for Game {
     fn initialize(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
         application.set_fullscreen();
-        self.camera.use_fps = true;
+        self.camera.orientation.sensitivity = glm::vec2(0.05, 0.05);
 
         // Load light 1
         {

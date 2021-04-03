@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{Application, ApplicationRunner, Camera},
+    app::{Application, ApplicationRunner, MouseOrbit},
     world::{load_gltf, BoxCollider, BoxColliderVisible, Camera as WorldCamera, Mesh, Selected},
 };
 use hotwatch::{Event, Hotwatch};
@@ -17,7 +17,7 @@ use std::{
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 pub struct Editor {
-    camera: Camera,
+    camera: MouseOrbit,
     _hotwatch: Option<Hotwatch>,
     reload_shaders: Arc<AtomicBool>,
 }
@@ -25,7 +25,7 @@ pub struct Editor {
 impl Default for Editor {
     fn default() -> Self {
         Self {
-            camera: Camera::default(),
+            camera: MouseOrbit::default(),
             _hotwatch: None,
             reload_shaders: Arc::new(AtomicBool::new(false)),
         }
