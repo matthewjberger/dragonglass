@@ -102,22 +102,9 @@ impl ApplicationRunner for Game {
         application.reload_world()?;
 
         // Add static box colliders to level meshes
-        let level_mesh_names = vec![
-            "Cube.006",
-            "Cube.002",
-            "Sphere",
-            "Cube.003",
-            "Cube.004",
-            "Cube.005",
-            "Torus",
-            "Cylinder",
-            "Icosphere",
-        ];
         let mut level_meshes = Vec::new();
         for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
-            if level_mesh_names.iter().any(|x| **x == mesh.name) {
-                level_meshes.push(entity);
-            }
+            level_meshes.push(entity);
             log::info!("Mesh available: {}", mesh.name);
         }
 
