@@ -9,9 +9,9 @@ layout(location=4) in vec3 inColor0;
 #define MAX_NUMBER_OF_TEXTURES 200
 
 layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
-layout(binding=3) uniform sampler2D brdflut;
-layout(binding=4) uniform samplerCube prefilter;
-layout(binding=5) uniform samplerCube irradiance;
+// layout(binding=3) uniform sampler2D brdflut;
+// layout(binding=4) uniform samplerCube prefilter;
+// layout(binding=5) uniform samplerCube irradiance;
 
 layout(push_constant) uniform Material{
     vec4 baseColorFactor;
