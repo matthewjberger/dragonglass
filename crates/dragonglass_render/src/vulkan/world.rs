@@ -1,6 +1,6 @@
 use crate::byte_slice_from;
 use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
-use dragonglass_physics::{PhysicsWorld, RigidBody};
+use dragonglass_physics::PhysicsWorld;
 use dragonglass_vulkan::{
     ash::{version::DeviceV1_0, vk},
     core::{
@@ -14,12 +14,10 @@ use dragonglass_vulkan::{
     render::CubeRender,
 };
 use dragonglass_world::{
-    AlphaMode, BoxCollider, BoxColliderVisible, Ecs, Filter, Geometry, Hidden, LightKind, Material,
-    Mesh, Scene, Selected, Skin, Transform, Vertex, World, WrappingMode,
+    AlphaMode, Ecs, Filter, Geometry, Hidden, LightKind, Material, Mesh, Scene, Skin, Transform,
+    Vertex, World, WrappingMode,
 };
-use log::warn;
 use nalgebra_glm as glm;
-use ncollide3d::{shape::Cuboid, world::CollisionWorld};
 use std::{mem, sync::Arc};
 
 pub struct PushConstantMaterial {
@@ -643,8 +641,7 @@ impl WorldRender {
         command_buffer: vk::CommandBuffer,
         ecs: &mut Ecs,
         world: &World,
-        physics_world: &PhysicsWorld,
-        collision_world: &CollisionWorld<f32, ()>,
+        _physics_world: &PhysicsWorld,
         aspect_ratio: f32,
     ) -> Result<()> {
         let pipeline = self
@@ -700,64 +697,6 @@ impl WorldRender {
                     }
 
                     if let Ok(mesh) = ecs.get::<Mesh>(entity) {
-
-                        let bounding_box_color =
-                        if ecs.get::<Selected>(entity).is_ok() {
-                            Some(glm::vec4(0.0, 1.0, 0.0, 1.0))
-                        } else if ecs.get::<BoxColliderVisible>(entity).is_ok() {
-                            Some(glm::vec4(0.0, 0.0, 1.0, 1.0))
-                        } else {
-                            None
-                        };
-
-                        if let Some(display_color) = bounding_box_color {
-                            if let Ok(collider) = ecs.get::<BoxCollider>(entity) {
-                                if let Some(collision_object) = collision_world.collision_object(collider.handle) {
-                                    let position = collision_object.position();
-                                    let translation = position.translation;
-                                    let rotation = position.rotation;
-                                    if let Some(cuboid) = collision_object.shape().as_shape::<Cuboid<f32>>() {
-                                        let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
-                                        let rotation = glm::quat_to_mat4(&rotation);
-                                        let scale = glm::scaling(&(cuboid.half_extents * 2.0));
-                                        self.cube_render.issue_commands(
-                                            command_buffer,
-                                            projection * view * offset * rotation * scale,
-                                            display_color,
-                                            false,
-                                        )?;
-                                    } else {
-                                        warn!("Found a collision object without a cuboid collison shape. Skipping visualization...");
-                                    };
-                                }
-                            }
-                        }
-
-                        // Render physics box collider
-                        // if let Ok(rigid_body) = ecs.get::<RigidBody>(entity) {
-                        //     if let Some(body) = physics_world.bodies.get(rigid_body.handle) {
-                        //         let position = body.position();
-                        //         let translation = position.translation.vector;
-                        //         let rotation = *position.rotation.quaternion();
-                        //         for collider_handle in body.colliders().iter() {
-                        //             if let Some(collider) = physics_world.colliders.get(*collider_handle) {
-                        //                 let shape = collider.shape();
-                        //                     if let Some(cuboid) = shape.as_cuboid() {
-                        //                         let offset = glm::translation(&glm::vec3(translation.x, translation.y, translation.z));
-                        //                         let rotation = glm::quat_to_mat4(&rotation);
-                        //                         let scale = glm::scaling(&(cuboid.half_extents * 2.0));
-                        //                         self.cube_render.issue_commands(
-                        //                             command_buffer,
-                        //                             projection * view * offset * rotation * scale,
-                        //                             glm::vec4(0.0, 1.0, 1.0, 1.0),
-                        //                             false,
-                        //                         )?;
-                        //                     }
-                        //                 }
-                        //             }
-                        //         }
-                        // }
-
                         if self.wireframe_enabled {
                             pipeline_wireframe.bind(&self.device.handle, command_buffer);
                         } else {

@@ -14,7 +14,6 @@ log = "0.4.14"
 image = "0.23.14"
 imgui = "0.7.0"
 nalgebra-glm = "0.11.0"
-ncollide3d = "0.28.0"
 hecs = { git = "https://github.com/Ralith/hecs", features = ["serde"] }
 petgraph = "0.5.1"
 rapier3d = "0.6.1"

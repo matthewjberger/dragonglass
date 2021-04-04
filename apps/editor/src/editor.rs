@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    world::{load_gltf, BoxCollider, BoxColliderVisible, Camera as WorldCamera, Mesh, Selected},
+    world::{load_gltf, Camera as WorldCamera, Mesh},
 };
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
@@ -78,26 +78,6 @@ impl Editor {
             }
         }
     }
-
-    fn show_hovered_object_collider(&self, application: &mut Application) -> Result<()> {
-        application
-            .world
-            .remove_all::<BoxColliderVisible>(&mut application.ecs);
-        if let Some(entity) = application.pick_object(f32::MAX)? {
-            let _ = application.ecs.insert_one(entity, BoxColliderVisible {});
-        }
-        Ok(())
-    }
-
-    fn clear_colliders(application: &mut Application) {
-        let colliders = application
-            .ecs
-            .query::<&BoxCollider>()
-            .iter()
-            .map(|(_entity, collider)| collider.handle)
-            .collect::<Vec<_>>();
-        application.collision_world.remove(&colliders);
-    }
 }
 
 impl ApplicationRunner for Editor {
@@ -130,10 +110,6 @@ impl ApplicationRunner for Editor {
                     "Number of materials: {}",
                     application.world.materials.len()
                 ));
-                ui.text(im_str!(
-                    "Number of collision_objects: {}",
-                    application.collision_world.collision_objects().count()
-                ));
 
                 ui.separator();
                 ui.text(im_str!("Cameras"));
@@ -159,10 +135,6 @@ impl ApplicationRunner for Editor {
                 }
 
                 ui.separator();
-                ui.text(im_str!("Selected Entities"));
-                for (entity, _) in application.ecs.query::<&Selected>().iter() {
-                    ui.text(im_str!("{:#?}", entity));
-                }
             });
         Ok(())
     }
@@ -197,8 +169,6 @@ impl ApplicationRunner for Editor {
             self.camera.update(application, camera_entity)?;
         }
 
-        self.show_hovered_object_collider(application)?;
-
         Ok(())
     }
 
@@ -213,7 +183,6 @@ impl ApplicationRunner for Editor {
             // (VirtualKeyCode::LAlt, ElementState::Released) => self.camera.use_fps = false,
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
-                Self::clear_colliders(application);
                 application.world.clear(&mut application.ecs)?;
                 application.world.add_default_light(&mut application.ecs)?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
@@ -248,30 +217,11 @@ impl ApplicationRunner for Editor {
     fn on_mouse(
         &mut self,
         application: &mut Application,
-        button: MouseButton,
-        state: ElementState,
+        _button: MouseButton,
+        _state: ElementState,
     ) -> Result<()> {
         if !application.input.allowed {
             return Ok(());
-        }
-        if let (MouseButton::Left, ElementState::Pressed) = (button, state) {
-            let entity = match application.pick_object(f32::MAX)? {
-                Some(entity) => entity,
-                None => return Ok(()),
-            };
-
-            let already_selected = application.ecs.get::<Selected>(entity).is_ok();
-            let shift_active = application.input.is_key_pressed(VirtualKeyCode::LShift);
-            if !shift_active {
-                application
-                    .world
-                    .remove_all::<Selected>(&mut application.ecs);
-            }
-            if !already_selected {
-                let _ = application.ecs.insert_one(entity, Selected {});
-            } else if shift_active {
-                let _ = application.ecs.remove_one::<Selected>(entity);
-            }
         }
         Ok(())
     }

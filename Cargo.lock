@@ -528,7 +528,6 @@ dependencies = [
  "imgui-winit-support",
  "log",
  "nalgebra-glm",
- "ncollide3d",
  "serde",
  "simplelog",
  "winit",
@@ -555,7 +554,6 @@ dependencies = [
  "imgui",
  "log",
  "nalgebra-glm",
- "ncollide3d",
  "petgraph",
  "rapier3d",
  "raw-window-handle",
@@ -577,7 +575,6 @@ dependencies = [
  "imgui",
  "log",
  "nalgebra-glm",
- "ncollide3d",
  "petgraph",
  "raw-window-handle",
  "shader-compilation",
@@ -596,7 +593,6 @@ dependencies = [
  "log",
  "nalgebra",
  "nalgebra-glm",
- "ncollide3d",
  "petgraph",
  "serde",
 ]
@@ -612,7 +608,6 @@ dependencies = [
  "log",
  "nalgebra",
  "nalgebra-glm",
- "ncollide3d",
  "winit",
 ]
 
@@ -707,7 +702,6 @@ dependencies = [
  "log",
  "nalgebra",
  "nalgebra-glm",
- "ncollide3d",
  "rapier3d",
  "winit",
 ]
@@ -1173,25 +1167,6 @@ dependencies = [
  "nalgebra",
  "num-traits",
  "simba",
-]
-
-[[package]]
-name = "ncollide3d"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b22c062f4f3a84ca13878fe48b79f4c0445d964c3dc81bad52c9189fe5142f"
-dependencies = [
- "approx",
- "bitflags",
- "downcast-rs",
- "either",
- "nalgebra",
- "num-traits",
- "petgraph",
- "simba",
- "slab",
- "slotmap",
- "smallvec",
 ]
 
 [[package]]
@@ -1769,15 +1744,6 @@ name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
-
-[[package]]
-name = "slotmap"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab3003725ae562cf995f3dc82bb99e70926e09000396816765bb6d7adbe740b1"
-dependencies = [
- "version_check",
-]
 
 [[package]]
 name = "smallvec"

@@ -12,6 +12,5 @@ image = "0.23.14"
 log = "0.4.14"
 nalgebra = "0.25.3"
 nalgebra-glm = { version = "0.11.0", features = ["serde-serialize"] }
-ncollide3d = "0.28.0"
 petgraph = { version = "0.5.1", features = ["serde-1"] }
 serde = { version = "1.0.125", features = ["derive"] }

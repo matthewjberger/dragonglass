@@ -15,7 +15,6 @@ use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
 use nalgebra_glm as glm;
-use ncollide3d::world::CollisionWorld;
 use raw_window_handle::HasRawWindowHandle;
 use shader_compilation::compile_shaders;
 use std::sync::Arc;
@@ -97,7 +96,6 @@ impl Render for VulkanRenderBackend {
         ecs: &mut Ecs,
         world: &World,
         physics_world: &PhysicsWorld,
-        collision_world: &CollisionWorld<f32, ()>,
         draw_data: &DrawData,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
@@ -183,7 +181,6 @@ impl Render for VulkanRenderBackend {
                             ecs,
                             world,
                             physics_world,
-                            collision_world,
                             aspect_ratio,
                         )?;
                     }

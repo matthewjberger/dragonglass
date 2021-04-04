@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
-use na::linalg::QR;
-use na::{Isometry3, Translation3, UnitQuaternion};
+use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
