@@ -45,8 +45,11 @@ impl Scene {
         let environment_maps =
             EnvironmentMapSet::new(context, &transient_command_pool, &mut shader_cache)?;
 
-        let skybox_render =
-            SkyboxRender::new(context, &transient_command_pool, &environment_maps.hdr)?;
+        let skybox_render = SkyboxRender::new(
+            context,
+            &transient_command_pool,
+            &environment_maps.prefilter,
+        )?;
 
         let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
         let gui_render = GuiRender::new(
@@ -226,7 +229,7 @@ impl Scene {
             &mut self.shader_cache,
         )?;
         self.skybox_render
-            .update_descriptor_set(context.device.clone(), &self.environment_maps.hdr);
+            .update_descriptor_set(context.device.clone(), &self.environment_maps.prefilter);
         Ok(())
     }
 

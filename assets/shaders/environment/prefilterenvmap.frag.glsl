@@ -97,7 +97,6 @@ vec3 prefilterEnvMap(vec3 R, float roughness)
 	return (color / totalWeight);
 }
 
-
 void main()
 {
 	vec3 N = normalize(inPos);
