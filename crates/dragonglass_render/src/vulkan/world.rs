@@ -234,7 +234,7 @@ impl WorldPipelineData {
             .binding(2)
             .descriptor_count(Self::MAX_NUMBER_OF_TEXTURES as _)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
             .build();
         let brdflut_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(3)

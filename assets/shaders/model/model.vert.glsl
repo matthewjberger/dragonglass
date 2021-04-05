@@ -48,6 +48,32 @@ layout(location=2) out vec2 outUV0;
 layout(location=3) out vec2 outUV1;
 layout(location=4) out vec3 outColor0;
 
+#define MAX_NUMBER_OF_TEXTURES 200
+
+layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
+
+layout(push_constant) uniform Material{
+    vec4 baseColorFactor;
+    vec3 emissiveFactor;
+    int colorTextureIndex;
+    int colorTextureSet;
+    int metallicRoughnessTextureIndex;
+    int metallicRoughnessTextureSet;
+    int normalTextureIndex;
+    int normalTextureSet;
+    float normalTextureScale;
+    int occlusionTextureIndex;
+    int occlusionTextureSet;
+    float occlusionStrength;
+    int emissiveTextureIndex;
+    int emissiveTextureSet;
+    float metallicFactor;
+    float roughnessFactor;
+    int alphaMode;
+    float alphaCutoff;
+    int isUnlit;
+} material;
+
 void main()
 {
   float jointCount = uboInstance.node_info.x;
@@ -63,10 +89,24 @@ void main()
   }
   mat4 skinnedModel = uboInstance.model * skinMatrix;
 
-  gl_Position = uboView.projection * uboView.view * skinnedModel * vec4(inPosition, 1.0);
+  vec3 normal = mat3(transpose(inverse(skinnedModel))) * inNormal;
+  if (material.normalTextureIndex > -1) {
+      vec2 tex_coord = inUV0;
+      if(material.normalTextureSet == 1) {
+          tex_coord = inUV1;
+      }
+      normal = texture(textures[material.normalTextureIndex], tex_coord).rgb;
+  }
 
-  outPosition = inPosition; 
-  outNormal = mat3(transpose(inverse(skinnedModel))) * inNormal;
+  // Outlines
+  // vec3 position = inPosition.xyz + normal * 0.01;
+
+  vec3 position = inPosition.xyz;
+
+  gl_Position = uboView.projection * uboView.view * skinnedModel * vec4(position, 1.0);
+
+  outPosition = position;
+  outNormal = normal;
   outUV0 = inUV0;
   outUV1 = inUV1;
   outColor0 = inColor0;
