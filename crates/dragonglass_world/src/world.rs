@@ -5,6 +5,7 @@ use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     marker::{Send, Sync},
     ops::{Index, IndexMut},
 };
@@ -567,6 +568,11 @@ pub struct Joint {
     pub inverse_bind_matrix: glm::Mat4,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeshRender {
+    pub name: String,
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Mesh {
     pub name: String,
@@ -659,6 +665,7 @@ impl MorphTarget {
 pub struct Geometry {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
+    pub meshes: HashMap<String, Mesh>,
 }
 
 impl Geometry {

@@ -1,8 +1,8 @@
 use crate::{
     AlphaMode, Animation, BoundingBox, Camera, Channel, Ecs, Entity, Filter, Format, Geometry,
-    Interpolation, Joint, Light, LightKind, Material, Mesh, MorphTarget, Name, OrthographicCamera,
-    PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin, Texture, Transform,
-    TransformationSet, Vertex, World, WrappingMode,
+    Interpolation, Joint, Light, LightKind, Material, Mesh, MeshRender, MorphTarget, Name,
+    OrthographicCamera, PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin,
+    Texture, Transform, TransformationSet, Vertex, World, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -81,6 +81,7 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World, ecs: &mut Ecs) -> Re
         .for_each(|node| world.animations.push(node));
 
     load_nodes(&gltf, &buffers, ecs, &mut world.geometry, &entities)?;
+
     entities.iter().for_each(|entity| {
         if let Ok(mut mesh) = ecs.get_mut::<Mesh>(*entity) {
             mesh.primitives.iter_mut().for_each(|primitive| {
@@ -272,8 +273,18 @@ fn load_nodes(
             ecs.insert(entity, (load_camera(&camera)?,))?;
         }
 
-        if let Some(mesh) = node.mesh() {
-            ecs.insert(entity, (load_mesh(&mesh, buffers, geometry)?,))?;
+        if let Some(gltf_mesh) = node.mesh() {
+            let mesh = load_mesh(&gltf_mesh, buffers, geometry)?;
+            let name = if geometry.meshes.contains_key(&mesh.name) {
+                // FIXME: increment a name with a number
+                //        instead of just adding an underscore
+                let name = mesh.name.to_string();
+                name + "_"
+            } else {
+                mesh.name.to_string()
+            };
+            if geometry.meshes.insert(name.clone(), mesh).is_some() {}
+            ecs.insert(entity, (MeshRender { name },))?;
         }
 
         if let Some(skin) = node.skin() {

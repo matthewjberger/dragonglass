@@ -14,8 +14,8 @@ use dragonglass_vulkan::{
     render::CubeRender,
 };
 use dragonglass_world::{
-    AlphaMode, Ecs, Filter, Geometry, Hidden, LightKind, Material, Mesh, Scene, Skin, Transform,
-    Vertex, World, WrappingMode,
+    AlphaMode, Ecs, Filter, Geometry, Hidden, LightKind, Material, Mesh, MeshRender, Scene, Skin,
+    Transform, Vertex, World, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -668,7 +668,7 @@ impl WorldRender {
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
-            let mut ubo_offset = -1;
+            let mut ubo_offset: i32 = -1;
             for graph in world.scene.graphs.iter() {
                 graph.walk(|node_index| {
                     ubo_offset += 1;
@@ -696,78 +696,89 @@ impl WorldRender {
                         )?;
                     }
 
-                    if let Ok(mesh) = ecs.get::<Mesh>(entity) {
-                        if self.wireframe_enabled {
-                            pipeline_wireframe.bind(&self.device.handle, command_buffer);
-                        } else {
-                            match alpha_mode {
-                                AlphaMode::Opaque | AlphaMode::Mask => {
-                                    pipeline.bind(&self.device.handle, command_buffer);
-                                }
-                                AlphaMode::Blend => {
-                                    pipeline_blended.bind(&self.device.handle, command_buffer);
-                                }
-                            }
-                        }
-
-                        self.pipeline_data
-                            .geometry_buffer
-                            .bind(&self.device.handle, command_buffer)?;
-
-                        unsafe {
-                            self.device.handle.cmd_bind_descriptor_sets(
-                                command_buffer,
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline_layout.handle,
-                                0,
-                                &[self.pipeline_data.descriptor_set],
-                                &[(ubo_offset as u64 * self.pipeline_data.dynamic_alignment) as _],
-                            );
-                        }
-
-                        for primitive in mesh.primitives.iter() {
-                            let material = match primitive.material_index {
-                                Some(material_index) => {
-                                    let primitive_material =
-                                        world.material_at_index(material_index)?;
-                                    if primitive_material.alpha_mode != *alpha_mode {
-                                        continue;
-                                    }
-                                    PushConstantMaterial::from(primitive_material)
-                                }
-                                None => PushConstantMaterial::from(&Material::default()),
-                            };
-
-                            unsafe {
-                                self.device.handle.cmd_push_constants(
-                                    command_buffer,
-                                    pipeline_layout.handle,
-                                    vk::ShaderStageFlags::ALL_GRAPHICS,
-                                    0,
-                                    byte_slice_from(&material),
-                                );
-
-                                if has_indices {
-                                    self.device.handle.cmd_draw_indexed(
-                                        command_buffer,
-                                        primitive.number_of_indices as _,
-                                        1,
-                                        primitive.first_index as _,
-                                        0,
-                                        0,
-                                    );
+                    match ecs.get::<MeshRender>(entity) {
+                        Ok(mesh_render) => {
+                            if let Some(mesh) = world.geometry.meshes.get(&mesh_render.name) {
+                                if self.wireframe_enabled {
+                                    pipeline_wireframe.bind(&self.device.handle, command_buffer);
                                 } else {
-                                    self.device.handle.cmd_draw(
+                                    match alpha_mode {
+                                        AlphaMode::Opaque | AlphaMode::Mask => {
+                                            pipeline.bind(&self.device.handle, command_buffer);
+                                        }
+                                        AlphaMode::Blend => {
+                                            pipeline_blended
+                                                .bind(&self.device.handle, command_buffer);
+                                        }
+                                    }
+                                }
+
+                                self.pipeline_data
+                                    .geometry_buffer
+                                    .bind(&self.device.handle, command_buffer)?;
+
+                                unsafe {
+                                    self.device.handle.cmd_bind_descriptor_sets(
                                         command_buffer,
-                                        primitive.number_of_vertices as _,
-                                        1,
-                                        primitive.first_vertex as _,
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        pipeline_layout.handle,
                                         0,
+                                        &[self.pipeline_data.descriptor_set],
+                                        &[
+                                            (ubo_offset as u64
+                                                * self.pipeline_data.dynamic_alignment)
+                                                as _,
+                                        ],
                                     );
+                                }
+
+                                for primitive in mesh.primitives.iter() {
+                                    let material = match primitive.material_index {
+                                        Some(material_index) => {
+                                            let primitive_material =
+                                                world.material_at_index(material_index)?;
+                                            if primitive_material.alpha_mode != *alpha_mode {
+                                                continue;
+                                            }
+                                            PushConstantMaterial::from(primitive_material)
+                                        }
+                                        None => PushConstantMaterial::from(&Material::default()),
+                                    };
+
+                                    unsafe {
+                                        self.device.handle.cmd_push_constants(
+                                            command_buffer,
+                                            pipeline_layout.handle,
+                                            vk::ShaderStageFlags::ALL_GRAPHICS,
+                                            0,
+                                            byte_slice_from(&material),
+                                        );
+
+                                        if has_indices {
+                                            self.device.handle.cmd_draw_indexed(
+                                                command_buffer,
+                                                primitive.number_of_indices as _,
+                                                1,
+                                                primitive.first_index as _,
+                                                0,
+                                                0,
+                                            );
+                                        } else {
+                                            self.device.handle.cmd_draw(
+                                                command_buffer,
+                                                primitive.number_of_vertices as _,
+                                                1,
+                                                primitive.first_vertex as _,
+                                                0,
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
+                        Err(_) => return Ok(()),
                     }
+
                     Ok(())
                 })?;
             }
