@@ -39,7 +39,7 @@ impl World {
     }
 
     fn add_default_camera(&mut self, ecs: &mut Ecs) -> Result<()> {
-        let position = glm::vec3(0.0, 10.0, 10.0);
+        let position = glm::vec3(0.0, 0.0, 10.0);
         let mut transform = Transform {
             translation: position,
             ..Default::default()
