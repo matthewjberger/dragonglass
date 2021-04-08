@@ -17,7 +17,8 @@ To run the visual editor for Dragonglass, run this command in the root directory
 cargo run --release --bin editor
 ```
 
-## Gifs
+## Gallery
 
+![PBR](gifs/helmet.png)
 ![3D Picking](gifs/picking.gif)
 ![Selecting 3D objects](gifs/selections.gif)
