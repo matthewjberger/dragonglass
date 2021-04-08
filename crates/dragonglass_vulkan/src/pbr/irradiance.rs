@@ -30,11 +30,11 @@ pub fn load_irradiance_map(
     shader_cache: &mut ShaderCache,
     cubemap: &Cubemap,
 ) -> Result<Cubemap> {
-    let output_dimension = 512;
+    let output_dimension = 64;
     let output_cubemap_description = ImageDescription::empty(
         output_dimension,
         output_dimension,
-        vk::Format::R16G16B16A16_SFLOAT,
+        vk::Format::R32G32B32A32_SFLOAT,
     );
     let output_cubemap = Cubemap::new(context, command_pool, &output_cubemap_description)?;
 
@@ -277,19 +277,19 @@ fn shader_paths() -> Result<ShaderPathSet> {
 
 fn cubemap_matrices() -> [glm::Mat4; 6] {
     let origin = glm::vec3(0.0, 0.0, 0.0);
-    let up = glm::vec3(0.0, 1.0, 0.0);
-    let down = glm::vec3(0.0, -1.0, 0.0);
-    let left = glm::vec3(-1.0, 0.0, 0.0);
-    let right = glm::vec3(1.0, 0.0, 0.0);
-    let forward = glm::vec3(0.0, 0.0, 1.0);
-    let backward = glm::vec3(0.0, 0.0, -1.0);
+    let left = glm::Vec3::x();
+    let up = glm::Vec3::y();
+    let forward = glm::Vec3::z();
+    let down = -up;
+    let right = -left;
+    let backward = -forward;
     [
-        glm::look_at(&origin, &right, &down),
-        glm::look_at(&origin, &left, &down),
-        glm::look_at(&origin, &down, &backward),
-        glm::look_at(&origin, &up, &forward),
-        glm::look_at(&origin, &forward, &down),
-        glm::look_at(&origin, &backward, &down),
+        glm::look_at(&origin, &right, &up),
+        glm::look_at(&origin, &left, &up),
+        glm::look_at(&origin, &up, &backward),
+        glm::look_at(&origin, &down, &forward),
+        glm::look_at(&origin, &forward, &up),
+        glm::look_at(&origin, &backward, &up),
     ]
 }
 

@@ -346,7 +346,7 @@ impl WorldPipelineData {
         Ok(geometry_buffer)
     }
 
-    fn update_descriptor_set(&self, device: Arc<Device>, _environment_maps: &EnvironmentMapSet) {
+    fn update_descriptor_set(&self, device: Arc<Device>, environment_maps: &EnvironmentMapSet) {
         let uniform_buffer_size = mem::size_of::<WorldUniformBuffer>() as vk::DeviceSize;
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
@@ -390,26 +390,26 @@ impl WorldPipelineData {
             }
         }
 
-        // let brdflut_image_info = vk::DescriptorImageInfo::builder()
-        //     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        //     .image_view(environment_maps.brdflut.view.handle)
-        //     .sampler(environment_maps.brdflut.sampler.handle)
-        //     .build();
-        // let brdflut_image_infos = [brdflut_image_info];
+        let brdflut_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(environment_maps.brdflut.view.handle)
+            .sampler(environment_maps.brdflut.sampler.handle)
+            .build();
+        let brdflut_image_infos = [brdflut_image_info];
 
-        // let prefilter_image_info = vk::DescriptorImageInfo::builder()
-        //     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        //     .image_view(environment_maps.prefilter.view.handle)
-        //     .sampler(environment_maps.prefilter.sampler.handle)
-        //     .build();
-        // let prefilter_image_infos = [prefilter_image_info];
+        let prefilter_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(environment_maps.prefilter.view.handle)
+            .sampler(environment_maps.prefilter.sampler.handle)
+            .build();
+        let prefilter_image_infos = [prefilter_image_info];
 
-        // let irradiance_image_info = vk::DescriptorImageInfo::builder()
-        //     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        //     .image_view(environment_maps.irradiance.view.handle)
-        //     .sampler(environment_maps.irradiance.sampler.handle)
-        //     .build();
-        // let irradiance_image_infos = [irradiance_image_info];
+        let irradiance_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(environment_maps.irradiance.view.handle)
+            .sampler(environment_maps.irradiance.sampler.handle)
+            .build();
+        let irradiance_image_infos = [irradiance_image_info];
 
         let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
@@ -435,37 +435,37 @@ impl WorldPipelineData {
             .image_info(&image_infos)
             .build();
 
-        // let brdflut_descriptor_write = vk::WriteDescriptorSet::builder()
-        //     .dst_set(self.descriptor_set)
-        //     .dst_binding(3)
-        //     .dst_array_element(0)
-        //     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        //     .image_info(&brdflut_image_infos)
-        //     .build();
+        let brdflut_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&brdflut_image_infos)
+            .build();
 
-        // let prefilter_descriptor_write = vk::WriteDescriptorSet::builder()
-        //     .dst_set(self.descriptor_set)
-        //     .dst_binding(4)
-        //     .dst_array_element(0)
-        //     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        //     .image_info(&prefilter_image_infos)
-        //     .build();
+        let prefilter_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(4)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&prefilter_image_infos)
+            .build();
 
-        // let irradiance_descriptor_write = vk::WriteDescriptorSet::builder()
-        //     .dst_set(self.descriptor_set)
-        //     .dst_binding(5)
-        //     .dst_array_element(0)
-        //     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        //     .image_info(&irradiance_image_infos)
-        //     .build();
+        let irradiance_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(5)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&irradiance_image_infos)
+            .build();
 
         let descriptor_writes = [
             ubo_descriptor_write,
             dynamic_ubo_descriptor_write,
             sampler_descriptor_write,
-            // brdflut_descriptor_write,
-            // prefilter_descriptor_write,
-            // irradiance_descriptor_write,
+            brdflut_descriptor_write,
+            prefilter_descriptor_write,
+            irradiance_descriptor_write,
         ];
 
         unsafe {

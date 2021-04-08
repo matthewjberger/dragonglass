@@ -6,7 +6,7 @@ use dragonglass_vulkan::{
         CommandPool, Context, Device, Image, ImageNode, RawImage, RenderGraph, ShaderCache,
         ShaderPathSetBuilder, Swapchain, SwapchainProperties,
     },
-    pbr::{load_hdr_map, EnvironmentMapSet},
+    pbr::EnvironmentMapSet,
     render::{FullscreenRender, GuiRender, SkyboxRender},
 };
 use dragonglass_world::World;
@@ -42,11 +42,18 @@ impl Scene {
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
         let mut shader_cache = ShaderCache::default();
 
-        let environment_maps =
-            EnvironmentMapSet::new(context, &transient_command_pool, &mut shader_cache)?;
+        let environment_maps = EnvironmentMapSet::new(
+            context,
+            &transient_command_pool,
+            &mut shader_cache,
+            "assets/skyboxes/night.hdr",
+        )?;
 
-        let skybox_render =
-            SkyboxRender::new(context, &transient_command_pool, &environment_maps.hdr)?;
+        let skybox_render = SkyboxRender::new(
+            context,
+            &transient_command_pool,
+            &environment_maps.irradiance,
+        )?;
 
         let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
         let gui_render = GuiRender::new(
@@ -218,15 +225,14 @@ impl Scene {
     }
 
     pub fn load_skybox(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
-        // TODO: Reload environment map set
-        self.environment_maps.hdr = load_hdr_map(
+        self.environment_maps = EnvironmentMapSet::new(
             context,
             &self.transient_command_pool,
-            path,
             &mut self.shader_cache,
+            path,
         )?;
         self.skybox_render
-            .update_descriptor_set(context.device.clone(), &self.environment_maps.hdr);
+            .update_descriptor_set(context.device.clone(), &self.environment_maps.irradiance);
         Ok(())
     }
 
