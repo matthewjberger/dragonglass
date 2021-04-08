@@ -55,12 +55,7 @@ pub fn load_irradiance_map(
     let descriptor_set =
         descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
 
-    update_descriptor_set(
-        &device.handle,
-        descriptor_set,
-        cubemap.view.handle,
-        cubemap.sampler.handle,
-    );
+    update_descriptor_set(&device.handle, descriptor_set, &cubemap);
 
     transition_cubemap_to_transfer_dst(
         command_pool,
@@ -243,13 +238,12 @@ fn descriptor_pool(device: Arc<Device>) -> Result<DescriptorPool> {
 pub fn update_descriptor_set(
     device: &ash::Device,
     descriptor_set: vk::DescriptorSet,
-    image_view: vk::ImageView,
-    sampler: vk::Sampler,
+    cubemap: &Cubemap,
 ) {
     let image_info = vk::DescriptorImageInfo::builder()
         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-        .image_view(image_view)
-        .sampler(sampler)
+        .image_view(cubemap.view.handle)
+        .sampler(cubemap.sampler.handle)
         .build();
     let image_infos = [image_info];
 

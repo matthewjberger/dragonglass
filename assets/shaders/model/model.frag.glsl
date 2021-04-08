@@ -10,8 +10,8 @@ layout(location=4) in vec3 inColor0;
 
 layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
 layout(binding=3) uniform sampler2D brdflut;
-layout(binding=4) uniform samplerCube prefilter;
-layout(binding=5) uniform samplerCube irradiance;
+layout(binding=4) uniform samplerCube prefilterMap;
+layout(binding=5) uniform samplerCube irradianceMap;
 
 layout(push_constant) uniform Material{
     vec4 baseColorFactor;
@@ -139,6 +139,11 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }
 
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
+}   
+
 void main()
 {
     // base color
@@ -184,7 +189,7 @@ void main()
 
 
     // Occlusion
-    float occlusion = 0.0;
+    float occlusion = 1.0;
     if (material.occlusionTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.occlusionTextureSet == 1) {
@@ -205,6 +210,7 @@ void main()
 
     vec3 N = getNormal();
     vec3 V = normalize(uboView.cameraPosition - inPosition);
+    vec3 R = reflect(-V, N); 
 
     // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
     // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)
@@ -251,12 +257,25 @@ void main()
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
     }
 
-    // ambient lighting (note that the next IBL tutorial will replace 
-    // this ambient lighting with environment lighting).
-    vec3 ambient = vec3(0.03) * albedo;
+    // IBL
+    vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 kS = F;
+    vec3 kD = 1.0 - kS;
+    kD *= 1.0 - metallic;	  
+    
+    vec3 irradiance = srgb_to_linear(texture(irradianceMap, N)).rgb;
+    vec3 diffuse      = irradiance * albedo;
+    
+    // sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefilteredColor = srgb_to_linear(textureLod(prefilterMap, R,  roughness * MAX_REFLECTION_LOD)).rgb;    
+    vec2 brdf  = texture(brdflut, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specular = prefilteredColor * (F * brdf.x + brdf.y);
+
+    vec3 ambient = kD * diffuse + specular;
 
     // occlusion
-    ambient = mix(ambient, ambient * occlusion, material.occlusionStrength);
+    // ambient = mix(ambient, ambient * occlusion, material.occlusionStrength);
 
     vec3 color = ambient + Lo;
 

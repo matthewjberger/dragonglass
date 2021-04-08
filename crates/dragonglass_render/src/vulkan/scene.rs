@@ -46,13 +46,13 @@ impl Scene {
             context,
             &transient_command_pool,
             &mut shader_cache,
-            "assets/skyboxes/night.hdr",
+            "assets/skyboxes/desert.hdr",
         )?;
 
         let skybox_render = SkyboxRender::new(
             context,
             &transient_command_pool,
-            &environment_maps.irradiance,
+            &environment_maps.prefilter,
         )?;
 
         let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
@@ -232,7 +232,7 @@ impl Scene {
             path,
         )?;
         self.skybox_render
-            .update_descriptor_set(context.device.clone(), &self.environment_maps.irradiance);
+            .update_descriptor_set(context.device.clone(), &self.environment_maps.prefilter);
         Ok(())
     }
 

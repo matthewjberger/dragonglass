@@ -66,7 +66,7 @@ impl World {
     }
 
     pub fn add_default_light(&mut self, ecs: &mut Ecs) -> Result<()> {
-        let position = glm::vec3(-2.0, 5.0, 0.0);
+        let position = glm::vec3(-4.0, 10.0, 0.0);
         let mut transform = Transform {
             translation: position,
             ..Default::default()
@@ -75,7 +75,7 @@ impl World {
         let light_entity = ecs.spawn((
             transform,
             Light {
-                color: glm::vec3(150.0, 150.0, 150.0),
+                color: glm::vec3(200.0, 200.0, 200.0),
                 kind: LightKind::Point,
                 ..Default::default()
             },
