@@ -19,6 +19,6 @@ cargo run --release --bin editor
 
 ## Gallery
 
-![PBR](gifs/helmet.png)
-![3D Picking](gifs/picking.gif)
-![Selecting 3D objects](gifs/selections.gif)
+![PBR](images/helmet.png)
+![3D Picking](images/picking.gif)
+![Selecting 3D objects](images/selections.gif)

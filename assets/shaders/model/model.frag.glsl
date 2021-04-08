@@ -147,19 +147,20 @@ vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 void main()
 {
     // base color
-    vec3 albedo = material.baseColorFactor.rgb;
+    vec4 baseColor = material.baseColorFactor;
     if (material.colorTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.colorTextureSet == 1) {
             tex_coord = inUV1;
         }
         vec4 albedoMap = texture(textures[material.colorTextureIndex], tex_coord);
-        albedo *= srgb_to_linear(albedoMap).rgb;
+        baseColor *= srgb_to_linear(albedoMap);
     }
-    albedo *= inColor0;
+
+    vec3 albedo = baseColor.rgb * inColor0;
 
     // alpha discard
-    if (material.alphaMode == 2 && material.baseColorFactor.a < material.alphaCutoff) {
+    if (material.alphaMode == 2 && baseColor.a < material.alphaCutoff) {
         discard;
     }
 
@@ -186,7 +187,6 @@ void main()
         roughness = clamp(roughness, minRoughness, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
     }
-
 
     // Occlusion
     float occlusion = 1.0;
@@ -288,5 +288,5 @@ void main()
     // gamma correct
     color = pow(color, vec3(1.0/2.2)); 
 
-    outColor = vec4(color, 1.0);
+    outColor = vec4(color, baseColor.a);
 }
