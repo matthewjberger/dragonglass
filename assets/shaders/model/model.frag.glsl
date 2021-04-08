@@ -68,155 +68,206 @@ layout(binding=0) uniform UboView{
 
 vec4 srgb_to_linear(vec4 srgbIn)
 {
-    vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
-    return vec4(linOut,srgbIn.w);
+    return vec4(pow(srgbIn.xyz,vec3(2.2)),srgbIn.w);
 }
 
 const int LightType_Directional = 0;
 const int LightType_Point = 1;
 const int LightType_Spot = 2;
 
-// https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#range-property
-float getRangeAttenuation(float range, float distance)
+const float PI = 3.14159265359;
+
+vec3 getNormal()
 {
-    if (range <= 0.0)
-    {
-        // negative range means unlimited
-        return 1.0;
+    if (material.normalTextureIndex <= -1) {
+        return normalize(inNormal);
     }
-    return max(min(1.0 - pow(distance / range, 4.0), 1.0), 0.0) / pow(distance, 2.0);
+
+    vec2 tex_coord = inUV0;
+    if(material.normalTextureSet == 1) {
+        tex_coord = inUV1;
+    }
+
+    // Perturb normal, see http://www.thetenthplanet.de/archives/1180
+	vec3 tangentNormal = texture(textures[material.normalTextureIndex], tex_coord).xyz * 2.0 - 1.0;
+
+	vec3 q1 = dFdx(inPosition);
+	vec3 q2 = dFdy(inPosition);
+	vec2 st1 = dFdx(tex_coord);
+	vec2 st2 = dFdy(tex_coord);
+
+	vec3 N = normalize(inNormal);
+	vec3 T = normalize(q1 * st2.t - q2 * st1.t);
+	vec3 B = -normalize(cross(N, T));
+	mat3 TBN = mat3(T, B, N);
+
+	return normalize(TBN * tangentNormal) * vec3(vec2(material.normalTextureScale), 1.0);
 }
 
-// https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#inner-and-outer-cone-angles
-float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeCos, float innerConeCos)
+float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
-    float actualCos = dot(normalize(spotDirection), normalize(-pointToLight));
-    if (actualCos > outerConeCos)
-    {
-        if (actualCos < innerConeCos)
-        {
-            return smoothstep(outerConeCos, innerConeCos, actualCos);
-        }
-        return 1.0;
-    }
-    return 0.0;
+    float a = roughness*roughness;
+    float a2 = a*a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+    float nom   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+    return nom / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+    return nom / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }
 
 void main()
 {
-    vec4 baseColor;
+    // base color
+    vec3 albedo = material.baseColorFactor.rgb;
     if (material.colorTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.colorTextureSet == 1) {
             tex_coord = inUV1;
         }
         vec4 albedoMap = texture(textures[material.colorTextureIndex], tex_coord);
-        baseColor = srgb_to_linear(albedoMap) * material.baseColorFactor * vec4(inColor0, 1.0);
-    } else {
-        baseColor = material.baseColorFactor * vec4(inColor0, 1.0);
+        albedo *= srgb_to_linear(albedoMap).rgb;
     }
-    
-    if (material.alphaMode == 2 && baseColor.a < material.alphaCutoff) {
+    albedo *= inColor0;
+
+    // alpha discard
+    if (material.alphaMode == 2 && material.baseColorFactor.a < material.alphaCutoff) {
         discard;
     }
 
+    // unlit
     if (material.isUnlit == 1) {
-        outColor = vec4(pow(baseColor.rgb, vec3(1.0 / 2.2)), baseColor.a);
+        outColor = vec4(pow(albedo, vec3(1.0 / 2.2)), material.baseColorFactor.a);
         return;
     }
 
-    vec3 normal = normalize(inNormal);
-    vec3 view = normalize(uboView.cameraPosition - inPosition);
-
-    vec3 color = vec3(0.0);
-    /* Blinn-Phong Shading */
-    for (int i = 0; i < uboView.numberOfLights; i++) {
-        // Treat all lights as directional lights for now
-
-        Light light = uboView.lights[i];
-
-        vec3 pointToLight = light.direction;
-        float rangeAttenuation = 1.0;
-        float spotAttenuation = 1.0;
-
-        // int lightKind = light.kind;
-        int lightKind = LightType_Point;
-        if(lightKind != LightType_Directional)
-        {
-            pointToLight = light.position - inPosition;
-            rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
+    // metallic
+    float metallic = material.metallicFactor;
+    float roughness = material.roughnessFactor;
+    float minRoughness = 1.0;
+    if (material.metallicRoughnessTextureIndex > -1)
+    {
+        vec2 tex_coord = inUV0;
+        if(material.metallicRoughnessTextureSet == 1) {
+            tex_coord = inUV1;
         }
-        if (lightKind == LightType_Spot)
-        {
-            spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
-        }
-        vec3 l = normalize(pointToLight);
-        // float lightIntensity = light.intensity;
-        float lightIntensity = 0.25;
-        vec3 intensity = rangeAttenuation * spotAttenuation * lightIntensity * light.color;
-        vec3 ambient = 0.05 * intensity * baseColor.rgb;
-
-        if(lightKind == LightType_Directional) {
-            float diff = max(dot(normal, light.direction), 0.0);
-            vec3 diffuse = diff * intensity * baseColor.rgb;
-
-            vec3 halfway = normalize(view + light.direction);
-            vec3 specular = vec3(0.0);
-            if (diff > 0.0) {
-                float shine = 32.0;
-                float spec = pow(max(dot(halfway, normal), 0.0), shine);
-                specular = light.color * spec;
-            }
-
-            color += ambient + diffuse + specular;
-        }
-
-        if(lightKind == LightType_Point) {
-            vec3 lightDir = normalize(pointToLight);
-
-            float diff = max(dot(normal, lightDir), 0.0);
-            vec3 diffuse = diff * intensity * baseColor.rgb;
-
-            vec3 reflectDir = reflect(lightDir, normal);
-            float shine = 32.0;
-            float spec = pow(max(dot(view, reflectDir), 0.0), shine);
-            vec3 specular = spec * intensity * baseColor.rgb;
-
-            color += ambient + diffuse + specular;
-        }
+        vec4 physicalDescriptor = texture(textures[material.metallicRoughnessTextureIndex], tex_coord);
+        roughness *= physicalDescriptor.g;
+        metallic *= physicalDescriptor.b;
+    } else {
+        roughness = clamp(roughness, minRoughness, 1.0);
+        metallic = clamp(metallic, 0.0, 1.0);
     }
 
+
+    // Occlusion
+    float occlusion = 0.0;
     if (material.occlusionTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.occlusionTextureSet == 1) {
             tex_coord = inUV1;
         }
-        vec4 occlusionMap = texture(textures[material.occlusionTextureIndex], tex_coord);
-        color = mix(color, color * occlusionMap.r, material.occlusionStrength);
+        occlusion = texture(textures[material.occlusionTextureIndex], tex_coord).r;
     }
 
+    // Emissive texture
+    vec3 emission = vec3(0.0);
     if (material.emissiveTextureIndex > -1) {
         vec2 tex_coord = inUV0;
         if(material.emissiveTextureSet == 1) {
             tex_coord = inUV1;
         }
-        vec4 emissiveMap = texture(textures[material.emissiveTextureIndex], tex_coord);
-        color += srgb_to_linear(emissiveMap).rgb * material.emissiveFactor;
+        emission = srgb_to_linear(texture(textures[material.emissiveTextureIndex], tex_coord)).rgb * material.emissiveFactor;
     }
 
-    // color = vec3(1.0);
+    vec3 N = getNormal();
+    vec3 V = normalize(uboView.cameraPosition - inPosition);
 
-    // glass
-    // vec3 I = normalize(inPosition - uboView.cameraPosition);
-    // float refractive_index = 1.00 / 1.52;
-    // vec3 R = refract(I, normalize(inNormal), refractive_index);
-    // color = textureLod(prefilter, R, 0.0).rgb;
+    // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
+    // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, metallic);
 
-    // mirror
-    // vec3 I = normalize(inPosition - uboView.cameraPosition);
-    // vec3 R = reflect(I, normalize(inNormal));
-    // color = textureLod(prefilter, R, 0.0).rgb;
-  
-    color = pow(color, vec3(1.0 / 2.2));
-    outColor = vec4(color, baseColor.a);
+    // reflectance equation
+    vec3 Lo = vec3(0.0);
+    for(int i = 0; i < uboView.numberOfLights; ++i)
+    {
+        Light light = uboView.lights[i];
+
+        // calculate per-light radiance
+        vec3 L = normalize(light.position - inPosition);
+        vec3 H = normalize(V + L);
+        float distance = length(light.position - inPosition);
+        float attenuation = 1.0 / (distance * distance);
+        vec3 radiance = light.color * attenuation;
+
+        // Cook-Torrance BRDF
+        float NDF = DistributionGGX(N, H, roughness);
+        float G   = GeometrySmith(N, V, L, roughness);
+        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 numerator    = NDF * G * F;
+        float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
+        vec3 specular = numerator / denominator;
+
+        // kS is equal to Fresnel
+        vec3 kS = F;
+        // for energy conservation, the diffuse and specular light can't
+        // be above 1.0 (unless the surface emits light); to preserve this
+        // relationship the diffuse component (kD) should equal 1.0 - kS.
+        vec3 kD = vec3(1.0) - kS;
+        // multiply kD by the inverse metalness such that only non-metals
+        // have diffuse lighting, or a linear blend if partly metal (pure metals
+        // have no diffuse light).
+        kD *= 1.0 - metallic;
+
+        // scale light by NdotL
+        float NdotL = max(dot(N, L), 0.0);
+
+        // add to outgoing radiance Lo
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+    }
+
+    // ambient lighting (note that the next IBL tutorial will replace 
+    // this ambient lighting with environment lighting).
+    vec3 ambient = vec3(0.03) * albedo;
+
+    // occlusion
+    ambient = mix(ambient, ambient * occlusion, material.occlusionStrength);
+
+    vec3 color = ambient + Lo;
+
+    // emission
+    color += emission;
+
+    // HDR tonemapping
+    color = color / (color + vec3(1.0));
+
+    // gamma correct
+    color = pow(color, vec3(1.0/2.2)); 
+
+    outColor = vec4(color, 1.0);
 }

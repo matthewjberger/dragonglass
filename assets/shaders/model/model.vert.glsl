@@ -8,6 +8,9 @@ layout(location=4) in vec4 inJoint0;
 layout(location=5) in vec4 inWeight0;
 layout(location=6) in vec3 inColor0;
 
+#define MAX_NUMBER_OF_LIGHTS 4
+#define MAX_NUMBER_OF_JOINTS 200
+
 struct Light
 {
     vec3 direction;
@@ -24,9 +27,6 @@ struct Light
 
     vec2 padding;
 };
-
-#define MAX_NUMBER_OF_LIGHTS 4
-#define MAX_NUMBER_OF_JOINTS 200
 
 layout(binding=0) uniform UboView{
   mat4 view;
@@ -48,32 +48,6 @@ layout(location=2) out vec2 outUV0;
 layout(location=3) out vec2 outUV1;
 layout(location=4) out vec3 outColor0;
 
-#define MAX_NUMBER_OF_TEXTURES 200
-
-layout(binding=2) uniform sampler2D textures[MAX_NUMBER_OF_TEXTURES];
-
-layout(push_constant) uniform Material{
-    vec4 baseColorFactor;
-    vec3 emissiveFactor;
-    int colorTextureIndex;
-    int colorTextureSet;
-    int metallicRoughnessTextureIndex;
-    int metallicRoughnessTextureSet;
-    int normalTextureIndex;
-    int normalTextureSet;
-    float normalTextureScale;
-    int occlusionTextureIndex;
-    int occlusionTextureSet;
-    float occlusionStrength;
-    int emissiveTextureIndex;
-    int emissiveTextureSet;
-    float metallicFactor;
-    float roughnessFactor;
-    int alphaMode;
-    float alphaCutoff;
-    int isUnlit;
-} material;
-
 void main()
 {
   float jointCount = uboInstance.node_info.x;
@@ -89,25 +63,12 @@ void main()
   }
   mat4 skinnedModel = uboInstance.model * skinMatrix;
 
-  vec3 normal = mat3(transpose(inverse(skinnedModel))) * inNormal;
-  if (material.normalTextureIndex > -1) {
-      vec2 tex_coord = inUV0;
-      if(material.normalTextureSet == 1) {
-          tex_coord = inUV1;
-      }
-      normal = texture(textures[material.normalTextureIndex], tex_coord).rgb;
-  }
-
-  // Outlines
-  // vec3 position = inPosition.xyz + normal * 0.01;
-
-  vec3 position = inPosition.xyz;
-
-  gl_Position = uboView.projection * uboView.view * skinnedModel * vec4(position, 1.0);
-
-  outPosition = position;
-  outNormal = normal;
+  vec4 position = uboInstance.model * skinMatrix * vec4(inPosition, 1.0);
+  outNormal = normalize(transpose(inverse(mat3(uboInstance.model * skinMatrix))) * inNormal);
+  outPosition = position.xyz / position.w;
   outUV0 = inUV0;
   outUV1 = inUV1;
   outColor0 = inColor0;
+
+  gl_Position = uboView.projection * uboView.view * vec4(outPosition, 1.0);
 }

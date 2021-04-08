@@ -75,8 +75,8 @@ impl World {
         let light_entity = ecs.spawn((
             transform,
             Light {
-                color: glm::vec3(1.0, 1.0, 1.0),
-                kind: LightKind::Directional,
+                color: glm::vec3(150.0, 150.0, 150.0),
+                kind: LightKind::Point,
                 ..Default::default()
             },
         ));
