@@ -83,7 +83,7 @@ impl Editor {
 impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
         self.setup_file_reloading()?;
-        application.world.add_default_light(&mut application.ecs)?;
+        // application.world.add_default_light(&mut application.ecs)?;
         Ok(())
     }
 
@@ -184,7 +184,7 @@ impl ApplicationRunner for Editor {
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 application.world.clear(&mut application.ecs)?;
-                application.world.add_default_light(&mut application.ecs)?;
+                // application.world.add_default_light(&mut application.ecs)?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }

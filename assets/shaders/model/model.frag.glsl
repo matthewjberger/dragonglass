@@ -1,4 +1,4 @@
-    #version 450
+#version 450
 
 layout(location=0) in vec3 inPosition;
 layout(location=1) in vec3 inNormal;
@@ -74,6 +74,30 @@ vec4 srgb_to_linear(vec4 srgbIn)
 const int LightType_Directional = 0;
 const int LightType_Point = 1;
 const int LightType_Spot = 2;
+
+float getRangeAttenuation(float range, float distance)
+{
+    if (range <= 0.0)
+    {
+        // negative range means unlimited
+        return 1.0;
+    }
+    return max(min(1.0 - pow(distance / range, 4.0), 1.0), 0.0) / pow(distance, 2.0);
+}
+
+float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeCos, float innerConeCos)
+{
+    float actualCos = dot(normalize(spotDirection), normalize(-pointToLight));
+    if (actualCos > outerConeCos)
+    {
+        if (actualCos < innerConeCos)
+        {
+            return smoothstep(outerConeCos, innerConeCos, actualCos);
+        }
+        return 1.0;
+    }
+    return 0.0;
+}
 
 const float PI = 3.14159265359;
 
@@ -173,7 +197,6 @@ void main()
     // metallic
     float metallic = material.metallicFactor;
     float roughness = material.roughnessFactor;
-    float minRoughness = 1.0;
     if (material.metallicRoughnessTextureIndex > -1)
     {
         vec2 tex_coord = inUV0;
@@ -183,9 +206,6 @@ void main()
         vec4 physicalDescriptor = texture(textures[material.metallicRoughnessTextureIndex], tex_coord);
         roughness *= physicalDescriptor.g;
         metallic *= physicalDescriptor.b;
-    } else {
-        roughness = clamp(roughness, minRoughness, 1.0);
-        metallic = clamp(metallic, 0.0, 1.0);
     }
 
     // Occlusion
@@ -224,11 +244,30 @@ void main()
         Light light = uboView.lights[i];
 
         // calculate per-light radiance
-        vec3 L = normalize(light.position - inPosition);
+        vec3 pointToLight = -light.direction;
+
+        if(light.kind != LightType_Directional)
+        {
+            pointToLight = light.position - inPosition;
+        }
+
+        vec3 L = normalize(pointToLight);
         vec3 H = normalize(V + L);
-        float distance = length(light.position - inPosition);
-        float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = light.color * attenuation;
+
+        float rangeAttenuation = 1.0;
+        float spotAttenuation = 1.0;
+
+        if (light.kind != LightType_Directional)
+        {
+            rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
+        }
+
+        if (light.kind == LightType_Spot)
+        {
+            spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+        }
+
+        vec3 radiance = rangeAttenuation * spotAttenuation * light.intensity * light.color;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);
