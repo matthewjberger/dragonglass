@@ -173,7 +173,6 @@ void main()
     // metallic
     float metallic = material.metallicFactor;
     float roughness = material.roughnessFactor;
-    float minRoughness = 1.0;
     if (material.metallicRoughnessTextureIndex > -1)
     {
         vec2 tex_coord = inUV0;
@@ -183,9 +182,6 @@ void main()
         vec4 physicalDescriptor = texture(textures[material.metallicRoughnessTextureIndex], tex_coord);
         roughness *= physicalDescriptor.g;
         metallic *= physicalDescriptor.b;
-    } else {
-        roughness = clamp(roughness, minRoughness, 1.0);
-        metallic = clamp(metallic, 0.0, 1.0);
     }
 
     // Occlusion
@@ -275,7 +271,7 @@ void main()
     vec3 ambient = kD * diffuse + specular;
 
     // occlusion
-    // ambient = mix(ambient, ambient * occlusion, material.occlusionStrength);
+    ambient = mix(ambient, ambient * occlusion, material.occlusionStrength);
 
     vec3 color = ambient + Lo;
 
