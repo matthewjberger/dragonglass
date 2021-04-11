@@ -41,7 +41,7 @@ impl VulkanDebug {
     }
 
     pub const fn enabled() -> bool {
-        true
+        false
     }
 
     pub fn layer_name() -> Result<&'static CStr> {
