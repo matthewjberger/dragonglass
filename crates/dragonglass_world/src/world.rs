@@ -221,7 +221,7 @@ impl World {
         Ok(())
     }
 
-    pub fn lights(&self, ecs: &mut Ecs) -> Result<Vec<(Transform, Light)>> {
+    pub fn lights(&self, ecs: &Ecs) -> Result<Vec<(Transform, Light)>> {
         let mut lights = Vec::new();
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
@@ -236,7 +236,7 @@ impl World {
         Ok(lights)
     }
 
-    pub fn joint_matrices(&self, ecs: &mut Ecs) -> Result<Vec<glm::Mat4>> {
+    pub fn joint_matrices(&self, ecs: &Ecs) -> Result<Vec<glm::Mat4>> {
         let mut offset = 0;
         let mut number_of_joints = 0;
         for graph in self.scene.graphs.iter() {

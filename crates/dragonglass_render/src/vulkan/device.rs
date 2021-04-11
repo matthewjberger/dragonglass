@@ -121,17 +121,7 @@ impl Render for VulkanRenderBackend {
             if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world, ecs)?;
 
-                let mut lights = [Light::default(); WorldPipelineData::MAX_NUMBER_OF_LIGHTS];
-                let world_lights = world
-                    .lights(ecs)?
-                    .iter()
-                    .map(|(transform, light)| Light::from_node(transform, light))
-                    .collect::<Vec<_>>();
-                let number_of_lights = world_lights.len() as u32;
-                lights
-                    .iter_mut()
-                    .zip(world_lights)
-                    .for_each(|(a, b)| *a = b);
+                let (lights, number_of_lights) = load_lights(world, ecs)?;
 
                 let mut joint_matrices =
                     [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
@@ -223,4 +213,22 @@ impl Drop for VulkanRenderBackend {
             }
         }
     }
+}
+
+fn load_lights(
+    world: &World,
+    ecs: &Ecs,
+) -> Result<([Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS], u32)> {
+    let mut lights = [Light::default(); WorldPipelineData::MAX_NUMBER_OF_LIGHTS];
+    let world_lights = world
+        .lights(ecs)?
+        .iter()
+        .map(|(transform, light)| Light::from_node(transform, light))
+        .collect::<Vec<_>>();
+    let number_of_lights = world_lights.len() as u32;
+    lights
+        .iter_mut()
+        .zip(world_lights)
+        .for_each(|(a, b)| *a = b);
+    Ok((lights, number_of_lights))
 }
