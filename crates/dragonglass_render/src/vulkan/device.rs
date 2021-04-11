@@ -8,8 +8,8 @@ use crate::{
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_vulkan::{
-    ash::{version::DeviceV1_0, vk},
-    core::{CommandPool, Context, Frame},
+    ash::version::DeviceV1_0,
+    core::{Context, Frame},
 };
 use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
@@ -20,7 +20,6 @@ use shader_compilation::compile_shaders;
 use std::sync::Arc;
 
 pub struct VulkanRenderBackend {
-    _command_pool: CommandPool,
     frame: Frame,
     scene: Scene,
     context: Arc<Context>,
@@ -42,17 +41,8 @@ impl VulkanRenderBackend {
             frame.swapchain()?,
             &frame.swapchain_properties,
         )?;
-        let create_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(context.physical_device.graphics_queue_family_index)
-            .flags(vk::CommandPoolCreateFlags::TRANSIENT);
-        let command_pool = CommandPool::new(
-            context.device.clone(),
-            context.graphics_queue(),
-            create_info,
-        )?;
 
         let renderer = Self {
-            _command_pool: command_pool,
             frame,
             scene,
             context,
