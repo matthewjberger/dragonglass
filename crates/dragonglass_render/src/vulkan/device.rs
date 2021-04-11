@@ -41,7 +41,6 @@ impl VulkanRenderBackend {
             frame.swapchain()?,
             &frame.swapchain_properties,
         )?;
-
         let renderer = Self {
             frame,
             scene,
