@@ -774,9 +774,9 @@ impl Default for Material {
             emissive_texture_index: -1,
             emissive_texture_set: -1,
             metallic_factor: 1.0,
-            roughness_factor: 0.0,
+            roughness_factor: 1.0,
             alpha_mode: AlphaMode::Opaque,
-            alpha_cutoff: 0.0,
+            alpha_cutoff: 0.5,
             is_unlit: false,
         }
     }
