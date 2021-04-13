@@ -185,8 +185,8 @@ impl Drop for Buffer {
 
 pub struct GeometryBuffer {
     pub vertex_buffer: GpuBuffer,
-    pub index_buffer: Option<GpuBuffer>,
     pub vertex_buffer_size: vk::DeviceSize,
+    pub index_buffer: Option<GpuBuffer>,
     pub index_buffer_size: Option<vk::DeviceSize>,
 }
 
@@ -203,13 +203,32 @@ impl GeometryBuffer {
         } else {
             None
         };
-        let geometry_buffer = Self {
+        Ok(Self {
             vertex_buffer,
-            index_buffer,
             vertex_buffer_size,
+            index_buffer,
             index_buffer_size,
-        };
-        Ok(geometry_buffer)
+        })
+    }
+
+    pub fn reallocate_vertex_buffer(
+        &mut self,
+        allocator: Arc<Allocator>,
+        size: vk::DeviceSize,
+    ) -> Result<()> {
+        self.vertex_buffer = GpuBuffer::vertex_buffer(allocator.clone(), size)?;
+        self.vertex_buffer_size = size;
+        Ok(())
+    }
+
+    pub fn reallocate_index_buffer(
+        &mut self,
+        allocator: Arc<Allocator>,
+        size: vk::DeviceSize,
+    ) -> Result<()> {
+        self.index_buffer = Some(GpuBuffer::index_buffer(allocator, size)?);
+        self.index_buffer_size = Some(size);
+        Ok(())
     }
 
     /// Assumes 32-bit index buffers

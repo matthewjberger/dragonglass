@@ -92,9 +92,8 @@ impl Render for VulkanRenderBackend {
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.device.clone();
 
-        // FIXME: Don't reallocate gui geometry buffers each frame...
         scene.gui_render.resize_geometry_buffer(
-            self.context.allocator.clone(),
+            &self.context,
             &scene.transient_command_pool,
             draw_data,
         )?;

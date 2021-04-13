@@ -15,7 +15,6 @@ use imgui::{Context as ImguiContext, DrawCmd, DrawCmdParams, DrawData, DrawVert}
 use log::debug;
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
-use vk_mem::Allocator;
 
 pub struct PushConstantBlockGui {
     pub projection: glm::Mat4,
@@ -233,10 +232,12 @@ impl GuiRender {
 
     pub fn resize_geometry_buffer(
         &mut self,
-        allocator: Arc<Allocator>,
+        context: &Context,
         command_pool: &CommandPool,
         draw_data: &DrawData,
     ) -> Result<()> {
+        let allocator = context.allocator.clone();
+
         let vertices = draw_data
             .draw_lists()
             .flat_map(|draw_list| draw_list.vtx_buffer())
@@ -249,23 +250,75 @@ impl GuiRender {
             .map(|index| *index as u32)
             .collect::<Vec<_>>();
 
-        let geometry_buffer = GeometryBuffer::new(
-            allocator,
-            (vertices.len() * std::mem::size_of::<DrawVert>()) as _,
-            Some((indices.len() * std::mem::size_of::<u32>()) as _),
-        )?;
+        let target_vertex_buffer_size =
+            (vertices.len() * std::mem::size_of::<DrawVert>()) as vk::DeviceSize;
+        let target_index_buffer_size =
+            (indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
 
-        geometry_buffer
-            .vertex_buffer
-            .upload_data(&vertices, 0, command_pool)?;
+        unsafe { context.device.handle.device_wait_idle() }?;
 
-        geometry_buffer
-            .index_buffer
-            .as_ref()
-            .context("Failed to access cube index buffer!")?
-            .upload_data(&indices, 0, command_pool)?;
+        // TODO: clean this up, it's nested too heavily
+        match self.geometry_buffer.as_mut() {
+            Some(geometry_buffer) => {
+                if target_vertex_buffer_size > geometry_buffer.vertex_buffer_size {
+                    // Resize vertex buffer
+                    geometry_buffer
+                        .reallocate_vertex_buffer(allocator.clone(), target_vertex_buffer_size)?;
+                } else {
+                    // Upload vertices to existing vertex buffer
+                    geometry_buffer
+                        .vertex_buffer
+                        .upload_data(&vertices, 0, command_pool)?;
+                }
 
-        self.geometry_buffer = Some(geometry_buffer);
+                if let Some(index_buffer_size) = geometry_buffer.index_buffer_size {
+                    if target_index_buffer_size > index_buffer_size {
+                        // Resize index buffer
+                        geometry_buffer
+                            .reallocate_index_buffer(allocator.clone(), target_index_buffer_size)?;
+                    } else {
+                        // Upload indices to existing vertex buffer
+                        geometry_buffer
+                            .index_buffer
+                            .as_ref()
+                            .context("Failed to access gui index buffer!")?
+                            .upload_data(&indices, 0, command_pool)?;
+                    }
+                }
+            }
+            None => {
+                // Create a new gui geometry buffer because one does not exist
+
+                let geometry_buffer = GeometryBuffer::new(
+                    allocator,
+                    target_vertex_buffer_size,
+                    Some(target_index_buffer_size),
+                )?;
+
+                geometry_buffer
+                    .vertex_buffer
+                    .upload_data(&vertices, 0, command_pool)?;
+
+                geometry_buffer
+                    .index_buffer
+                    .as_ref()
+                    .context("Failed to access gui index buffer!")?
+                    .upload_data(&indices, 0, command_pool)?;
+
+                if let Some(debug) = context.debug.as_ref() {
+                    debug.name_buffer(
+                        "GUI Vertex Buffer",
+                        geometry_buffer.vertex_buffer.handle().as_raw(),
+                    )?;
+                    if let Some(index_buffer) = geometry_buffer.index_buffer.as_ref() {
+                        debug.name_buffer("GUI Index Buffer", index_buffer.handle().as_raw())?;
+                    }
+                }
+
+                self.geometry_buffer = Some(geometry_buffer);
+            }
+        }
+
         Ok(())
     }
 
