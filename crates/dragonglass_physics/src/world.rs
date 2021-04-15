@@ -1,4 +1,5 @@
 use rapier3d::{
+    dynamics::CCDSolver,
     dynamics::{IntegrationParameters, JointSet, RigidBodySet},
     geometry::{BroadPhase, ColliderSet, NarrowPhase},
     na::Vector3,
@@ -14,7 +15,8 @@ pub struct PhysicsWorld {
     pub bodies: RigidBodySet,
     pub colliders: ColliderSet,
     pub joints: JointSet,
-    pub query: QueryPipeline,
+    pub query_pipeline: QueryPipeline,
+    pub ccd_solver: CCDSolver,
 }
 
 impl Default for PhysicsWorld {
@@ -34,7 +36,8 @@ impl PhysicsWorld {
             bodies: RigidBodySet::new(),
             colliders: ColliderSet::new(),
             joints: JointSet::new(),
-            query: QueryPipeline::default(),
+            query_pipeline: QueryPipeline::default(),
+            ccd_solver: CCDSolver::new(),
         }
     }
 
@@ -44,7 +47,7 @@ impl PhysicsWorld {
         // We ignore contact events for now.
         let event_handler = ();
 
-        self.query.update(&self.bodies, &self.colliders);
+        self.query_pipeline.update(&self.bodies, &self.colliders);
 
         self.pipeline.step(
             &self.gravity,
@@ -54,6 +57,7 @@ impl PhysicsWorld {
             &mut self.bodies,
             &mut self.colliders,
             &mut self.joints,
+            &mut self.ccd_solver,
             &(),
             &event_handler,
         );
