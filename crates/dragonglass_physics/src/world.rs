@@ -1,7 +1,6 @@
 use rapier3d::{
-    dynamics::CCDSolver,
-    dynamics::{IntegrationParameters, JointSet, RigidBodySet},
-    geometry::{BroadPhase, ColliderSet, NarrowPhase},
+    dynamics::{CCDSolver, IntegrationParameters, JointSet, RigidBodySet},
+    geometry::{BroadPhase, ColliderHandle, ColliderSet, InteractionGroups, NarrowPhase, Ray},
     na::Vector3,
     pipeline::{PhysicsPipeline, QueryPipeline},
 };
@@ -47,8 +46,6 @@ impl PhysicsWorld {
         // We ignore contact events for now.
         let event_handler = ();
 
-        self.query_pipeline.update(&self.bodies, &self.colliders);
-
         self.pipeline.step(
             &self.gravity,
             &self.integration_parameters,
@@ -61,5 +58,7 @@ impl PhysicsWorld {
             &(),
             &event_handler,
         );
+
+        self.query_pipeline.update(&self.bodies, &self.colliders);
     }
 }
