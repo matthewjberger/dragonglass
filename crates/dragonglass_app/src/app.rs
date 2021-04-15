@@ -5,11 +5,11 @@ use crate::{
 };
 use anyhow::Result;
 use dragonglass_physics::{
-    rapier3d::{geometry::Ray, na::Point3},
-    PhysicsWorld,
+    rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
+    PhysicsWorld, RigidBody,
 };
 use dragonglass_render::{Backend, Render};
-use dragonglass_world::{load_gltf, Ecs, World};
+use dragonglass_world::{load_gltf, Ecs, Entity, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
 use log::error;
@@ -138,6 +138,37 @@ impl Application {
         let direction = (p_far - p_near).normalize();
         let ray = Ray::new(Point3::from(p_near), direction);
         Ok(ray)
+    }
+
+    pub fn pick_object(
+        &mut self,
+        interact_distance: f32,
+        groups: InteractionGroups,
+    ) -> Result<Option<Entity>> {
+        let ray = self.mouse_ray()?;
+
+        let hit = self.physics_world.query_pipeline.cast_ray(
+            &self.physics_world.colliders,
+            &ray,
+            interact_distance,
+            true,
+            groups,
+            None,
+        );
+
+        let mut picked_entity = None;
+        if let Some((handle, _)) = hit {
+            let collider = &self.physics_world.colliders[handle];
+            let rigid_body_handle = collider.parent();
+            for (entity, rigid_body) in self.ecs.query::<&RigidBody>().iter() {
+                if rigid_body.handle == rigid_body_handle {
+                    picked_entity = Some(entity);
+                    break;
+                }
+            }
+        }
+
+        Ok(picked_entity)
     }
 
     pub fn update(&mut self) -> Result<()> {
