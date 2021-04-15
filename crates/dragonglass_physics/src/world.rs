@@ -1,6 +1,6 @@
 use rapier3d::{
     dynamics::{CCDSolver, IntegrationParameters, JointSet, RigidBodySet},
-    geometry::{BroadPhase, ColliderHandle, ColliderSet, InteractionGroups, NarrowPhase, Ray},
+    geometry::{BroadPhase, ColliderSet, NarrowPhase},
     na::Vector3,
     pipeline::{PhysicsPipeline, QueryPipeline},
 };
