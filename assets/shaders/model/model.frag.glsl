@@ -268,8 +268,7 @@ void main()
         vec3 L = normalize(pointToLight);
         vec3 H = normalize(V + L);
 
-        float intensity = 10.0;
-        vec3 radiance = rangeAttenuation * spotAttenuation * intensity * light.color;
+        vec3 radiance = rangeAttenuation * spotAttenuation * light.intensity * light.color;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);
