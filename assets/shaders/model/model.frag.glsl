@@ -142,7 +142,33 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 {
     return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
-}   
+}
+
+// https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#range-property
+float getRangeAttenuation(float range, float distance)
+{
+    if (range <= 0.0)
+    {
+        // negative range means unlimited
+        return 1.0;
+    }
+    return max(min(1.0 - pow(distance / range, 4.0), 1.0), 0.0) / pow(distance, 2.0);
+}
+
+// https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_lights_punctual/README.md#inner-and-outer-cone-angles
+float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeCos, float innerConeCos)
+{
+    float actualCos = dot(normalize(spotDirection), normalize(-pointToLight));
+    if (actualCos > outerConeCos)
+    {
+        if (actualCos < innerConeCos)
+        {
+            return smoothstep(outerConeCos, innerConeCos, actualCos);
+        }
+        return 1.0;
+    }
+    return 0.0;
+}
 
 void main()
 {
@@ -219,12 +245,31 @@ void main()
     {
         Light light = uboView.lights[i];
 
+        vec3 pointToLight = -light.direction;
+        float rangeAttenuation = 1.0;
+        float spotAttenuation = 1.0;
+
+        if(light.kind != LightType_Directional)
+        {
+            pointToLight = light.position - inPosition;
+        }
+
+        if (light.kind != LightType_Directional)
+        {
+            rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
+        }
+
+        if (light.kind == LightType_Spot)
+        {
+            spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+        }
+
         // calculate per-light radiance
-        vec3 L = normalize(light.position - inPosition);
+        vec3 L = normalize(pointToLight);
         vec3 H = normalize(V + L);
-        float distance = length(light.position - inPosition);
-        float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = light.color * attenuation;
+
+        float intensity = 10.0;
+        vec3 radiance = rangeAttenuation * spotAttenuation * intensity * light.color;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);

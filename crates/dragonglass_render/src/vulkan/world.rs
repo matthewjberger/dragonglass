@@ -102,7 +102,7 @@ impl Light {
             }
         };
         Self {
-            direction: transform.rotation.as_vector().xyz().normalize(),
+            direction: -1.0 * glm::quat_rotate_vec3(&transform.rotation, &glm::Vec3::z()),
             range: light.range,
             color: light.color,
             intensity: light.intensity,
