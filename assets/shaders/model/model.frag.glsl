@@ -170,6 +170,23 @@ float getSpotAttenuation(vec3 pointToLight, vec3 spotDirection, float outerConeC
     return 0.0;
 }
 
+vec3 getLightIntensity(Light light, vec3 pointToLight)
+{
+    float rangeAttenuation = 1.0;
+    float spotAttenuation = 1.0;
+
+    if (light.kind != LightType_Directional)
+    {
+        rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
+    }
+    if (light.kind == LightType_Spot)
+    {
+        spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+    }
+
+    return rangeAttenuation * spotAttenuation * light.intensity * light.color;
+}
+
 void main()
 {
     // base color
@@ -245,30 +262,22 @@ void main()
     {
         Light light = uboView.lights[i];
 
-        vec3 pointToLight = -light.direction;
+        vec3 pointToLight;
         float rangeAttenuation = 1.0;
         float spotAttenuation = 1.0;
 
         if(light.kind != LightType_Directional)
         {
             pointToLight = light.position - inPosition;
-        }
-
-        if (light.kind != LightType_Directional)
-        {
-            rangeAttenuation = getRangeAttenuation(light.range, length(pointToLight));
-        }
-
-        if (light.kind == LightType_Spot)
-        {
-            spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+        } else {
+            pointToLight = -light.direction;
         }
 
         // calculate per-light radiance
         vec3 L = normalize(pointToLight);
         vec3 H = normalize(V + L);
 
-        vec3 radiance = rangeAttenuation * spotAttenuation * light.intensity * light.color;
+        vec3 radiance = getLightIntensity(light, pointToLight);
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);
