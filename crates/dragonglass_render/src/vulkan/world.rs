@@ -9,9 +9,9 @@ use dragonglass_vulkan::{
         PipelineLayout, RenderPass, Sampler, ShaderCache, ShaderPathSet, ShaderPathSetBuilder,
         Texture,
     },
-    geometry::Cube,
+    geometry::{Shape, ShapeBuffer},
     pbr::EnvironmentMapSet,
-    render::CubeRender,
+    render::ShapeRender,
 };
 use dragonglass_world::{
     AlphaMode, Ecs, Filter, Geometry, Hidden, LightKind, Material, Mesh, MeshRender, Scene, Skin,
@@ -530,7 +530,7 @@ impl WorldPipelineData {
 }
 
 pub struct WorldRender {
-    pub cube_render: CubeRender,
+    pub shape_render: ShapeRender,
     pub pipeline_data: WorldPipelineData,
     pub pipeline: Option<Pipeline>,
     pub pipeline_blended: Option<Pipeline>,
@@ -548,10 +548,10 @@ impl WorldRender {
         environment_maps: &EnvironmentMapSet,
     ) -> Result<Self> {
         let pipeline_data = WorldPipelineData::new(context, command_pool, world, environment_maps)?;
-        let cube = Cube::new(context.allocator.clone(), command_pool)?;
-        let cube_render = CubeRender::new(context.device.clone(), cube);
+        let shape_buffer = ShapeBuffer::new(context.allocator.clone(), command_pool)?;
+        let shape_render = ShapeRender::new(context.device.clone(), shape_buffer);
         Ok(Self {
-            cube_render,
+            shape_render,
             pipeline_data,
             pipeline: None,
             pipeline_blended: None,
@@ -577,7 +577,7 @@ impl WorldRender {
         render_pass: Arc<RenderPass>,
         samples: vk::SampleCountFlags,
     ) -> Result<()> {
-        self.cube_render
+        self.shape_render
             .create_pipeline(shader_cache, render_pass.clone(), samples)?;
 
         let push_constant_range = vk::PushConstantRange::builder()
@@ -683,16 +683,15 @@ impl WorldRender {
                     // FIXME: Don't always render lights, add a debug flag to the component or something
                     // Render lights as colored boxes for debugging
                     if let Ok(light) = ecs.get::<dragonglass_world::Light>(entity) {
-                        // FIXME: Render a solid cube for this instead of a bounding box unit cube
                         let offset = glm::translation(&transform.translation);
                         let rotation = glm::quat_to_mat4(&transform.rotation);
                         let extents = glm::vec3(0.25, 0.25, 0.25);
                         let scale = glm::scaling(&extents);
-                        self.cube_render.issue_commands(
+                        self.shape_render.issue_commands(
                             command_buffer,
                             projection * view * offset * rotation * scale,
                             glm::vec3_to_vec4(&light.color),
-                            true,
+                            &Shape::Cone,
                         )?;
                     }
 
