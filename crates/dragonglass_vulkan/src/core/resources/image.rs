@@ -240,8 +240,7 @@ pub fn transition_image(
         .src_stage_mask(info.src_stage_mask)
         .dst_stage_mask(info.dst_stage_mask)
         .image_memory_barriers(vec![image_barrier])
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
+        .build()?;
     pool.transition_image_layout(&pipeline_barrier_info)?;
     Ok(())
 }
@@ -318,8 +317,7 @@ impl AllocatedImage {
             .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
             .src_stage_mask(vk::PipelineStageFlags::TOP_OF_PIPE)
             .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         transition_image(self.handle, pool, &transition)
     }
 
@@ -336,8 +334,7 @@ impl AllocatedImage {
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         transition_image(self.handle, pool, &transition)
     }
 
@@ -355,8 +352,7 @@ impl AllocatedImage {
             .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
             .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .dst_stage_mask(vk::PipelineStageFlags::TRANSFER)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         transition_image(self.handle, pool, &transition)
     }
 
@@ -369,8 +365,7 @@ impl AllocatedImage {
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
             .src_stage_mask(vk::PipelineStageFlags::TRANSFER)
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         transition_image(self.handle, pool, &transition)
     }
 
@@ -401,8 +396,7 @@ impl AllocatedImage {
             .source(buffer)
             .destination(self.handle)
             .regions(vec![region])
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         pool.copy_buffer_to_image(&copy_info)?;
         Ok(())
     }
@@ -457,8 +451,7 @@ impl AllocatedImage {
             .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
             .regions(vec![regions])
             .filter(vk::Filter::LINEAR)
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
 
         pool.blit_image(&blit_image_info)
     }

@@ -7,7 +7,7 @@ use crate::{
     },
     geometry::Cube,
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
 use std::sync::Arc;
@@ -56,8 +56,7 @@ impl SkyboxRender {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/skybox/skybox.vert.spv")
             .fragment("assets/shaders/skybox/skybox.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         Ok(shader_path_set)
     }
 
@@ -96,10 +95,7 @@ impl SkyboxRender {
         self.pipeline_layout = None;
 
         // TODO: Reuse the pipeline layout across these pipelines since they are the same
-        let (pipeline, pipeline_layout) = settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
-            .create_pipeline(self.device.clone())?;
+        let (pipeline, pipeline_layout) = settings.build()?.create_pipeline(self.device.clone())?;
 
         self.pipeline = Some(pipeline);
         self.pipeline_layout = Some(pipeline_layout);

@@ -6,7 +6,7 @@ use crate::{
         Sampler, ShaderCache, ShaderPathSetBuilder, Texture,
     },
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{
     version::DeviceV1_0,
     vk::{self, Handle},
@@ -152,10 +152,7 @@ impl GuiRender {
             .build()
             .expect("Failed to create render pipeline settings");
 
-        let (pipeline, pipeline_layout) = settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
-            .create_pipeline(self.device.clone())?;
+        let (pipeline, pipeline_layout) = settings.build()?.create_pipeline(self.device.clone())?;
         self.pipeline = Some(pipeline);
         self.pipeline_layout = Some(pipeline_layout);
         Ok(())

@@ -3,7 +3,7 @@ use crate::core::{
     GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
     ShaderPathSet,
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 
@@ -65,8 +65,7 @@ impl FullscreenRender {
             .vertex_attributes(Vec::new())
             .descriptor_set_layout(descriptor_set_layout)
             .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         Ok(settings)
     }
 

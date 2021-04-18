@@ -6,7 +6,7 @@ use crate::{
     },
     geometry::Cube,
 };
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use nalgebra_glm as glm;
 use std::sync::Arc;
@@ -42,8 +42,7 @@ impl CubeRender {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/cube/cube.vert.spv")
             .fragment("assets/shaders/cube/cube.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         Ok(shader_path_set)
     }
 
@@ -109,18 +108,15 @@ impl CubeRender {
             ]);
 
         let (solid_pipeline, pipeline_layout) = solid_settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
+            .build()?
             .create_pipeline(self.device.clone())?;
 
         let (loop_pipeline, _) = loop_settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
+            .build()?
             .create_pipeline(self.device.clone())?;
 
         let (segment_pipeline, _) = segment_settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
+            .build()?
             .create_pipeline(self.device.clone())?;
 
         self.solid_pipeline = Some(solid_pipeline);

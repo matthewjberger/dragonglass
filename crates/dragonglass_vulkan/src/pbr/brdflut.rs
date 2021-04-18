@@ -5,7 +5,7 @@ use crate::{
     },
     render::FullscreenRender,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ash::vk::{self, Handle};
 
 pub struct Brdflut {
@@ -54,8 +54,7 @@ impl Brdflut {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
             .fragment("assets/shaders/environment/genbrdflut.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
 
         let fullscreen_pass = rendergraph.pass_handle(fullscreen)?;
         let pipeline = FullscreenRender::new(

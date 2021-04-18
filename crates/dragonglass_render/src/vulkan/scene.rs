@@ -1,5 +1,5 @@
 use crate::vulkan::world::WorldRender;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use dragonglass_vulkan::{
     ash::vk,
     core::{
@@ -85,8 +85,7 @@ impl Scene {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
             .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
 
         self.fullscreen_pipeline = None;
         let fullscreen_pipeline = FullscreenRender::new(

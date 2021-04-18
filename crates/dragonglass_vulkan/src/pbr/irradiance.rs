@@ -8,7 +8,7 @@ use crate::{
     },
     geometry::Cube,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ash::{
     version::DeviceV1_0,
     vk::{self, Handle},
@@ -152,8 +152,7 @@ pub fn load_irradiance_map(
                 .source_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .destination_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                 .regions(vec![region])
-                .build()
-                .map_err(|error| anyhow!("{}", error))?;
+                .build()?;
             command_pool.copy_image_to_image(&copy_info)?;
 
             transition_backbuffer_to_color_attachment(command_pool, color_image)?;
@@ -264,8 +263,7 @@ fn shader_paths() -> Result<ShaderPathSet> {
     let shader_path_set = ShaderPathSetBuilder::default()
         .vertex("assets/shaders/environment/filtercube.vert.spv")
         .fragment("assets/shaders/environment/irradiancecube.frag.spv")
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
+        .build()?;
     Ok(shader_path_set)
 }
 
@@ -309,10 +307,7 @@ fn pipeline(
         .rasterization_samples(vk::SampleCountFlags::TYPE_1)
         .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
         .push_constant_range(push_constant_range);
-    settings
-        .build()
-        .map_err(|error| anyhow!("{}", error))?
-        .create_pipeline(device)
+    settings.build()?.create_pipeline(device)
 }
 
 fn transition_cubemap_to_transfer_dst(
@@ -330,8 +325,7 @@ fn transition_cubemap_to_transfer_dst(
         .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
         .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
         .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
+        .build()?;
     transition_image(cubemap_image, command_pool, &transition)?;
     Ok(())
 }
@@ -348,8 +342,7 @@ fn transition_backbuffer_to_transfer_src(
         .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
         .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
         .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
+        .build()?;
     transition_image(color_image, command_pool, &transition)?;
     Ok(())
 }
@@ -366,8 +359,7 @@ fn transition_backbuffer_to_color_attachment(
         .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
         .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
         .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
+        .build()?;
     transition_image(color_image, command_pool, &transition)?;
     Ok(())
 }
@@ -387,8 +379,7 @@ fn transition_cubemap_to_shader_read(
         .dst_access_mask(vk::AccessFlags::HOST_WRITE | vk::AccessFlags::TRANSFER_WRITE)
         .src_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
         .dst_stage_mask(vk::PipelineStageFlags::ALL_COMMANDS)
-        .build()
-        .map_err(|error| anyhow!("{}", error))?;
+        .build()?;
     transition_image(cubemap_image, command_pool, &transition)?;
     Ok(())
 }

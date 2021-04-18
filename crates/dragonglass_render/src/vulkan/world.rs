@@ -1,5 +1,5 @@
 use crate::byte_slice_from;
-use anyhow::{anyhow, ensure, Context as AnyhowContext, Result};
+use anyhow::{ensure, Context as AnyhowContext, Result};
 use dragonglass_physics::PhysicsWorld;
 use dragonglass_vulkan::{
     ash::{version::DeviceV1_0, vk},
@@ -566,8 +566,7 @@ impl WorldRender {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/model/model.vert.spv")
             .fragment("assets/shaders/model/model.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
         Ok(shader_path_set)
     }
 
@@ -613,19 +612,14 @@ impl WorldRender {
         self.pipeline_layout = None;
 
         // TODO: Reuse the pipeline layout across these pipelines since they are the same
-        let (pipeline, pipeline_layout) = settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
-            .create_pipeline(self.device.clone())?;
+        let (pipeline, pipeline_layout) = settings.build()?.create_pipeline(self.device.clone())?;
 
         let (pipeline_blended, _) = blend_settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
+            .build()?
             .create_pipeline(self.device.clone())?;
 
         let (pipeline_wireframe, _) = wireframe_settings
-            .build()
-            .map_err(|error| anyhow!("{}", error))?
+            .build()?
             .create_pipeline(self.device.clone())?;
 
         self.pipeline = Some(pipeline);

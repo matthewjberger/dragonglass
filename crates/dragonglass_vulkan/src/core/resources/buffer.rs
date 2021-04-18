@@ -1,5 +1,5 @@
 use crate::core::{BufferToBufferCopyBuilder, CommandPool};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ash::{version::DeviceV1_0, vk};
 use std::sync::Arc;
 use vk_mem::Allocator;
@@ -56,8 +56,7 @@ impl GpuBuffer {
             .source(staging_buffer.buffer.handle)
             .destination(self.buffer.handle)
             .regions(vec![region])
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+            .build()?;
 
         pool.copy_buffer_to_buffer(&info)?;
 
