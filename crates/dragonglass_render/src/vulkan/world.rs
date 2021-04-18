@@ -535,6 +535,7 @@ pub struct WorldRender {
     pub pipeline: Option<Pipeline>,
     pub pipeline_blended: Option<Pipeline>,
     pub pipeline_wireframe: Option<Pipeline>,
+    pub pipeline_outline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub wireframe_enabled: bool,
     device: Arc<Device>,
@@ -556,6 +557,7 @@ impl WorldRender {
             pipeline: None,
             pipeline_blended: None,
             pipeline_wireframe: None,
+            pipeline_outline: None,
             pipeline_layout: None,
             wireframe_enabled: false,
             device: context.device.clone(),
@@ -566,6 +568,15 @@ impl WorldRender {
         let shader_path_set = ShaderPathSetBuilder::default()
             .vertex("assets/shaders/model/model.vert.spv")
             .fragment("assets/shaders/model/model.frag.spv")
+            .build()
+            .map_err(|error| anyhow!("{}", error))?;
+        Ok(shader_path_set)
+    }
+
+    fn outline_shader_paths() -> Result<ShaderPathSet> {
+        let shader_path_set = ShaderPathSetBuilder::default()
+            .vertex("assets/shaders/model/outline.vert.spv")
+            .fragment("assets/shaders/model/outline.frag.spv")
             .build()
             .map_err(|error| anyhow!("{}", error))?;
         Ok(shader_path_set)
@@ -595,11 +606,24 @@ impl WorldRender {
             .vertex_attributes(vertex_attributes())
             .descriptor_set_layout(self.pipeline_data.descriptor_set_layout.clone())
             .shader_set(shader_set)
-            .rasterization_samples(samples)
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
             .sample_shading_enabled(true)
             .cull_mode(vk::CullModeFlags::BACK)
             .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
             .push_constant_range(push_constant_range);
+
+        let stencil_op_state = vk::StencilOpState::builder()
+            .compare_op(vk::CompareOp::ALWAYS)
+            .fail_op(vk::StencilOp::REPLACE)
+            .depth_fail_op(vk::StencilOp::REPLACE)
+            .pass_op(vk::StencilOp::REPLACE)
+            .compare_mask(0xFF)
+            .write_mask(0xFF)
+            .reference(1)
+            .build();
+        settings.stencil_test_enabled(true);
+        settings.stencil_front_state(stencil_op_state);
+        settings.stencil_back_state(stencil_op_state);
 
         let mut blend_settings = settings.clone();
         blend_settings.blended(true);
@@ -607,9 +631,29 @@ impl WorldRender {
         let mut wireframe_settings = settings.clone();
         wireframe_settings.polygon_mode(vk::PolygonMode::LINE);
 
+        let mut outline_settings = settings.clone();
+        outline_settings.depth_test_enabled(false);
+        let outline_shader_paths = Self::outline_shader_paths()?;
+        let outline_shader_set =
+            shader_cache.create_shader_set(self.device.clone(), &outline_shader_paths)?;
+        outline_settings.shader_set(outline_shader_set);
+
+        let outline_stencil_op_state = vk::StencilOpState::builder()
+            .compare_op(vk::CompareOp::NOT_EQUAL)
+            .fail_op(vk::StencilOp::KEEP)
+            .depth_fail_op(vk::StencilOp::KEEP)
+            .pass_op(vk::StencilOp::REPLACE)
+            .compare_mask(0xFF)
+            .write_mask(0xFF)
+            .reference(1)
+            .build();
+        outline_settings.stencil_front_state(outline_stencil_op_state);
+        outline_settings.stencil_back_state(outline_stencil_op_state);
+
         self.pipeline = None;
         self.pipeline_blended = None;
         self.pipeline_wireframe = None;
+        self.pipeline_outline = None;
         self.pipeline_layout = None;
 
         // TODO: Reuse the pipeline layout across these pipelines since they are the same
@@ -628,9 +672,15 @@ impl WorldRender {
             .map_err(|error| anyhow!("{}", error))?
             .create_pipeline(self.device.clone())?;
 
+        let (pipeline_outline, _) = outline_settings
+            .build()
+            .map_err(|error| anyhow!("{}", error))?
+            .create_pipeline(self.device.clone())?;
+
         self.pipeline = Some(pipeline);
         self.pipeline_blended = Some(pipeline_blended);
         self.pipeline_wireframe = Some(pipeline_wireframe);
+        self.pipeline_outline = Some(pipeline_outline);
         self.pipeline_layout = Some(pipeline_layout);
 
         Ok(())
@@ -659,6 +709,11 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get wireframe pipeline for rendering world!")?;
 
+        let pipeline_outline = self
+            .pipeline_outline
+            .as_ref()
+            .context("Failed to get outline pipeline for rendering world!")?;
+
         let pipeline_layout = self
             .pipeline_layout
             .as_ref()
@@ -666,7 +721,130 @@ impl WorldRender {
 
         let (projection, view) = world.active_camera_matrices(ecs, aspect_ratio)?;
 
-        for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
+        {
+            // draw normally
+            for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
+                let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
+                let mut ubo_offset: i32 = -1;
+                for graph in world.scene.graphs.iter() {
+                    graph.walk(|node_index| {
+                        ubo_offset += 1;
+                        let entity = graph[node_index];
+
+                        if ecs.get::<Hidden>(entity).is_ok() {
+                            return Ok(());
+                        }
+
+                        let transform = world.entity_global_transform(ecs, entity)?;
+
+                        // FIXME: Don't always render lights, add a debug flag to the component or something
+                        // Render lights as colored boxes for debugging
+                        if let Ok(light) = ecs.get::<dragonglass_world::Light>(entity) {
+                            // FIXME: Render a solid cube for this instead of a bounding box unit cube
+                            let offset = glm::translation(&transform.translation);
+                            let rotation = glm::quat_to_mat4(&transform.rotation);
+                            let extents = glm::vec3(0.25, 0.25, 0.25);
+                            let scale = glm::scaling(&extents);
+                            self.cube_render.issue_commands(
+                                command_buffer,
+                                projection * view * offset * rotation * scale,
+                                glm::vec3_to_vec4(&light.color),
+                                true,
+                            )?;
+                        }
+
+                        match ecs.get::<MeshRender>(entity) {
+                            Ok(mesh_render) => {
+                                if let Some(mesh) = world.geometry.meshes.get(&mesh_render.name) {
+                                    if self.wireframe_enabled {
+                                        pipeline_wireframe
+                                            .bind(&self.device.handle, command_buffer);
+                                    } else {
+                                        match alpha_mode {
+                                            AlphaMode::Opaque | AlphaMode::Mask => {
+                                                pipeline.bind(&self.device.handle, command_buffer);
+                                            }
+                                            AlphaMode::Blend => {
+                                                pipeline_blended
+                                                    .bind(&self.device.handle, command_buffer);
+                                            }
+                                        }
+                                    }
+
+                                    self.pipeline_data
+                                        .geometry_buffer
+                                        .bind(&self.device.handle, command_buffer)?;
+
+                                    unsafe {
+                                        self.device.handle.cmd_bind_descriptor_sets(
+                                            command_buffer,
+                                            vk::PipelineBindPoint::GRAPHICS,
+                                            pipeline_layout.handle,
+                                            0,
+                                            &[self.pipeline_data.descriptor_set],
+                                            &[(ubo_offset as u64
+                                                * self.pipeline_data.dynamic_alignment)
+                                                as _],
+                                        );
+                                    }
+
+                                    for primitive in mesh.primitives.iter() {
+                                        let material = match primitive.material_index {
+                                            Some(material_index) => {
+                                                let primitive_material =
+                                                    world.material_at_index(material_index)?;
+                                                if primitive_material.alpha_mode != *alpha_mode {
+                                                    continue;
+                                                }
+                                                PushConstantMaterial::from(primitive_material)
+                                            }
+                                            None => {
+                                                PushConstantMaterial::from(&Material::default())
+                                            }
+                                        };
+
+                                        unsafe {
+                                            self.device.handle.cmd_push_constants(
+                                                command_buffer,
+                                                pipeline_layout.handle,
+                                                vk::ShaderStageFlags::ALL_GRAPHICS,
+                                                0,
+                                                byte_slice_from(&material),
+                                            );
+
+                                            if has_indices {
+                                                self.device.handle.cmd_draw_indexed(
+                                                    command_buffer,
+                                                    primitive.number_of_indices as _,
+                                                    1,
+                                                    primitive.first_index as _,
+                                                    0,
+                                                    0,
+                                                );
+                                            } else {
+                                                self.device.handle.cmd_draw(
+                                                    command_buffer,
+                                                    primitive.number_of_vertices as _,
+                                                    1,
+                                                    primitive.first_vertex as _,
+                                                    0,
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Err(_) => return Ok(()),
+                        }
+
+                        Ok(())
+                    })?;
+                }
+            }
+        }
+
+        {
+            // draw outline
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
             let mut ubo_offset: i32 = -1;
             for graph in world.scene.graphs.iter() {
@@ -678,40 +856,10 @@ impl WorldRender {
                         return Ok(());
                     }
 
-                    let transform = world.entity_global_transform(ecs, entity)?;
-
-                    // FIXME: Don't always render lights, add a debug flag to the component or something
-                    // Render lights as colored boxes for debugging
-                    if let Ok(light) = ecs.get::<dragonglass_world::Light>(entity) {
-                        // FIXME: Render a solid cube for this instead of a bounding box unit cube
-                        let offset = glm::translation(&transform.translation);
-                        let rotation = glm::quat_to_mat4(&transform.rotation);
-                        let extents = glm::vec3(0.25, 0.25, 0.25);
-                        let scale = glm::scaling(&extents);
-                        self.cube_render.issue_commands(
-                            command_buffer,
-                            projection * view * offset * rotation * scale,
-                            glm::vec3_to_vec4(&light.color),
-                            true,
-                        )?;
-                    }
-
                     match ecs.get::<MeshRender>(entity) {
                         Ok(mesh_render) => {
                             if let Some(mesh) = world.geometry.meshes.get(&mesh_render.name) {
-                                if self.wireframe_enabled {
-                                    pipeline_wireframe.bind(&self.device.handle, command_buffer);
-                                } else {
-                                    match alpha_mode {
-                                        AlphaMode::Opaque | AlphaMode::Mask => {
-                                            pipeline.bind(&self.device.handle, command_buffer);
-                                        }
-                                        AlphaMode::Blend => {
-                                            pipeline_blended
-                                                .bind(&self.device.handle, command_buffer);
-                                        }
-                                    }
-                                }
+                                pipeline_outline.bind(&self.device.handle, command_buffer);
 
                                 self.pipeline_data
                                     .geometry_buffer
@@ -737,9 +885,6 @@ impl WorldRender {
                                         Some(material_index) => {
                                             let primitive_material =
                                                 world.material_at_index(material_index)?;
-                                            if primitive_material.alpha_mode != *alpha_mode {
-                                                continue;
-                                            }
                                             PushConstantMaterial::from(primitive_material)
                                         }
                                         None => PushConstantMaterial::from(&Material::default()),

@@ -166,19 +166,19 @@ impl Render for VulkanRenderBackend {
                 },
             )?;
 
-            scene.rendergraph.execute_pass(
-                command_buffer,
-                "fullscreen",
-                image_index,
-                |pass, command_buffer| {
-                    device.update_viewport(command_buffer, pass.extent, false)?;
-                    if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
-                        fullscreen_pipeline.issue_commands(command_buffer)?;
-                    }
-                    scene.gui_render.issue_commands(command_buffer, draw_data)?;
-                    Ok(())
-                },
-            )?;
+            // scene.rendergraph.execute_pass(
+            //     command_buffer,
+            //     "fullscreen",
+            //     image_index,
+            //     |pass, command_buffer| {
+            //         device.update_viewport(command_buffer, pass.extent, false)?;
+            //         if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
+            //             fullscreen_pipeline.issue_commands(command_buffer)?;
+            //         }
+            //         scene.gui_render.issue_commands(command_buffer, draw_data)?;
+            //         Ok(())
+            //     },
+            // )?;
 
             Ok(())
         })?;

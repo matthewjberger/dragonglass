@@ -37,7 +37,7 @@ impl Scene {
             context.graphics_queue(),
             context.physical_device.graphics_queue_family_index,
         )?;
-        let samples = context.max_usable_samples();
+        let samples = vk::SampleCountFlags::TYPE_1;
         let rendergraph =
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
         let mut shader_cache = ShaderCache::default();
@@ -55,11 +55,11 @@ impl Scene {
             &environment_maps.prefilter,
         )?;
 
-        let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
+        let offscreen_pass = rendergraph.pass_handle("offscreen")?;
         let gui_render = GuiRender::new(
             context,
             &mut shader_cache,
-            fullscreen_pass,
+            offscreen_pass,
             imgui,
             &transient_command_pool,
         )?;
@@ -80,27 +80,27 @@ impl Scene {
     }
 
     pub fn create_pipelines(&mut self, context: &Context) -> Result<()> {
-        let fullscreen_pass = self.rendergraph.pass_handle("fullscreen")?;
+        let offscreen_pass = self.rendergraph.pass_handle("offscreen")?;
 
-        let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
-            .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
-            .build()
-            .map_err(|error| anyhow!("{}", error))?;
+        // let shader_path_set = ShaderPathSetBuilder::default()
+        //     .vertex("assets/shaders/postprocessing/fullscreen_triangle.vert.spv")
+        //     .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
+        //     .build()
+        //     .map_err(|error| anyhow!("{}", error))?;
 
         self.fullscreen_pipeline = None;
-        let fullscreen_pipeline = FullscreenRender::new(
-            context,
-            fullscreen_pass.clone(),
-            &mut self.shader_cache,
-            self.rendergraph.image_view("color_resolve")?.handle,
-            self.rendergraph.sampler("default")?.handle,
-            shader_path_set,
-        )?;
-        self.fullscreen_pipeline = Some(fullscreen_pipeline);
+        // let fullscreen_pipeline = FullscreenRender::new(
+        //     context,
+        //     fullscreen_pass.clone(),
+        //     &mut self.shader_cache,
+        //     self.rendergraph.image_view("color_resolve")?.handle,
+        //     self.rendergraph.sampler("default")?.handle,
+        //     shader_path_set,
+        // )?;
+        // self.fullscreen_pipeline = Some(fullscreen_pipeline);
 
         self.gui_render
-            .create_pipeline(&mut self.shader_cache, fullscreen_pass)?;
+            .create_pipeline(&mut self.shader_cache, offscreen_pass)?;
 
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         self.skybox_render.create_pipeline(
@@ -147,69 +147,21 @@ impl Scene {
         let color_resolve = "color_resolve";
         let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
         let mut rendergraph = RenderGraph::new(
-            &[offscreen, fullscreen],
-            vec![
-                ImageNode {
-                    name: color.to_string(),
-                    extent: offscreen_extent,
-                    format: vk::Format::R8G8B8A8_UNORM,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.39, 0.58, 0.92, 1.0],
-                        },
+            &[offscreen],
+            vec![ImageNode {
+                name: RenderGraph::backbuffer_name(0),
+                extent: swapchain_properties.extent,
+                format: swapchain_properties.surface_format.format,
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
                     },
-                    samples,
-                    force_store: false,
-                    force_shader_read: false,
                 },
-                ImageNode {
-                    name: RenderGraph::DEPTH_STENCIL.to_owned(),
-                    extent: offscreen_extent,
-                    format: vk::Format::D24_UNORM_S8_UINT,
-                    clear_value: vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                    samples,
-                    force_store: false,
-                    force_shader_read: false,
-                },
-                ImageNode {
-                    name: color_resolve.to_string(),
-                    extent: offscreen_extent,
-                    format: vk::Format::R8G8B8A8_UNORM,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [1.0, 1.0, 1.0, 1.0],
-                        },
-                    },
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    force_store: false,
-                    force_shader_read: false,
-                },
-                ImageNode {
-                    name: RenderGraph::backbuffer_name(0),
-                    extent: swapchain_properties.extent,
-                    format: swapchain_properties.surface_format.format,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [1.0, 1.0, 1.0, 1.0],
-                        },
-                    },
-                    samples: vk::SampleCountFlags::TYPE_1,
-                    force_store: false,
-                    force_shader_read: false,
-                },
-            ],
-            &[
-                (offscreen, color),
-                (offscreen, color_resolve),
-                (offscreen, RenderGraph::DEPTH_STENCIL),
-                (color_resolve, fullscreen),
-                (fullscreen, &RenderGraph::backbuffer_name(0)),
-            ],
+                samples: vk::SampleCountFlags::TYPE_1,
+                force_store: false,
+                force_shader_read: false,
+            }],
+            &[(offscreen, &RenderGraph::backbuffer_name(0))],
         )?;
 
         rendergraph.build(device.clone(), allocator)?;
