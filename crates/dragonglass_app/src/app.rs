@@ -178,6 +178,7 @@ impl Application {
 
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
         self.renderer.render(
+            self.system.milliseconds_since_start(),
             &self.system.window_dimensions,
             &mut self.ecs,
             &self.world,

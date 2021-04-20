@@ -16,8 +16,10 @@ pub trait Render {
     fn load_skybox(&mut self, path: &str) -> Result<()>;
     fn load_world(&mut self, world: &World) -> Result<()>;
     fn reload_asset_shaders(&mut self) -> Result<()>;
+    // TODO: this has too many arguments
     fn render(
         &mut self,
+        elapsed_milliseconds: u32,
         dimensions: &[u32; 2],
         ecs: &mut Ecs,
         world: &World,

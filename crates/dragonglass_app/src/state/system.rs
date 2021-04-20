@@ -7,6 +7,7 @@ use winit::{
 
 pub struct System {
     pub window_dimensions: [u32; 2], // TODO: Change this to a glm::Vec2
+    pub start_time: Instant,
     pub delta_time: f64,
     pub last_frame: Instant,
     pub exit_requested: bool,
@@ -14,12 +15,18 @@ pub struct System {
 
 impl System {
     pub fn new(window_dimensions: [u32; 2]) -> Self {
+        let now = Instant::now();
         Self {
-            last_frame: Instant::now(),
+            start_time: now,
+            last_frame: now,
             window_dimensions,
             delta_time: 0.01,
             exit_requested: false,
         }
+    }
+
+    pub fn milliseconds_since_start(&self) -> u32 {
+        Instant::now().duration_since(self.start_time).as_millis() as u32
     }
 
     pub fn aspect_ratio(&self) -> f32 {

@@ -17,7 +17,7 @@ pub struct Scene {
     pub environment_maps: EnvironmentMapSet,
     pub world_render: Option<WorldRender>,
     pub skybox_render: SkyboxRender,
-    pub fullscreen_pipeline: Option<FullscreenRender>,
+    pub fullscreen_render: Option<FullscreenRender>,
     pub gui_render: GuiRender,
     pub rendergraph: RenderGraph,
     pub transient_command_pool: CommandPool,
@@ -68,7 +68,7 @@ impl Scene {
             environment_maps,
             world_render: None,
             skybox_render,
-            fullscreen_pipeline: None,
+            fullscreen_render: None,
             gui_render,
             rendergraph,
             transient_command_pool,
@@ -87,7 +87,7 @@ impl Scene {
             .fragment("assets/shaders/postprocessing/postprocess.frag.spv")
             .build()?;
 
-        self.fullscreen_pipeline = None;
+        self.fullscreen_render = None;
         let fullscreen_pipeline = FullscreenRender::new(
             context,
             fullscreen_pass.clone(),
@@ -96,7 +96,7 @@ impl Scene {
             self.rendergraph.sampler("default")?.handle,
             shader_path_set,
         )?;
-        self.fullscreen_pipeline = Some(fullscreen_pipeline);
+        self.fullscreen_render = Some(fullscreen_pipeline);
 
         self.gui_render
             .create_pipeline(&mut self.shader_cache, fullscreen_pass)?;

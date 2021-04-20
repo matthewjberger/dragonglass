@@ -10,6 +10,7 @@ use dragonglass_physics::PhysicsWorld;
 use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
+    render::FullscreenUniformBuffer,
 };
 use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
@@ -81,6 +82,7 @@ impl Render for VulkanRenderBackend {
 
     fn render(
         &mut self,
+        elapsed_milliseconds: u32,
         dimensions: &[u32; 2],
         ecs: &mut Ecs,
         world: &World,
@@ -143,6 +145,13 @@ impl Render for VulkanRenderBackend {
                     .upload_data(&[ubo], 0)?;
             }
 
+            if let Some(fullscreen_render) = scene.fullscreen_render.as_mut() {
+                let ubo = FullscreenUniformBuffer {
+                    time: elapsed_milliseconds,
+                };
+                fullscreen_render.uniform_buffer.upload_data(&[ubo], 0)?;
+            }
+
             scene.skybox_render.projection = skybox_projection;
             scene.skybox_render.view = view;
 
@@ -172,7 +181,7 @@ impl Render for VulkanRenderBackend {
                 image_index,
                 |pass, command_buffer| {
                     device.update_viewport(command_buffer, pass.extent, false)?;
-                    if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
+                    if let Some(fullscreen_pipeline) = scene.fullscreen_render.as_ref() {
                         fullscreen_pipeline.issue_commands(command_buffer)?;
                     }
                     scene.gui_render.issue_commands(command_buffer, draw_data)?;
