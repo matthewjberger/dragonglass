@@ -224,7 +224,7 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.ecs)?;
+                let node_transform = self.global_transform(graph, node_index)?;
                 if let Ok(light) = self.ecs.get::<Light>(entity) {
                     lights.push((Transform::from(node_transform), *light));
                 }
@@ -251,14 +251,14 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &self.ecs)?;
+                let node_transform = self.global_transform(graph, node_index)?;
                 if let Ok(skin) = self.ecs.get::<Skin>(entity) {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in self.scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
-                                    transform = graph.global_transform(index, &self.ecs)?;
+                                    transform = self.global_transform(graph, index)?;
                                 }
                             }
                             transform
@@ -290,7 +290,7 @@ impl World {
                 if entity != graph[node_index] {
                     return Ok(());
                 }
-                transform = graph.global_transform(node_index, &self.ecs)?;
+                transform = self.global_transform(graph, node_index)?;
                 found = true;
                 Ok(())
             })?;
@@ -314,6 +314,21 @@ impl World {
         let entities = self.entities_with::<T>(ecs);
         for entity in entities.into_iter() {
             let _ = ecs.remove_one::<T>(entity);
+        }
+    }
+
+    pub fn global_transform(&self, graph: &SceneGraph, index: NodeIndex) -> Result<glm::Mat4> {
+        let entity = graph[index];
+        let transform = match self.ecs.get::<Transform>(entity) {
+            Ok(transform) => transform.matrix(),
+            Err(_) => bail!(
+                "A transform component was requested from a component that does not have one!"
+            ),
+        };
+        let mut incoming_walker = graph.0.neighbors_directed(index, Incoming).detach();
+        match incoming_walker.next_node(&graph.0) {
+            Some(parent_index) => Ok(self.global_transform(graph, parent_index)? * transform),
+            None => Ok(transform),
         }
     }
 }
@@ -888,21 +903,6 @@ impl SceneGraph {
             }
         }
         Ok(())
-    }
-
-    pub fn global_transform(&self, index: NodeIndex, ecs: &Ecs) -> Result<glm::Mat4> {
-        let entity = self[index];
-        let transform = match ecs.get::<Transform>(entity) {
-            Ok(transform) => transform.matrix(),
-            Err(_) => bail!(
-                "A transform component was requested from a component that does not have one!"
-            ),
-        };
-        let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
-        match incoming_walker.next_node(&self.0) {
-            Some(parent_index) => Ok(self.global_transform(parent_index, ecs)? * transform),
-            None => Ok(transform),
-        }
     }
 
     pub fn has_neighbors(&self, index: NodeIndex) -> bool {

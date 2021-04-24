@@ -14,8 +14,8 @@ use dragonglass_vulkan::{
     render::CubeRender,
 };
 use dragonglass_world::{
-    AlphaMode, Ecs, Filter, Geometry, Hidden, LightKind, Material, Mesh, MeshRender, Scene, Skin,
-    Transform, Vertex, World, WrappingMode,
+    AlphaMode, Filter, Geometry, Hidden, LightKind, Material, Mesh, MeshRender, Skin, Transform,
+    Vertex, World, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -485,31 +485,31 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world.scene, &world.ecs)?;
+        self.update_node_ubos(&world)?;
 
         Ok(())
     }
 
-    fn update_node_ubos(&mut self, scene: &Scene, ecs: &Ecs) -> Result<()> {
+    fn update_node_ubos(&mut self, world: &World) -> Result<()> {
         let mut buffers = vec![EntityDynamicUniformBuffer::default(); Self::MAX_NUMBER_OF_MESHES];
         let mut joint_offset = 0;
         let mut weight_offset = 0;
         let mut ubo_offset = 0;
-        for graph in scene.graphs.iter() {
+        for graph in world.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = graph.global_transform(node_index, ecs)?;
+                let model = world.global_transform(graph, node_index)?;
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
-                if let Ok(skin) = ecs.get::<Skin>(entity) {
+                if let Ok(skin) = world.ecs.get::<Skin>(entity) {
                     let joint_count = skin.joints.len();
                     node_info.x = joint_count as f32;
                     node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                if let Ok(mesh) = ecs.get::<Mesh>(entity) {
+                if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
                     let weight_count = mesh.weights.len();
                     node_info.z = weight_count as f32;
                     node_info.w = weight_offset as f32;
