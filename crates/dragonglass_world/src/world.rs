@@ -362,16 +362,28 @@ impl World {
         Ok(joint_matrices)
     }
 
+    pub fn as_bytes(&self) -> Result<Vec<u8>> {
+        Ok(set_entity_serializer(&*ENTITY_SERIALIZER, || {
+            bincode::serialize(&self)
+        })?)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<World> {
+        Ok(set_entity_serializer(&*ENTITY_SERIALIZER, || {
+            bincode::deserialize(&bytes[..])
+        })?)
+    }
+
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        let encoded: Vec<u8> =
-            set_entity_serializer(&*ENTITY_SERIALIZER, || bincode::serialize(&self))?;
-        log::info!("Serialized world!");
-        // TODO: write to file
-        // TODO: implement a loader
-        let _decoded: Option<String> =
-            set_entity_serializer(&*ENTITY_SERIALIZER, || bincode::deserialize(&encoded[..]))?;
-        log::info!("Deserialized world!");
-        Ok(())
+        Ok(std::fs::write(path, &self.as_bytes()?)?)
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self::from_bytes(&std::fs::read(path)?)?)
+    }
+
+    pub fn roundtrip(&self) -> Result<World> {
+        Self::from_bytes(&self.as_bytes()?)
     }
 }
 

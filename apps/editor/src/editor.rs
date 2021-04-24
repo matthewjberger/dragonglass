@@ -2,6 +2,7 @@ use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     world::load_gltf,
+    world::World,
 };
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
@@ -132,6 +133,12 @@ impl ApplicationRunner for Editor {
         match (keycode, keystate) {
             (VirtualKeyCode::S, ElementState::Pressed) => {
                 application.world.save("saved_map.dga")?;
+                log::info!("Saved world!");
+            }
+            (VirtualKeyCode::L, ElementState::Pressed) => {
+                application.world = World::load("saved_map.dga")?;
+                application.renderer.load_world(&application.world)?;
+                log::info!("Loaded world!");
             }
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
