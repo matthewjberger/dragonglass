@@ -130,8 +130,9 @@ impl ApplicationRunner for Editor {
         keycode: VirtualKeyCode,
     ) -> Result<()> {
         match (keycode, keystate) {
-            // (VirtualKeyCode::LAlt, ElementState::Pressed) => self.camera.use_fps = true,
-            // (VirtualKeyCode::LAlt, ElementState::Released) => self.camera.use_fps = false,
+            (VirtualKeyCode::S, ElementState::Pressed) => {
+                application.world.save("saved_map.dga")?;
+            }
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 application.world.clear()?;

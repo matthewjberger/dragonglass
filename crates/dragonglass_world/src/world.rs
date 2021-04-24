@@ -1,16 +1,22 @@
 use crate::Name;
 use anyhow::{bail, Context, Result};
 use lazy_static::lazy_static;
-use legion::{serialize::Canon, world::Entry, EntityStore, IntoQuery, Registry};
+use legion::{
+    serialize::set_entity_serializer, serialize::Canon, world::Entry, EntityStore, IntoQuery,
+    Registry,
+};
 use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
 use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
-use std::sync::{Arc, RwLock};
 use std::{
     collections::HashMap,
     ops::{Index, IndexMut},
+};
+use std::{
+    path::Path,
+    sync::{Arc, RwLock},
 };
 
 lazy_static! {
@@ -354,6 +360,18 @@ impl World {
             })?;
         }
         Ok(joint_matrices)
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
+        let encoded: Vec<u8> =
+            set_entity_serializer(&*ENTITY_SERIALIZER, || bincode::serialize(&self))?;
+        log::info!("Serialized world!");
+        // TODO: write to file
+        // TODO: implement a loader
+        let _decoded: Option<String> =
+            set_entity_serializer(&*ENTITY_SERIALIZER, || bincode::deserialize(&encoded[..]))?;
+        log::info!("Deserialized world!");
+        Ok(())
     }
 }
 
