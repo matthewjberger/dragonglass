@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dragonglass_physics::PhysicsWorld;
-use dragonglass_world::{Ecs, World};
+use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
 
@@ -19,7 +19,6 @@ pub trait Render {
     fn render(
         &mut self,
         dimensions: &[u32; 2],
-        ecs: &mut Ecs,
         world: &World,
         physics_world: &PhysicsWorld,
         draw_data: &DrawData,

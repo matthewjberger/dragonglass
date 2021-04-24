@@ -11,7 +11,7 @@ use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
 };
-use dragonglass_world::{Camera, Ecs, PerspectiveCamera, World};
+use dragonglass_world::{Camera, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
 use nalgebra_glm as glm;
@@ -82,7 +82,6 @@ impl Render for VulkanRenderBackend {
     fn render(
         &mut self,
         dimensions: &[u32; 2],
-        ecs: &mut Ecs,
         world: &World,
         physics_world: &PhysicsWorld,
         draw_data: &DrawData,
@@ -98,12 +97,12 @@ impl Render for VulkanRenderBackend {
             draw_data,
         )?;
 
-        let (projection, view) = world.active_camera_matrices(ecs, aspect_ratio)?;
-        let camera_entity = world.active_camera(ecs)?;
-        let camera_transform = world.entity_global_transform(ecs, camera_entity)?;
+        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        let camera_entity = world.active_camera()?;
+        let camera_transform = world.entity_global_transform(camera_entity)?;
 
         // Maintain a perspective projection for the skybox
-        let using_ortho_projection = ecs.get::<Camera>(camera_entity)?.is_orthographic();
+        let using_ortho_projection = world.ecs.get::<Camera>(camera_entity)?.is_orthographic();
         let skybox_projection = if using_ortho_projection {
             let camera = PerspectiveCamera {
                 aspect_ratio: None,
@@ -118,15 +117,15 @@ impl Render for VulkanRenderBackend {
 
         frame.render(dimensions, |command_buffer, image_index| {
             if let Some(world_render) = scene.world_render.as_mut() {
-                world_render.pipeline_data.update_dynamic_ubo(world, ecs)?;
+                world_render.pipeline_data.update_dynamic_ubo(world)?;
 
-                let (lights, number_of_lights) = load_lights(world, ecs)?;
+                let (lights, number_of_lights) = load_lights(world)?;
 
                 let mut joint_matrices =
                     [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
                 joint_matrices
                     .iter_mut()
-                    .zip(world.joint_matrices(ecs)?.into_iter())
+                    .zip(world.joint_matrices(&world.ecs)?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let ubo = WorldUniformBuffer {
@@ -156,7 +155,6 @@ impl Render for VulkanRenderBackend {
                     if let Some(world_render) = scene.world_render.as_ref() {
                         world_render.issue_commands(
                             command_buffer,
-                            ecs,
                             world,
                             physics_world,
                             aspect_ratio,
@@ -214,13 +212,10 @@ impl Drop for VulkanRenderBackend {
     }
 }
 
-fn load_lights(
-    world: &World,
-    ecs: &Ecs,
-) -> Result<([Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS], u32)> {
+fn load_lights(world: &World) -> Result<([Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS], u32)> {
     let mut lights = [Light::default(); WorldPipelineData::MAX_NUMBER_OF_LIGHTS];
     let world_lights = world
-        .lights(ecs)?
+        .lights()?
         .iter()
         .map(|(transform, light)| Light::from_node(transform, light))
         .collect::<Vec<_>>();

@@ -41,7 +41,7 @@ impl ApplicationRunner for Game {
                 ..Default::default()
             };
             transform.look_at(&(-position), &glm::Vec3::y());
-            let light_entity = application.ecs.spawn((
+            let light_entity = application.world.ecs.spawn((
                 transform,
                 Light {
                     color: glm::vec3(0.0, 1.0, 1.0),
@@ -64,7 +64,7 @@ impl ApplicationRunner for Game {
                 ..Default::default()
             };
             transform.look_at(&(-position), &glm::Vec3::y());
-            let light_entity = application.ecs.spawn((
+            let light_entity = application.world.ecs.spawn((
                 transform,
                 Light {
                     color: glm::vec3(1.0, 0.0, 0.0),
@@ -87,7 +87,7 @@ impl ApplicationRunner for Game {
         };
 
         {
-            let player_entity = application.ecs.spawn((transform,));
+            let player_entity = application.world.ecs.spawn((transform,));
             application
                 .world
                 .scene
@@ -103,7 +103,7 @@ impl ApplicationRunner for Game {
 
         // Add static box colliders to level meshes
         let mut level_meshes = Vec::new();
-        for (entity, mesh) in application.ecs.query::<&Mesh>().iter() {
+        for (entity, mesh) in application.world.ecs.query::<&Mesh>().iter() {
             level_meshes.push(entity);
             log::info!("Mesh available: {}", mesh.name);
         }
@@ -126,6 +126,7 @@ impl ApplicationRunner for Game {
                 .build();
             let handle = application.physics_world.bodies.insert(rigid_body);
             application
+                .world
                 .ecs
                 .insert_one(*entity, RigidBody::new(handle))?;
 
@@ -191,14 +192,12 @@ fn add_rigid_body(
 ) -> Result<()> {
     let handle = {
         let bounding_box = {
-            let mesh = application.ecs.get::<Mesh>(entity)?;
+            let mesh = application.world.ecs.get::<Mesh>(entity)?;
             mesh.bounding_box()
         };
         let translation = glm::translation(&bounding_box.center());
-        let transform_matrix = application
-            .world
-            .entity_global_transform_matrix(&mut application.ecs, entity)?
-            * translation;
+        let transform_matrix =
+            application.world.entity_global_transform_matrix(entity)? * translation;
         let transform = Transform::from(transform_matrix);
 
         // Insert a corresponding rigid body
@@ -207,7 +206,10 @@ fn add_rigid_body(
             .build();
         application.physics_world.bodies.insert(rigid_body)
     };
-    application.ecs.insert_one(entity, RigidBody::new(handle))?;
+    application
+        .world
+        .ecs
+        .insert_one(entity, RigidBody::new(handle))?;
     Ok(())
 }
 
@@ -217,11 +219,11 @@ fn add_box_collider(
     collision_groups: InteractionGroups,
 ) -> Result<()> {
     let bounding_box = {
-        let mesh = application.ecs.get::<Mesh>(entity)?;
+        let mesh = application.world.ecs.get::<Mesh>(entity)?;
         mesh.bounding_box()
     };
-    let transform = application.ecs.get::<Transform>(entity)?;
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
+    let transform = application.world.ecs.get::<Transform>(entity)?;
+    let rigid_body_handle = application.world.ecs.get::<RigidBody>(entity)?.handle;
     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
     let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
         .collision_groups(collision_groups)
@@ -239,7 +241,7 @@ fn add_cylinder_collider(
     entity: Entity,
     collision_groups: InteractionGroups,
 ) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
+    let rigid_body_handle = application.world.ecs.get::<RigidBody>(entity)?.handle;
     let (half_height, radius) = (1.0, 0.5);
     let collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
@@ -253,8 +255,8 @@ fn add_cylinder_collider(
 }
 
 fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
-    let transform = application.ecs.get::<Transform>(entity)?;
+    let rigid_body_handle = application.world.ecs.get::<RigidBody>(entity)?.handle;
+    let transform = application.world.ecs.get::<Transform>(entity)?;
     if let Some(body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
         body.set_position(transform.as_isometry(), true);
     }
@@ -262,8 +264,8 @@ fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -
 }
 
 fn sync_transform_to_rigid_body(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
-    let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+    let rigid_body_handle = application.world.ecs.get::<RigidBody>(entity)?.handle;
+    let mut transform = application.world.ecs.get_mut::<Transform>(entity)?;
     if let Some(body) = application.physics_world.bodies.get(rigid_body_handle) {
         let position = body.position();
         transform.translation = position.translation.vector;
@@ -277,8 +279,10 @@ fn sync_transform_to_rigid_body(application: &mut Application, entity: Entity) -
 
 fn sync_all_rigid_bodies(application: &mut Application) {
     // Sync the render transforms with the physics rigid bodies
-    for (_entity, (rigid_body, transform)) in
-        application.ecs.query_mut::<(&RigidBody, &mut Transform)>()
+    for (_entity, (rigid_body, transform)) in application
+        .world
+        .ecs
+        .query_mut::<(&RigidBody, &mut Transform)>()
     {
         if let Some(body) = application.physics_world.bodies.get(rigid_body.handle) {
             let position = body.position();
@@ -291,7 +295,7 @@ fn sync_all_rigid_bodies(application: &mut Application) {
 fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
     let speed = 6.0 * application.system.delta_time as f32;
     {
-        let mut transform = application.ecs.get_mut::<Transform>(entity)?;
+        let mut transform = application.world.ecs.get_mut::<Transform>(entity)?;
         let mut translation = glm::vec3(0.0, 0.0, 0.0);
 
         if application.input.is_key_pressed(VirtualKeyCode::W) {
@@ -317,7 +321,7 @@ fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
 }
 
 fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application.ecs.get::<RigidBody>(entity)?.handle;
+    let rigid_body_handle = application.world.ecs.get::<RigidBody>(entity)?.handle;
     if let Some(rigid_body) = application.physics_world.bodies.get_mut(rigid_body_handle) {
         let jump_strength = 5.0;
         let impulse = jump_strength * glm::Vec3::y();
@@ -329,14 +333,15 @@ fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
 
 fn activate_first_person(application: &mut Application, entity: Entity) -> Result<()> {
     // Disable active camera
-    let camera_entity = application.world.active_camera(&mut application.ecs)?;
+    let camera_entity = application.world.active_camera()?;
     application
+        .world
         .ecs
         .get_mut::<WorldCamera>(camera_entity)?
         .enabled = false;
 
-    application.ecs.insert_one(entity, Hidden {})?;
-    application.ecs.insert_one(
+    application.world.ecs.insert_one(entity, Hidden {})?;
+    application.world.ecs.insert_one(
         entity,
         WorldCamera {
             name: "Player Camera".to_string(),

@@ -9,7 +9,7 @@ use dragonglass_physics::{
     PhysicsWorld, RigidBody,
 };
 use dragonglass_render::{Backend, Render};
-use dragonglass_world::{load_gltf, Ecs, Entity, World};
+use dragonglass_world::{load_gltf, Entity, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
 use log::error;
@@ -63,7 +63,6 @@ impl AppConfig {
 }
 
 pub struct Application {
-    pub ecs: Ecs,
     pub world: World,
     pub physics_world: PhysicsWorld,
     pub input: Input,
@@ -99,7 +98,7 @@ impl Application {
     }
 
     pub fn load_asset(&mut self, path: &str) -> Result<()> {
-        load_gltf(path, &mut self.world, &mut self.ecs)?;
+        load_gltf(path, &mut self.world)?;
         Ok(())
     }
 
@@ -114,9 +113,7 @@ impl Application {
         );
         let aspect_ratio = self.system.aspect_ratio();
 
-        let (projection, view) = self
-            .world
-            .active_camera_matrices(&mut self.ecs, aspect_ratio)?;
+        let (projection, view) = self.world.active_camera_matrices(aspect_ratio)?;
 
         let mut position = self.input.mouse.position;
         position.y = height - position.y;
@@ -160,7 +157,7 @@ impl Application {
         if let Some((handle, _)) = hit {
             let collider = &self.physics_world.colliders[handle];
             let rigid_body_handle = collider.parent();
-            for (entity, rigid_body) in self.ecs.query::<&RigidBody>().iter() {
+            for (entity, rigid_body) in self.world.ecs.query::<&RigidBody>().iter() {
                 if rigid_body.handle == rigid_body_handle {
                     picked_entity = Some(entity);
                     break;
@@ -179,7 +176,6 @@ impl Application {
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
         self.renderer.render(
             &self.system.window_dimensions,
-            &mut self.ecs,
             &self.world,
             &self.physics_world,
             draw_data,
@@ -255,11 +251,9 @@ pub fn run_application(
         gui.context_mut(),
     )?);
 
-    let mut ecs = Ecs::new();
-    let world = World::new(&mut ecs)?;
+    let world = World::new()?;
 
     let mut state = Application {
-        ecs,
         world,
         physics_world: PhysicsWorld::new(),
         input: Input::default(),

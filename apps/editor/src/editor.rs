@@ -53,7 +53,7 @@ impl Editor {
     }
 
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
-        load_gltf(path, &mut application.world, &mut application.ecs)?;
+        load_gltf(path, &mut application.world)?;
 
         // FIXME: Don't reload entire scene whenever something is added
         match application.renderer.load_world(&application.world) {
@@ -92,10 +92,10 @@ impl ApplicationRunner for Editor {
             .build(ui, || {
                 ui.text(im_str!(
                     "Number of entities: {}",
-                    application.ecs.iter().count()
+                    application.world.ecs.iter().count()
                 ));
 
-                let number_of_meshes = application.ecs.query::<&Mesh>().iter().count();
+                let number_of_meshes = application.world.ecs.query::<&Mesh>().iter().count();
                 ui.text(im_str!("Number of meshes: {}", number_of_meshes));
                 ui.text(im_str!(
                     "Number of animations: {}",
@@ -113,8 +113,12 @@ impl ApplicationRunner for Editor {
                 ui.separator();
                 ui.text(im_str!("Cameras"));
                 let mut change_camera = None;
-                for (index, (entity, camera)) in
-                    application.ecs.query::<&WorldCamera>().iter().enumerate()
+                for (index, (entity, camera)) in application
+                    .world
+                    .ecs
+                    .query::<&WorldCamera>()
+                    .iter()
+                    .enumerate()
                 {
                     let label = if camera.enabled {
                         "enabled"
@@ -128,7 +132,7 @@ impl ApplicationRunner for Editor {
                     }
                 }
                 if let Some(selected_camera_entity) = change_camera {
-                    for (entity, camera) in application.ecs.query_mut::<&mut WorldCamera>() {
+                    for (entity, camera) in application.world.ecs.query_mut::<&mut WorldCamera>() {
                         camera.enabled = entity == selected_camera_entity;
                     }
                 }
@@ -149,22 +153,17 @@ impl ApplicationRunner for Editor {
         }
 
         if !application.world.animations.is_empty() {
-            application.world.animate(
-                &mut application.ecs,
-                0,
-                0.75 * application.system.delta_time as f32,
-            )?;
+            application
+                .world
+                .animate(0, 0.75 * application.system.delta_time as f32)?;
         }
 
         if !application.input.allowed {
             return Ok(());
         }
 
-        if application
-            .world
-            .active_camera_is_main(&mut application.ecs)?
-        {
-            let camera_entity = application.world.active_camera(&mut application.ecs)?;
+        if application.world.active_camera_is_main()? {
+            let camera_entity = application.world.active_camera()?;
             self.camera.update(application, camera_entity)?;
         }
 
@@ -182,7 +181,7 @@ impl ApplicationRunner for Editor {
             // (VirtualKeyCode::LAlt, ElementState::Released) => self.camera.use_fps = false,
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
-                application.world.clear(&mut application.ecs)?;
+                application.world.clear()?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }

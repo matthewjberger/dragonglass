@@ -45,7 +45,7 @@ fn node_transform(node: &gltf::Node) -> Transform {
 
 const DEFAULT_NAME: &str = "<Unnamed>";
 
-pub fn load_gltf(path: impl AsRef<Path>, world: &mut World, ecs: &mut Ecs) -> Result<()> {
+pub fn load_gltf(path: impl AsRef<Path>, world: &mut World) -> Result<()> {
     let (gltf, buffers, images) = gltf::import(path)?;
 
     let number_of_materials = world.materials.len();
@@ -72,7 +72,8 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World, ecs: &mut Ecs) -> Re
         .into_iter()
         .for_each(|texture| world.textures.push(texture));
 
-    let entities = ecs
+    let entities = world
+        .ecs
         .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
         .collect::<Vec<_>>();
 
@@ -80,10 +81,16 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World, ecs: &mut Ecs) -> Re
         .into_iter()
         .for_each(|node| world.animations.push(node));
 
-    load_nodes(&gltf, &buffers, ecs, &mut world.geometry, &entities)?;
+    load_nodes(
+        &gltf,
+        &buffers,
+        &mut world.ecs,
+        &mut world.geometry,
+        &entities,
+    )?;
 
     entities.iter().for_each(|entity| {
-        if let Ok(mut mesh) = ecs.get_mut::<Mesh>(*entity) {
+        if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
             mesh.primitives.iter_mut().for_each(|primitive| {
                 if let Some(material_index) = primitive.material_index.as_mut() {
                     *material_index += number_of_materials
@@ -93,7 +100,7 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World, ecs: &mut Ecs) -> Re
     });
 
     // Only merge default scene
-    let new_scenes = load_scenes(&gltf, ecs, &entities);
+    let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
     if let Some(new_scene) = new_scenes.into_iter().next() {
         new_scene.graphs.into_iter().for_each(|graph| {
             world.scene.graphs.push(graph);

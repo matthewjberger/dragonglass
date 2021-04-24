@@ -475,8 +475,8 @@ impl WorldPipelineData {
         }
     }
 
-    pub fn update_dynamic_ubo(&mut self, world: &World, ecs: &mut Ecs) -> Result<()> {
-        let world_joint_matrices = world.joint_matrices(ecs)?;
+    pub fn update_dynamic_ubo(&mut self, world: &World) -> Result<()> {
+        let world_joint_matrices = world.joint_matrices(&world.ecs)?;
         let number_of_joints = world_joint_matrices.len();
         ensure!(
             number_of_joints < Self::MAX_NUMBER_OF_JOINTS,
@@ -485,7 +485,7 @@ impl WorldPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world.scene, ecs)?;
+        self.update_node_ubos(&world.scene, &world.ecs)?;
 
         Ok(())
     }
@@ -633,7 +633,6 @@ impl WorldRender {
     pub fn issue_commands(
         &self,
         command_buffer: vk::CommandBuffer,
-        ecs: &mut Ecs,
         world: &World,
         _physics_world: &PhysicsWorld,
         aspect_ratio: f32,
@@ -658,7 +657,7 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        let (projection, view) = world.active_camera_matrices(ecs, aspect_ratio)?;
+        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
@@ -668,15 +667,15 @@ impl WorldRender {
                     ubo_offset += 1;
                     let entity = graph[node_index];
 
-                    if ecs.get::<Hidden>(entity).is_ok() {
+                    if world.ecs.get::<Hidden>(entity).is_ok() {
                         return Ok(());
                     }
 
-                    let transform = world.entity_global_transform(ecs, entity)?;
+                    let transform = world.entity_global_transform(entity)?;
 
                     // FIXME: Don't always render lights, add a debug flag to the component or something
                     // Render lights as colored boxes for debugging
-                    if let Ok(light) = ecs.get::<dragonglass_world::Light>(entity) {
+                    if let Ok(light) = world.ecs.get::<dragonglass_world::Light>(entity) {
                         // FIXME: Render a solid cube for this instead of a bounding box unit cube
                         let offset = glm::translation(&transform.translation);
                         let rotation = glm::quat_to_mat4(&transform.rotation);
@@ -690,7 +689,7 @@ impl WorldRender {
                         )?;
                     }
 
-                    match ecs.get::<MeshRender>(entity) {
+                    match world.ecs.get::<MeshRender>(entity) {
                         Ok(mesh_render) => {
                             if let Some(mesh) = world.geometry.meshes.get(&mesh_render.name) {
                                 if self.wireframe_enabled {
