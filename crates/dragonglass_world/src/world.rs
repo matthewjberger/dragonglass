@@ -234,13 +234,13 @@ impl World {
         Ok(lights)
     }
 
-    pub fn joint_matrices(&self, ecs: &Ecs) -> Result<Vec<glm::Mat4>> {
+    pub fn joint_matrices(&self) -> Result<Vec<glm::Mat4>> {
         let mut offset = 0;
         let mut number_of_joints = 0;
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                if let Ok(skin) = ecs.get::<Skin>(entity) {
+                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
                     number_of_joints += skin.joints.len();
                 }
                 Ok(())
@@ -251,14 +251,14 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = graph.global_transform(node_index, &ecs)?;
-                if let Ok(skin) = ecs.get::<Skin>(entity) {
+                let node_transform = graph.global_transform(node_index, &self.ecs)?;
+                if let Ok(skin) = self.ecs.get::<Skin>(entity) {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in self.scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
-                                    transform = graph.global_transform(index, &ecs)?;
+                                    transform = graph.global_transform(index, &self.ecs)?;
                                 }
                             }
                             transform

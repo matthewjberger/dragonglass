@@ -476,7 +476,7 @@ impl WorldPipelineData {
     }
 
     pub fn update_dynamic_ubo(&mut self, world: &World) -> Result<()> {
-        let world_joint_matrices = world.joint_matrices(&world.ecs)?;
+        let world_joint_matrices = world.joint_matrices()?;
         let number_of_joints = world_joint_matrices.len();
         ensure!(
             number_of_joints < Self::MAX_NUMBER_OF_JOINTS,

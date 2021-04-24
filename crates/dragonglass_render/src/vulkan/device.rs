@@ -125,7 +125,7 @@ impl Render for VulkanRenderBackend {
                     [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
                 joint_matrices
                     .iter_mut()
-                    .zip(world.joint_matrices(&world.ecs)?.into_iter())
+                    .zip(world.joint_matrices()?.into_iter())
                     .for_each(|(a, b)| *a = b);
 
                 let ubo = WorldUniformBuffer {
