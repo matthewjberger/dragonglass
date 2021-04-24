@@ -9,7 +9,7 @@ use dragonglass_physics::{
     PhysicsWorld, RigidBody,
 };
 use dragonglass_render::{Backend, Render};
-use dragonglass_world::{load_gltf, Entity, World};
+use dragonglass_world::{legion::IntoQuery, load_gltf, Entity, World};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
 use log::error;
@@ -157,9 +157,10 @@ impl Application {
         if let Some((handle, _)) = hit {
             let collider = &self.physics_world.colliders[handle];
             let rigid_body_handle = collider.parent();
-            for (entity, rigid_body) in self.world.ecs.query::<&RigidBody>().iter() {
+            let mut query = <(Entity, &RigidBody)>::query();
+            for (entity, rigid_body) in query.iter(&self.world.ecs) {
                 if rigid_body.handle == rigid_body_handle {
-                    picked_entity = Some(entity);
+                    picked_entity = Some(*entity);
                     break;
                 }
             }

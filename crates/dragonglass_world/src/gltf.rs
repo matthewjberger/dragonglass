@@ -74,8 +74,8 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World) -> Result<()> {
 
     let entities = world
         .ecs
-        .spawn_batch((0..gltf.nodes().len()).map(|_| ()))
-        .collect::<Vec<_>>();
+        .extend((0..gltf.nodes().len()).map(|_| ()))
+        .to_vec();
 
     load_animations(&gltf, &buffers, &entities)?
         .into_iter()
@@ -89,15 +89,15 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World) -> Result<()> {
         &entities,
     )?;
 
-    entities.iter().for_each(|entity| {
-        if let Ok(mut mesh) = world.ecs.get_mut::<Mesh>(*entity) {
+    for entity in entities.iter() {
+        if let Ok(mesh) = world.entry_mut(*entity)?.get_component_mut::<Mesh>() {
             mesh.primitives.iter_mut().for_each(|primitive| {
                 if let Some(material_index) = primitive.material_index.as_mut() {
                     *material_index += number_of_materials
                 }
             })
         }
-    });
+    }
 
     // Only merge default scene
     let new_scenes = load_scenes(&gltf, &mut world.ecs, &entities);
@@ -272,18 +272,20 @@ fn load_nodes(
 
         let name = node.name().unwrap_or(DEFAULT_NAME).to_string();
 
-        ecs.insert(entity, (Name(name),))?;
+        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
 
-        ecs.insert(entity, (node_transform(&node),))?;
+        entry.add_component(Name(name));
+
+        entry.add_component(node_transform(&node));
 
         if let Some(camera) = node.camera() {
-            ecs.insert(entity, (load_camera(&camera)?,))?;
+            entry.add_component(load_camera(&camera)?);
         }
 
         if let Some(gltf_mesh) = node.mesh() {
             let mesh = load_mesh(&gltf_mesh, buffers, geometry)?;
             let name = if geometry.meshes.contains_key(&mesh.name) {
-                // FIXME: increment a name with a number
+                // FIXME: increment a repeated name with a number
                 //        instead of just adding an underscore
                 let name = mesh.name.to_string();
                 name + "_"
@@ -291,15 +293,15 @@ fn load_nodes(
                 mesh.name.to_string()
             };
             if geometry.meshes.insert(name.clone(), mesh).is_some() {}
-            ecs.insert(entity, (MeshRender { name },))?;
+            entry.add_component(MeshRender { name });
         }
 
         if let Some(skin) = node.skin() {
-            ecs.insert(entity, (load_skin(&skin, buffers, entities),))?;
+            entry.add_component(load_skin(&skin, buffers, entities));
         }
 
         if let Some(light) = node.light() {
-            ecs.insert(entity, (load_light(&light),))?;
+            entry.add_component(load_light(&light));
         }
     }
 

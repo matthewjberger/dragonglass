@@ -14,8 +14,8 @@ use dragonglass_vulkan::{
     render::CubeRender,
 };
 use dragonglass_world::{
-    AlphaMode, Filter, Geometry, Hidden, LightKind, Material, Mesh, MeshRender, Skin, Transform,
-    Vertex, World, WrappingMode,
+    legion::EntityStore, AlphaMode, Filter, Geometry, Hidden, LightKind, Material, Mesh,
+    MeshRender, Skin, Transform, Vertex, World, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -502,14 +502,14 @@ impl WorldPipelineData {
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 
-                if let Ok(skin) = world.ecs.get::<Skin>(entity) {
+                if let Ok(skin) = world.ecs.entry_ref(entity)?.get_component::<Skin>() {
                     let joint_count = skin.joints.len();
                     node_info.x = joint_count as f32;
                     node_info.y = joint_offset as f32;
                     joint_offset += joint_count;
                 }
 
-                if let Ok(mesh) = world.ecs.get::<Mesh>(entity) {
+                if let Ok(mesh) = world.ecs.entry_ref(entity)?.get_component::<Mesh>() {
                     let weight_count = mesh.weights.len();
                     node_info.z = weight_count as f32;
                     node_info.w = weight_offset as f32;
@@ -667,7 +667,12 @@ impl WorldRender {
                     ubo_offset += 1;
                     let entity = graph[node_index];
 
-                    if world.ecs.get::<Hidden>(entity).is_ok() {
+                    if world
+                        .ecs
+                        .entry_ref(entity)?
+                        .get_component::<Hidden>()
+                        .is_ok()
+                    {
                         return Ok(());
                     }
 
@@ -675,7 +680,11 @@ impl WorldRender {
 
                     // FIXME: Don't always render lights, add a debug flag to the component or something
                     // Render lights as colored boxes for debugging
-                    if let Ok(light) = world.ecs.get::<dragonglass_world::Light>(entity) {
+                    if let Ok(light) = world
+                        .ecs
+                        .entry_ref(entity)?
+                        .get_component::<dragonglass_world::Light>()
+                    {
                         // FIXME: Render a solid cube for this instead of a bounding box unit cube
                         let offset = glm::translation(&transform.translation);
                         let rotation = glm::quat_to_mat4(&transform.rotation);
@@ -689,7 +698,7 @@ impl WorldRender {
                         )?;
                     }
 
-                    match world.ecs.get::<MeshRender>(entity) {
+                    match world.ecs.entry_ref(entity)?.get_component::<MeshRender>() {
                         Ok(mesh_render) => {
                             if let Some(mesh) = world.geometry.meshes.get(&mesh_render.name) {
                                 if self.wireframe_enabled {

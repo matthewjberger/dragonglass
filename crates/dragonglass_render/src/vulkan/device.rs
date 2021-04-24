@@ -11,7 +11,7 @@ use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
 };
-use dragonglass_world::{Camera, PerspectiveCamera, World};
+use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
 use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
 use nalgebra_glm as glm;
@@ -102,7 +102,11 @@ impl Render for VulkanRenderBackend {
         let camera_transform = world.entity_global_transform(camera_entity)?;
 
         // Maintain a perspective projection for the skybox
-        let using_ortho_projection = world.ecs.get::<Camera>(camera_entity)?.is_orthographic();
+        let using_ortho_projection = world
+            .ecs
+            .entry_ref(camera_entity)?
+            .get_component::<Camera>()?
+            .is_orthographic();
         let skybox_projection = if using_ortho_projection {
             let camera = PerspectiveCamera {
                 aspect_ratio: None,

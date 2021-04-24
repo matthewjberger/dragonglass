@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    world::{load_gltf, Camera as WorldCamera, Mesh},
+    world::load_gltf,
 };
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
@@ -86,58 +86,11 @@ impl ApplicationRunner for Editor {
         Ok(())
     }
 
-    fn create_ui(&mut self, application: &mut Application, ui: &Ui) -> Result<()> {
+    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
         Window::new(im_str!("Scene Info"))
             .collapsed(true, Condition::FirstUseEver)
             .build(ui, || {
-                ui.text(im_str!(
-                    "Number of entities: {}",
-                    application.world.ecs.iter().count()
-                ));
-
-                let number_of_meshes = application.world.ecs.query::<&Mesh>().iter().count();
-                ui.text(im_str!("Number of meshes: {}", number_of_meshes));
-                ui.text(im_str!(
-                    "Number of animations: {}",
-                    application.world.animations.len()
-                ));
-                ui.text(im_str!(
-                    "Number of textures: {}",
-                    application.world.textures.len()
-                ));
-                ui.text(im_str!(
-                    "Number of materials: {}",
-                    application.world.materials.len()
-                ));
-
-                ui.separator();
-                ui.text(im_str!("Cameras"));
-                let mut change_camera = None;
-                for (index, (entity, camera)) in application
-                    .world
-                    .ecs
-                    .query::<&WorldCamera>()
-                    .iter()
-                    .enumerate()
-                {
-                    let label = if camera.enabled {
-                        "enabled"
-                    } else {
-                        "disabled"
-                    };
-                    let clicked =
-                        ui.small_button(&im_str!("{} #{} [{}]", camera.name, index, label));
-                    if change_camera.is_none() && clicked {
-                        change_camera = Some(entity);
-                    }
-                }
-                if let Some(selected_camera_entity) = change_camera {
-                    for (entity, camera) in application.world.ecs.query_mut::<&mut WorldCamera>() {
-                        camera.enabled = entity == selected_camera_entity;
-                    }
-                }
-
-                ui.separator();
+                ui.text(im_str!(" ",));
             });
         Ok(())
     }

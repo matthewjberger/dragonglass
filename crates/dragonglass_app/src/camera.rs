@@ -23,7 +23,8 @@ impl MouseOrbit {
         }
 
         {
-            let mut transform = application.world.ecs.get_mut::<Transform>(entity)?;
+            let mut entry = application.world.entry_mut(entity)?;
+            let mut transform = entry.get_component_mut::<Transform>()?;
             if application.input.mouse.is_right_clicked {
                 self.orientation.pan(&mouse_delta)
             }
@@ -51,7 +52,8 @@ impl MouseLook {
         self.orientation.rotate(&mouse_delta);
 
         {
-            let mut transform = application.world.ecs.get_mut::<Transform>(entity)?;
+            let mut entry = application.world.entry_mut(entity)?;
+            let mut transform = entry.get_component_mut::<Transform>()?;
             transform.rotation = self.orientation.look_forward();
         }
 
