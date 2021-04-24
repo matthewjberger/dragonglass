@@ -1,20 +1,38 @@
+use crate::Name;
 use anyhow::{bail, Context, Result};
-use legion::{world::Entry, EntityStore, IntoQuery};
+use lazy_static::lazy_static;
+use legion::{serialize::Canon, world::Entry, EntityStore, IntoQuery, Registry};
 use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::{Arc, RwLock};
 use std::{
     collections::HashMap,
     ops::{Index, IndexMut},
 };
 
+lazy_static! {
+    pub static ref COMPONENT_REGISTRY: Arc<RwLock<Registry<String>>> = {
+        let mut registry = Registry::default();
+        registry.register::<Name>("name".to_string());
+        registry.register::<Transform>("transform".to_string());
+        registry.register::<Camera>("camera".to_string());
+        registry.register::<MeshRender>("mesh".to_string());
+        registry.register::<Skin>("skin".to_string());
+        registry.register::<Light>("light".to_string());
+        Arc::new(RwLock::new(registry))
+    };
+    pub static ref ENTITY_SERIALIZER: Canon = Canon::default();
+}
+
 pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct World {
+    #[serde(serialize_with = "serialize_ecs", deserialize_with = "deserialize_ecs")]
     pub ecs: Ecs,
     pub scene: Scene,
     pub animations: Vec<Animation>,
@@ -339,6 +357,27 @@ impl World {
     }
 }
 
+fn serialize_ecs<S>(ecs: &Ecs, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let registry = (&*COMPONENT_REGISTRY)
+        .read()
+        .expect("Failed to get the component registry lock!");
+    ecs.as_serializable(legion::any(), &*registry, &*ENTITY_SERIALIZER)
+        .serialize(serializer)
+}
+
+fn deserialize_ecs<'de, D>(deserializer: D) -> Result<Ecs, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    (&*COMPONENT_REGISTRY)
+        .read()
+        .expect("Failed to get the component registry lock!")
+        .as_deserialize(&*ENTITY_SERIALIZER)
+        .deserialize(deserializer)
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
@@ -571,13 +610,13 @@ impl OrthographicCamera {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Skin {
     pub name: String,
     pub joints: Vec<Joint>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Joint {
     pub target: Entity,
     pub inverse_bind_matrix: glm::Mat4,

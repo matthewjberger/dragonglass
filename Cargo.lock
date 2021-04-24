@@ -633,6 +633,7 @@ dependencies = [
  "anyhow",
  "gltf",
  "image",
+ "lazy_static",
  "legion",
  "log",
  "nalgebra 0.26.1",
