@@ -36,7 +36,7 @@ lazy_static! {
 pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct World {
     #[serde(serialize_with = "serialize_ecs", deserialize_with = "deserialize_ecs")]
     pub ecs: Ecs,
