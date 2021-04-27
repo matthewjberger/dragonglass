@@ -1,6 +1,5 @@
 use crate::byte_slice_from;
 use anyhow::{ensure, Context as AnyhowContext, Result};
-use dragonglass_physics::PhysicsWorld;
 use dragonglass_vulkan::{
     ash::{version::DeviceV1_0, vk},
     core::{
@@ -634,7 +633,6 @@ impl WorldRender {
         &self,
         command_buffer: vk::CommandBuffer,
         world: &World,
-        _physics_world: &PhysicsWorld,
         aspect_ratio: f32,
     ) -> Result<()> {
         let pipeline = self

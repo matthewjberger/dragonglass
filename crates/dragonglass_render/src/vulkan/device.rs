@@ -6,7 +6,6 @@ use crate::{
     Render,
 };
 use anyhow::Result;
-use dragonglass_physics::PhysicsWorld;
 use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
@@ -79,13 +78,7 @@ impl Render for VulkanRenderBackend {
         Ok(())
     }
 
-    fn render(
-        &mut self,
-        dimensions: &[u32; 2],
-        world: &World,
-        physics_world: &PhysicsWorld,
-        draw_data: &DrawData,
-    ) -> Result<()> {
+    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
@@ -157,12 +150,7 @@ impl Render for VulkanRenderBackend {
                     device.update_viewport(command_buffer, pass.extent, true)?;
                     scene.skybox_render.issue_commands(command_buffer)?;
                     if let Some(world_render) = scene.world_render.as_ref() {
-                        world_render.issue_commands(
-                            command_buffer,
-                            world,
-                            physics_world,
-                            aspect_ratio,
-                        )?;
+                        world_render.issue_commands(command_buffer, world, aspect_ratio)?;
                     }
                     Ok(())
                 },

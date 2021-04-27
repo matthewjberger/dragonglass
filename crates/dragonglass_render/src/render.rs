@@ -1,5 +1,4 @@
 use anyhow::Result;
-use dragonglass_physics::PhysicsWorld;
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
@@ -16,13 +15,7 @@ pub trait Render {
     fn load_skybox(&mut self, path: &str) -> Result<()>;
     fn load_world(&mut self, world: &World) -> Result<()>;
     fn reload_asset_shaders(&mut self) -> Result<()>;
-    fn render(
-        &mut self,
-        dimensions: &[u32; 2],
-        world: &World,
-        physics_world: &PhysicsWorld,
-        draw_data: &DrawData,
-    ) -> Result<()>;
+    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;
 }
 
 impl dyn Render {

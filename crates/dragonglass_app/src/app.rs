@@ -4,12 +4,13 @@ use crate::{
     state::{Input, System},
 };
 use anyhow::Result;
-use dragonglass_physics::{
-    rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
-    PhysicsWorld, RigidBody,
-};
 use dragonglass_render::{Backend, Render};
-use dragonglass_world::{legion::IntoQuery, load_gltf, Entity, World};
+use dragonglass_world::{
+    legion::IntoQuery,
+    load_gltf,
+    rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
+    Entity, RigidBody, World,
+};
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
 use log::error;
@@ -64,7 +65,6 @@ impl AppConfig {
 
 pub struct Application {
     pub world: World,
-    pub physics_world: PhysicsWorld,
     pub input: Input,
     pub system: System,
     pub renderer: Box<dyn Render>,
@@ -137,6 +137,7 @@ impl Application {
         Ok(ray)
     }
 
+    // FIXME: Move picking stuff to world struct
     pub fn pick_object(
         &mut self,
         interact_distance: f32,
@@ -144,8 +145,8 @@ impl Application {
     ) -> Result<Option<Entity>> {
         let ray = self.mouse_ray()?;
 
-        let hit = self.physics_world.query_pipeline.cast_ray(
-            &self.physics_world.colliders,
+        let hit = self.world.physics.query_pipeline.cast_ray(
+            &self.world.physics.colliders,
             &ray,
             interact_distance,
             true,
@@ -155,7 +156,7 @@ impl Application {
 
         let mut picked_entity = None;
         if let Some((handle, _)) = hit {
-            let collider = &self.physics_world.colliders[handle];
+            let collider = &self.world.physics.colliders[handle];
             let rigid_body_handle = collider.parent();
             let mut query = <(Entity, &RigidBody)>::query();
             for (entity, rigid_body) in query.iter(&self.world.ecs) {
@@ -169,18 +170,15 @@ impl Application {
         Ok(picked_entity)
     }
 
+    // FIXME: Give world an update method
     pub fn update(&mut self) -> Result<()> {
-        self.physics_world.update(self.system.delta_time as f32);
+        self.world.physics.update(self.system.delta_time as f32);
         Ok(())
     }
 
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
-        self.renderer.render(
-            &self.system.window_dimensions,
-            &self.world,
-            &self.physics_world,
-            draw_data,
-        )?;
+        self.renderer
+            .render(&self.system.window_dimensions, &self.world, draw_data)?;
         Ok(())
     }
 }
@@ -256,7 +254,6 @@ pub fn run_application(
 
     let mut state = Application {
         world,
-        physics_world: PhysicsWorld::new(),
         input: Input::default(),
         system: System::new(window_dimensions),
         renderer,

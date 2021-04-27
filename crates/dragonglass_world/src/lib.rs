@@ -1,9 +1,11 @@
 mod gltf;
+mod physics;
 mod world;
 
 pub use self::{
     gltf::*,
     legion::{EntityStore, IntoQuery},
+    physics::*,
     world::*,
 };
 pub use legion;

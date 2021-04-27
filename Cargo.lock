@@ -119,6 +119,9 @@ name = "bit-vec"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitflags"
@@ -236,9 +239,9 @@ checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "const_fn"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "076a6803b0dacd6a88cfe64deba628b01533ff5ef265687e6938280c1afd0a28"
+checksum = "402da840495de3f976eaefc3485b7f5eb5b0bf9761f9a47be27fe975b3b8c2ec"
 
 [[package]]
 name = "core-foundation"
@@ -412,12 +415,12 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9d6ddad5866bb2170686ed03f6839d31a76e5407d80b1c334a2c24618543ffa"
+checksum = "5f2c43f534ea4b0b049015d00269734195e6d3f0f6635cb692251aca6f9f8b3c"
 dependencies = [
- "darling_core 0.12.3",
- "darling_macro 0.12.3",
+ "darling_core 0.12.4",
+ "darling_macro 0.12.4",
 ]
 
 [[package]]
@@ -436,9 +439,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9ced1fd13dc386d5a8315899de465708cf34ee2a6d9394654515214e67bb846"
+checksum = "8e91455b86830a1c21799d94524df0845183fa55bafd9aa137b01c7d1065fa36"
 dependencies = [
  "fnv",
  "ident_case",
@@ -461,11 +464,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a7a1445d54b2f9792e3b31a3e715feabbace393f38dc4ffd49d94ee9bc487d5"
+checksum = "29b5acf0dea37a7f66f7b25d2c5e93fd46f8f6968b1a5d7a3e02e97768afc95a"
 dependencies = [
- "darling_core 0.12.3",
+ "darling_core 0.12.4",
  "quote",
  "syn",
 ]
@@ -493,21 +496,20 @@ dependencies = [
 
 [[package]]
 name = "derive_builder"
-version = "0.10.0"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ef25735c9f0d0c547d2794701600c94abf030ecb740fad1673fa64461f3573"
+checksum = "d13202debe11181040ae9063d739fa32cfcaaebe2275fe387703460ae2365b30"
 dependencies = [
- "derive_builder_core",
  "derive_builder_macro",
 ]
 
 [[package]]
 name = "derive_builder_core"
-version = "0.10.0"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3150f1e84602847b99d3eeb702487fc364f7d6c94f634e944a68fdbaea09e457"
+checksum = "66e616858f6187ed828df7c64a6d71720d83767a7f19740b2d1b6fe6327b36e5"
 dependencies = [
- "darling 0.12.3",
+ "darling 0.12.4",
  "proc-macro2",
  "quote",
  "syn",
@@ -515,9 +517,9 @@ dependencies = [
 
 [[package]]
 name = "derive_builder_macro"
-version = "0.10.0"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ca1008bddefdc08d1e734aeb27b94f384390af261b4d1a8fb51fe19c577f05c"
+checksum = "58a94ace95092c5acb1e97a7e846b310cfbd499652f72297da7493f618a98d73"
 dependencies = [
  "derive_builder_core",
  "syn",
@@ -564,7 +566,6 @@ name = "dragonglass"
 version = "0.1.0"
 dependencies = [
  "dragonglass_app",
- "dragonglass_physics",
  "dragonglass_render",
  "dragonglass_vulkan",
  "dragonglass_world",
@@ -575,7 +576,6 @@ name = "dragonglass_app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dragonglass_physics",
  "dragonglass_render",
  "dragonglass_world",
  "image",
@@ -589,19 +589,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "dragonglass_physics"
-version = "0.1.0"
-dependencies = [
- "rapier3d",
-]
-
-[[package]]
 name = "dragonglass_render"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "derive_builder",
- "dragonglass_physics",
  "dragonglass_vulkan",
  "dragonglass_world",
  "image",
@@ -646,9 +638,10 @@ dependencies = [
  "lazy_static",
  "legion",
  "log",
- "nalgebra 0.26.1",
+ "nalgebra 0.26.2",
  "nalgebra-glm 0.12.0",
  "petgraph",
+ "rapier3d",
  "serde",
 ]
 
@@ -1054,9 +1047,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.93"
+version = "0.2.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9385f66bf6105b241aa65a61cb923ef20efc665cb9f9bb50ac2f0c4b7f378d41"
+checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
 
 [[package]]
 name = "libloading"
@@ -1225,9 +1218,9 @@ dependencies = [
 
 [[package]]
 name = "nalgebra"
-version = "0.26.1"
+version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e420697df99b528ac4bac53d6b59936219c9f490933b79eab8e7b146152eb9ca"
+checksum = "476d1d59fe02fe54c86356e91650cd892f392782a1cb9fc524ec84f7aa9e1d06"
 dependencies = [
  "approx",
  "matrixmultiply",
@@ -1258,7 +1251,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb2e88a888ba4c1e4f3b78acd5136d5548046176831d99f3ac94ef9a596c2ed0"
 dependencies = [
  "approx",
- "nalgebra 0.26.1",
+ "nalgebra 0.26.2",
  "num-traits",
  "simba",
 ]
@@ -1355,9 +1348,9 @@ dependencies = [
 
 [[package]]
 name = "notify"
-version = "4.0.15"
+version = "4.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80ae4a7688d1fab81c5bf19c64fc8db920be8d519ce6336ed4e7efe024724dbd"
+checksum = "2599080e87c9bd051ddb11b10074f4da7b1223298df65d4c2ec5bcf309af1533"
 dependencies = [
  "bitflags",
  "filetime",
@@ -1516,18 +1509,19 @@ dependencies = [
 
 [[package]]
 name = "parry3d"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccb56ccaae49120d92e27ba6234eb378e33c5f5176c3f99bf03c2ccfafd161c5"
+checksum = "8778d45b719c2f2785e43a15fb2b9be5c33721304199e5bb5f5f03d1121460f4"
 dependencies = [
  "approx",
  "bitflags",
  "downcast-rs",
  "either",
- "nalgebra 0.26.1",
+ "nalgebra 0.26.2",
  "num-derive",
  "num-traits",
  "rustc-hash",
+ "serde",
  "simba",
  "slab",
  "smallvec",
@@ -1621,11 +1615,13 @@ dependencies = [
  "crossbeam",
  "downcast-rs",
  "instant",
- "nalgebra 0.26.1",
+ "nalgebra 0.26.2",
  "num-derive",
  "num-traits",
  "parry3d",
+ "rayon",
  "rustc-hash",
+ "serde",
  "simba",
 ]
 
@@ -1839,9 +1835,9 @@ dependencies = [
 
 [[package]]
 name = "slab"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
+checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
 
 [[package]]
 name = "smallvec"
@@ -1940,9 +1936,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "syn"
-version = "1.0.69"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48fe99c6bd8b1cc636890bcc071842de909d902c81ac7dab53ba33c421ab8ffb"
+checksum = "b9505f307c872bab8eb46f77ae357c8eba1fdacead58ee5a850116b1d7f82883"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2236,9 +2232,9 @@ dependencies = [
 
 [[package]]
 name = "weezl"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a32b378380f4e9869b22f0b5177c68a5519f03b3454fde0b291455ddbae266c"
+checksum = "d8b77fdfd5a253be4ab714e4ffa3c49caf146b4de743e97510c0656cf90f1e8e"
 
 [[package]]
 name = "winapi"

@@ -1,14 +1,29 @@
+pub use rapier3d;
+
 use rapier3d::{
     dynamics::{CCDSolver, IntegrationParameters, JointSet, RigidBodySet},
     geometry::{BroadPhase, ColliderSet, NarrowPhase},
     na::Vector3,
     pipeline::{PhysicsPipeline, QueryPipeline},
 };
+use serde::{Deserialize, Serialize};
 
-pub struct PhysicsWorld {
+pub type Handle = rapier3d::dynamics::RigidBodyHandle;
+
+pub struct RigidBody {
+    pub handle: Handle,
+}
+
+impl RigidBody {
+    pub fn new(handle: Handle) -> Self {
+        Self { handle }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WorldPhysics {
     pub gravity: Vector3<f32>,
     pub integration_parameters: IntegrationParameters,
-    pub pipeline: PhysicsPipeline,
     pub broad_phase: BroadPhase,
     pub narrow_phase: NarrowPhase,
     pub bodies: RigidBodySet,
@@ -16,20 +31,21 @@ pub struct PhysicsWorld {
     pub joints: JointSet,
     pub query_pipeline: QueryPipeline,
     pub ccd_solver: CCDSolver,
+    #[serde(skip)]
+    pub pipeline: PhysicsPipeline,
 }
 
-impl Default for PhysicsWorld {
+impl Default for WorldPhysics {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PhysicsWorld {
+impl WorldPhysics {
     pub fn new() -> Self {
         Self {
             gravity: Vector3::y() * -9.81,
             integration_parameters: IntegrationParameters::default(),
-            pipeline: PhysicsPipeline::new(),
             broad_phase: BroadPhase::new(),
             narrow_phase: NarrowPhase::new(),
             bodies: RigidBodySet::new(),
@@ -37,6 +53,7 @@ impl PhysicsWorld {
             joints: JointSet::new(),
             query_pipeline: QueryPipeline::default(),
             ccd_solver: CCDSolver::new(),
+            pipeline: PhysicsPipeline::new(),
         }
     }
 

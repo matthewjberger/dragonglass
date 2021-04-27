@@ -1,4 +1,4 @@
-use crate::Name;
+use crate::{Name, WorldPhysics};
 use anyhow::{bail, Context, Result};
 use lazy_static::lazy_static;
 use legion::{
@@ -36,10 +36,11 @@ lazy_static! {
 pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct World {
     #[serde(serialize_with = "serialize_ecs", deserialize_with = "deserialize_ecs")]
     pub ecs: Ecs,
+    pub physics: WorldPhysics,
     pub scene: Scene,
     pub animations: Vec<Animation>,
     pub materials: Vec<Material>,
