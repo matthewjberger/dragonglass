@@ -28,8 +28,7 @@ impl GpuBuffer {
             &allocation_create_info,
             buffer_create_info,
         )?;
-        let gpu_buffer = Self { buffer, allocator };
-        Ok(gpu_buffer)
+        Ok(Self { buffer, allocator })
     }
 
     pub fn handle(&self) -> vk::Buffer {
@@ -91,8 +90,7 @@ impl CpuToGpuBuffer {
             .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         let buffer = Buffer::new(allocator, &allocation_create_info, buffer_create_info)?;
-        let cpu_to_gpu_buffer = Self { buffer };
-        Ok(cpu_to_gpu_buffer)
+        Ok(Self { buffer })
     }
 
     pub fn handle(&self) -> vk::Buffer {
@@ -160,14 +158,12 @@ impl Buffer {
         let (handle, allocation, allocation_info) =
             allocator.create_buffer(&buffer_create_info, allocation_create_info)?;
 
-        let buffer = Self {
+        Ok(Self {
             handle,
             allocation_info,
             allocation,
             allocator,
-        };
-
-        Ok(buffer)
+        })
     }
 
     pub fn flush(&self, offset: usize, size: usize) {
