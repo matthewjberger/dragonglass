@@ -1,8 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    world::load_gltf,
-    world::World,
+    world::{load_gltf, World},
 };
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
