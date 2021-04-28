@@ -567,7 +567,6 @@ version = "0.1.0"
 dependencies = [
  "dragonglass_app",
  "dragonglass_render",
- "dragonglass_vulkan",
  "dragonglass_world",
 ]
 
