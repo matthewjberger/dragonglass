@@ -14,7 +14,7 @@ use dragonglass_vulkan::{
 };
 use dragonglass_world::{
     legion::EntityStore, AlphaMode, Filter, Geometry, Hidden, LightKind, Material, Mesh,
-    MeshRender, Skin, Transform, Vertex, World, WrappingMode,
+    MeshRender, RigidBody, Skin, Transform, Vertex, World, WrappingMode,
 };
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
@@ -497,7 +497,24 @@ impl WorldPipelineData {
         for graph in world.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let model = world.global_transform(graph, node_index)?;
+
+                let entry = world.ecs.entry_ref(entity)?;
+
+                // Render rigid bodies at the transform specified by the physics world instead of the scenegraph
+                let model = match entry.get_component::<RigidBody>() {
+                    Ok(rigid_body) => {
+                        let body = world
+                            .physics
+                            .bodies
+                            .get(rigid_body.handle)
+                            .context("Failed to acquire physics body to render!")?;
+                        let position = body.position();
+                        let translation = position.translation.vector;
+                        let rotation = *position.rotation.quaternion();
+                        Transform::new(translation, rotation, glm::vec3(1.0, 1.0, 1.0)).matrix()
+                    }
+                    Err(_) => world.global_transform(graph, node_index)?,
+                };
 
                 let mut node_info = glm::vec4(0.0, 0.0, 0.0, 0.0);
 

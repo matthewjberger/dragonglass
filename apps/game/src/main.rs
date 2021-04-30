@@ -16,7 +16,6 @@ use rapier3d::{
 use winit::event::{ElementState, VirtualKeyCode};
 
 // TODO: Create trigger with event on collision
-// TODO: Add trimesh component with handle?
 // TODO: Visualize triangle mesh colliders as wireframes in renderer?
 
 const PLAYER_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b10, 0b01);
@@ -82,7 +81,7 @@ impl ApplicationRunner for Game {
         }
 
         // Load player
-        let position = glm::vec3(0.0, 40.0, 0.0);
+        let position = glm::vec3(0.0, 1.0, 0.0);
         let transform = Transform {
             translation: position,
             ..Default::default()
@@ -156,7 +155,7 @@ impl ApplicationRunner for Game {
             application.system.exit_requested = true;
         }
 
-        // sync_all_rigid_bodies(application);
+        sync_all_rigid_bodies(application);
         if let Some(player) = self.player.as_ref() {
             self.camera.update(application, *player)?;
             update_player(application, *player)?;
@@ -196,14 +195,7 @@ fn add_rigid_body(
     body_status: BodyStatus,
 ) -> Result<()> {
     let handle = {
-        let bounding_box = {
-            let entry = application.world.ecs.entry_ref(entity).context("")?;
-            let mesh = entry.get_component::<MeshRender>()?;
-            application.world.geometry.meshes[&mesh.name].bounding_box()
-        };
-        let translation = glm::translation(&bounding_box.center());
-        let transform_matrix =
-            application.world.entity_global_transform_matrix(entity)? * translation;
+        let transform_matrix = application.world.entity_global_transform_matrix(entity)?;
         let transform = Transform::from(transform_matrix);
 
         // Insert a corresponding rigid body
