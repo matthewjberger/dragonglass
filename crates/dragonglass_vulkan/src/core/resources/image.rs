@@ -48,6 +48,7 @@ impl ImageDescription {
         }
     }
 
+    // FIXME: MOve this to the 'world' crate
     #[allow(dead_code)]
     pub fn from_file<P>(path: P) -> Result<Self>
     where
@@ -59,6 +60,7 @@ impl ImageDescription {
         Self::from_image(&image)
     }
 
+    // FIXME: Move this to the 'world' crate
     #[allow(dead_code)]
     pub fn from_hdr<P>(path: P) -> Result<Self>
     where

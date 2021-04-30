@@ -1,5 +1,7 @@
 use crate::{Name, WorldPhysics};
 use anyhow::{bail, Context, Result};
+use bmfont::{BMFont, OrdinateOrientation};
+use image::{io::Reader as ImageReader, DynamicImage, GenericImageView};
 use lazy_static::lazy_static;
 use legion::{
     serialize::set_entity_serializer, serialize::Canon, world::Entry, EntityStore, IntoQuery,
@@ -13,8 +15,6 @@ use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serialize
 use std::{
     collections::HashMap,
     ops::{Index, IndexMut},
-};
-use std::{
     path::Path,
     sync::{Arc, RwLock},
 };
@@ -46,6 +46,7 @@ pub struct World {
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub geometry: Geometry,
+    pub fonts: HashMap<String, SdfFont>,
 }
 
 impl World {
@@ -880,6 +881,7 @@ impl Default for AlphaMode {
     }
 }
 
+// FIXME: Add mip levels
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Texture {
     pub pixels: Vec<u8>,
@@ -887,6 +889,35 @@ pub struct Texture {
     pub width: u32,
     pub height: u32,
     pub sampler: Sampler,
+}
+
+impl Texture {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let image = ImageReader::open(path)?.decode()?;
+        let pixels = image.to_bytes();
+        let (width, height) = image.dimensions();
+        let format = Self::map_format(&image)?;
+
+        Ok(Self {
+            pixels,
+            format,
+            width,
+            height,
+            sampler: Sampler::default(),
+        })
+    }
+
+    pub fn map_format(image: &DynamicImage) -> Result<Format> {
+        Ok(match image {
+            DynamicImage::ImageRgb8(_) => Format::R8G8B8,
+            DynamicImage::ImageRgba8(_) => Format::R8G8B8A8,
+            DynamicImage::ImageBgr8(_) => Format::B8G8R8,
+            DynamicImage::ImageBgra8(_) => Format::B8G8R8A8,
+            DynamicImage::ImageRgb16(_) => Format::R16G16B16,
+            DynamicImage::ImageRgba16(_) => Format::R16G16B16A16,
+            _ => bail!("Failed to match the provided image format to a vulkan format!"),
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -1016,5 +1047,20 @@ impl Index<NodeIndex> for SceneGraph {
 impl IndexMut<NodeIndex> for SceneGraph {
     fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
         &mut self.0[index]
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SdfFont {
+    texture: Texture,
+    font: BMFont,
+}
+
+impl SdfFont {
+    pub fn new(font_path: impl AsRef<Path>, texture_path: impl AsRef<Path>) -> Result<Self> {
+        let file = std::fs::File::open(font_path)?;
+        let font = BMFont::new(file, OrdinateOrientation::TopToBottom)?;
+        let texture = Texture::from_file(texture_path)?;
+        Ok(Self { texture, font })
     }
 }

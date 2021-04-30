@@ -9,7 +9,7 @@ use dragonglass_world::{
     legion::IntoQuery,
     load_gltf,
     rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
-    Entity, RigidBody, World,
+    Entity, RigidBody, SdfFont, World,
 };
 use image::io::Reader;
 use imgui::{im_str, DrawData, Ui};
@@ -250,7 +250,11 @@ pub fn run_application(
         gui.context_mut(),
     )?);
 
-    let world = World::new()?;
+    let mut world = World::new()?;
+    world.fonts.insert(
+        "default".to_string(),
+        SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
+    );
 
     let mut state = Application {
         world,
