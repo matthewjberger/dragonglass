@@ -99,7 +99,7 @@ impl ApplicationRunner for Game {
         }
 
         // Load the level
-        application.load_asset("assets/models/blocklevel.glb")?;
+        application.load_asset("assets/models/gamemap.glb")?;
 
         application.reload_world()?;
 
@@ -156,7 +156,7 @@ impl ApplicationRunner for Game {
             application.system.exit_requested = true;
         }
 
-        sync_all_rigid_bodies(application);
+        // sync_all_rigid_bodies(application);
         if let Some(player) = self.player.as_ref() {
             self.camera.update(application, *player)?;
             update_player(application, *player)?;
