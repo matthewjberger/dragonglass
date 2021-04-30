@@ -1,6 +1,6 @@
 use crate::app::Application;
 use anyhow::Result;
-use dragonglass_world::{Entity, Transform};
+use dragonglass_world::{Entity, EntityStore, Transform};
 use nalgebra_glm as glm;
 
 #[derive(Default)]
@@ -23,7 +23,7 @@ impl MouseOrbit {
         }
 
         {
-            let mut entry = application.world.entry_mut(entity)?;
+            let mut entry = application.world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
             if application.input.mouse.is_right_clicked {
                 self.orientation.pan(&mouse_delta)
@@ -52,7 +52,7 @@ impl MouseLook {
         self.orientation.rotate(&mouse_delta);
 
         {
-            let mut entry = application.world.entry_mut(entity)?;
+            let mut entry = application.world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
             transform.rotation = self.orientation.look_forward();
         }

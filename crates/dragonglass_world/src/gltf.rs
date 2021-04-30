@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
+use legion::EntityStore;
 use nalgebra_glm as glm;
 use petgraph::prelude::*;
 use std::path::Path;
@@ -90,7 +91,7 @@ pub fn load_gltf(path: impl AsRef<Path>, world: &mut World) -> Result<()> {
     )?;
 
     for entity in entities.iter() {
-        if let Ok(mesh) = world.entry_mut(*entity)?.get_component_mut::<Mesh>() {
+        if let Ok(mesh) = world.ecs.entry_mut(*entity)?.get_component_mut::<Mesh>() {
             mesh.primitives.iter_mut().for_each(|primitive| {
                 if let Some(material_index) = primitive.material_index.as_mut() {
                     *material_index += number_of_materials

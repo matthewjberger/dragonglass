@@ -4,8 +4,7 @@ use bmfont::{BMFont, OrdinateOrientation};
 use image::{io::Reader as ImageReader, DynamicImage, GenericImageView};
 use lazy_static::lazy_static;
 use legion::{
-    serialize::set_entity_serializer, serialize::Canon, world::Entry, EntityStore, IntoQuery,
-    Registry,
+    serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
 };
 use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
 use nalgebra as na;
@@ -63,12 +62,6 @@ impl World {
         self.scene.name = "Main Scene".to_string();
         self.add_default_camera()?;
         Ok(())
-    }
-
-    pub fn entry_mut(&mut self, entity: Entity) -> Result<Entry> {
-        self.ecs
-            .entry(entity)
-            .context("Failed to find a requested camera entity!")
     }
 
     fn add_default_camera(&mut self) -> Result<()> {
