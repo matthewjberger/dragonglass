@@ -11,6 +11,7 @@ use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::{BodyStatus, RigidBodyBuilder},
     geometry::{ColliderBuilder, InteractionGroups},
+    math::Point,
 };
 use winit::event::{ElementState, VirtualKeyCode};
 
@@ -102,17 +103,17 @@ impl ApplicationRunner for Game {
 
         application.reload_world()?;
 
-        // Add static box colliders to level meshes
+        // Add static colliders to level meshes
         let mut level_meshes = Vec::new();
         let mut query = <(Entity, &MeshRender)>::query();
         for (entity, mesh) in query.iter(&application.world.ecs) {
             level_meshes.push(*entity);
             log::info!("Mesh available: {}", mesh.name);
         }
-
         for entity in level_meshes.into_iter() {
             add_rigid_body(application, entity, BodyStatus::Static)?;
-            add_box_collider(application, entity, LEVEL_COLLISION_GROUP)?;
+            // add_box_collider(application, entity, LEVEL_COLLISION_GROUP)?;
+            add_trimesh_collider(application, entity, LEVEL_COLLISION_GROUP)?;
         }
 
         // Setup player
@@ -220,6 +221,54 @@ fn add_rigid_body(
     Ok(())
 }
 
+fn add_trimesh_collider(
+    application: &mut Application,
+    entity: Entity,
+    collision_groups: InteractionGroups,
+) -> Result<()> {
+    let entry = application.world.ecs.entry_ref(entity)?;
+    let mesh = entry.get_component::<MeshRender>()?;
+    let mesh = &application.world.geometry.meshes[&mesh.name];
+
+    let rigid_body_handle = application
+        .world
+        .ecs
+        .entry_ref(entity)?
+        .get_component::<RigidBody>()?
+        .handle;
+
+    for primitive in mesh.primitives.iter() {
+        let vertices = application.world.geometry.vertices
+            [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
+            .iter()
+            .map(|v| Point::from_slice(v.position.as_slice()))
+            .collect::<Vec<_>>();
+
+        let indices = application.world.geometry.indices
+            [primitive.first_index..primitive.first_index + primitive.number_of_indices]
+            .chunks(3)
+            .map(|chunk| {
+                [
+                    chunk[0] - primitive.first_vertex as u32,
+                    chunk[1] - primitive.first_vertex as u32,
+                    chunk[2] - primitive.first_vertex as u32,
+                ]
+            })
+            .collect::<Vec<[u32; 3]>>();
+
+        let collider = ColliderBuilder::trimesh(vertices, indices)
+            .collision_groups(collision_groups)
+            .build();
+        application.world.physics.colliders.insert(
+            collider,
+            rigid_body_handle,
+            &mut application.world.physics.bodies,
+        );
+    }
+    Ok(())
+}
+
+#[allow(dead_code)]
 fn add_box_collider(
     application: &mut Application,
     entity: Entity,
