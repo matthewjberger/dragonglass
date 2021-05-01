@@ -195,12 +195,12 @@ fn add_rigid_body(
     body_status: BodyStatus,
 ) -> Result<()> {
     let handle = {
-        let transform_matrix = application.world.entity_global_transform_matrix(entity)?;
-        let transform = Transform::from(transform_matrix);
+        let isometry = Transform::from(application.world.entity_global_transform_matrix(entity)?)
+            .as_isometry();
 
         // Insert a corresponding rigid body
         let rigid_body = RigidBodyBuilder::new(body_status)
-            .position(transform.as_isometry())
+            .position(isometry)
             .build();
         application.world.physics.bodies.insert(rigid_body)
     };
@@ -220,6 +220,7 @@ fn add_trimesh_collider(
 ) -> Result<()> {
     let entry = application.world.ecs.entry_ref(entity)?;
     let mesh = entry.get_component::<MeshRender>()?;
+    let transform = entry.get_component::<Transform>()?;
     let mesh = &application.world.geometry.meshes[&mesh.name];
 
     let rigid_body_handle = application
@@ -233,7 +234,7 @@ fn add_trimesh_collider(
         let vertices = application.world.geometry.vertices
             [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
             .iter()
-            .map(|v| Point::from_slice(v.position.as_slice()))
+            .map(|v| Point::from_slice((v.position.component_mul(&transform.scale)).as_slice()))
             .collect::<Vec<_>>();
 
         let indices = application.world.geometry.indices
