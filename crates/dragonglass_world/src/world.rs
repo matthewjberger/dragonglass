@@ -1,4 +1,4 @@
-use crate::{Name, WorldPhysics};
+use crate::{Name, RigidBody, WorldPhysics};
 use anyhow::{bail, Context, Result};
 use bmfont::{BMFont, OrdinateOrientation};
 use image::{io::Reader as ImageReader, DynamicImage, GenericImageView};
@@ -6,10 +6,15 @@ use lazy_static::lazy_static;
 use legion::{
     serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
 };
-use na::{linalg::QR, Isometry3, Translation3, UnitQuaternion};
+use na::{linalg::QR, Isometry3, Point, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
+use rapier3d::{
+    dynamics::BodyStatus,
+    dynamics::RigidBodyBuilder,
+    geometry::{ColliderBuilder, InteractionGroups},
+};
 use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::HashMap,
@@ -355,6 +360,69 @@ impl World {
             })?;
         }
         Ok(joint_matrices)
+    }
+
+    pub fn add_trimesh_collider(
+        &mut self,
+        entity: Entity,
+        collision_groups: InteractionGroups,
+    ) -> Result<()> {
+        let entry = self.ecs.entry_ref(entity)?;
+        let mesh = entry.get_component::<MeshRender>()?;
+        let transform = entry.get_component::<Transform>()?;
+        let mesh = &self.geometry.meshes[&mesh.name];
+
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+
+        for primitive in mesh.primitives.iter() {
+            let vertices = self.geometry.vertices
+                [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
+                .iter()
+                .map(|v| Point::from_slice((v.position.component_mul(&transform.scale)).as_slice()))
+                .collect::<Vec<_>>();
+
+            let indices = self.geometry.indices
+                [primitive.first_index..primitive.first_index + primitive.number_of_indices]
+                .chunks(3)
+                .map(|chunk| {
+                    [
+                        chunk[0] - primitive.first_vertex as u32,
+                        chunk[1] - primitive.first_vertex as u32,
+                        chunk[2] - primitive.first_vertex as u32,
+                    ]
+                })
+                .collect::<Vec<[u32; 3]>>();
+
+            let collider = ColliderBuilder::trimesh(vertices, indices)
+                .collision_groups(collision_groups)
+                .build();
+            self.physics
+                .colliders
+                .insert(collider, rigid_body_handle, &mut self.physics.bodies);
+        }
+        Ok(())
+    }
+
+    pub fn add_rigid_body(&mut self, entity: Entity, body_status: BodyStatus) -> Result<()> {
+        let handle = {
+            let isometry =
+                Transform::from(self.entity_global_transform_matrix(entity)?).as_isometry();
+
+            // Insert a corresponding rigid body
+            let rigid_body = RigidBodyBuilder::new(body_status)
+                .position(isometry)
+                .build();
+            self.physics.bodies.insert(rigid_body)
+        };
+        self.ecs
+            .entry(entity)
+            .context("")?
+            .add_component(RigidBody::new(handle));
+        Ok(())
     }
 
     pub fn as_bytes(&self) -> Result<Vec<u8>> {

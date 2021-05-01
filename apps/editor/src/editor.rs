@@ -1,7 +1,10 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    world::{load_gltf, World},
+    world::rapier3d::dynamics::BodyStatus,
+    world::rapier3d::geometry::InteractionGroups,
+    world::MeshRender,
+    world::{legion::Entity, load_gltf, IntoQuery, World},
 };
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
@@ -168,17 +171,37 @@ impl ApplicationRunner for Editor {
             }
         }
 
+        let mut query = <(Entity, &MeshRender)>::query();
+        let entities = query
+            .iter(&mut application.world.ecs)
+            .map(|(e, _)| *e)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            application
+                .world
+                .add_rigid_body(entity, BodyStatus::Static)?;
+            application
+                .world
+                .add_trimesh_collider(entity, InteractionGroups::all())?;
+        }
+
         Ok(())
     }
 
     fn on_mouse(
         &mut self,
         application: &mut Application,
-        _button: MouseButton,
-        _state: ElementState,
+        button: MouseButton,
+        state: ElementState,
     ) -> Result<()> {
         if !application.input.allowed {
             return Ok(());
+        }
+
+        if (MouseButton::Left, ElementState::Pressed) == (button, state) {
+            if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
+                log::info!("Bingo! {:?}", entity);
+            }
         }
         Ok(())
     }
