@@ -108,11 +108,11 @@ impl ApplicationRunner for Editor {
             application.system.exit_requested = true;
         }
 
-        if !application.world.animations.is_empty() {
-            application
-                .world
-                .animate(0, 0.75 * application.system.delta_time as f32)?;
-        }
+        // if !application.world.animations.is_empty() {
+        //     application
+        //         .world
+        //         .animate(0, 0.75 * application.system.delta_time as f32)?;
+        // }
 
         if !application.input.allowed {
             return Ok(());

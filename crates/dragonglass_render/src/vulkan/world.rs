@@ -501,17 +501,11 @@ impl WorldPipelineData {
                 let entry = world.ecs.entry_ref(entity)?;
 
                 // Render rigid bodies at the transform specified by the physics world instead of the scenegraph
-                // FIXME: Rigid body rendering
-                //        Should we apply local entity scale or computed aggregate scale????
-                //        scale for the collider isn't stored in the physics world
-                //        so if scale of the entity changes it will be de-synced from its collider scale.
+                // NOTE: The rigid body collider scaling should be the same as the scale of the entity transform
+                //       otherwise this won't look right. It's probably best to just not scale entities that have rigid bodies
+                //       with colliders on them.
                 let model = match entry.get_component::<RigidBody>() {
                     Ok(rigid_body) => {
-                        let scale = world
-                            .ecs
-                            .entry_ref(entity)?
-                            .get_component::<Transform>()?
-                            .scale;
                         let body = world
                             .physics
                             .bodies
@@ -520,6 +514,8 @@ impl WorldPipelineData {
                         let position = body.position();
                         let translation = position.translation.vector;
                         let rotation = *position.rotation.quaternion();
+                        let scale =
+                            Transform::from(world.global_transform(graph, node_index)?).scale;
                         Transform::new(translation, rotation, scale).matrix()
                     }
                     Err(_) => world.global_transform(graph, node_index)?,

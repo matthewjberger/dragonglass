@@ -369,7 +369,7 @@ impl World {
     ) -> Result<()> {
         let entry = self.ecs.entry_ref(entity)?;
         let mesh = entry.get_component::<MeshRender>()?;
-        let transform = entry.get_component::<Transform>()?;
+        let transform = self.entity_global_transform(entity)?;
         let mesh = &self.geometry.meshes[&mesh.name];
 
         let rigid_body_handle = self
