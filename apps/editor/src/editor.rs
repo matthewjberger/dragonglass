@@ -200,7 +200,7 @@ impl ApplicationRunner for Editor {
 
         if (MouseButton::Left, ElementState::Pressed) == (button, state) {
             if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
-                log::info!("Bingo! {:?}", entity);
+                log::info!("Picked entity: {:?}", entity);
             }
         }
         Ok(())
