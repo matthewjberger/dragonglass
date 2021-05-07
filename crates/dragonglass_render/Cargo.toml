@@ -26,4 +26,5 @@ simplelog = { version = "0.10.0", features = ["termcolor"] }
 
 [features]
 default = ["vulkan"]
+opengl = []
 vulkan = ["dragonglass_vulkan"]
