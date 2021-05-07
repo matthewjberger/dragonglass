@@ -17,9 +17,8 @@ rapier3d = "0.8.0"
 raw-window-handle = "0.3.3"
 shader-compilation = { path = "../shader-compilation" }
 
+dragonglass_opengl = { path = "../dragonglass_opengl", optional = true }
 dragonglass_vulkan = { path = "../dragonglass_vulkan", optional = true }
-gl = { version = "0.14.0", optional = true }
-glutin = { version = "0.26.0", optional = true }
 
 [build-dependencies]
 log = "0.4.14"
@@ -28,5 +27,5 @@ simplelog = { version = "0.10.0", features = ["termcolor"] }
 
 [features]
 default = ["opengl"]
-opengl = ["gl", "glutin"]
+opengl = ["dragonglass_opengl"]
 vulkan = ["dragonglass_vulkan"]

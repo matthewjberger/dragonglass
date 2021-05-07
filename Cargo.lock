@@ -628,15 +628,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "dragonglass_opengl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gl",
+ "glutin",
+ "image",
+ "log",
+ "nalgebra-glm 0.12.0",
+ "raw-window-handle",
+]
+
+[[package]]
 name = "dragonglass_render"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "derive_builder",
+ "dragonglass_opengl",
  "dragonglass_vulkan",
  "dragonglass_world",
- "gl",
- "glutin",
  "image",
  "imgui",
  "log",
