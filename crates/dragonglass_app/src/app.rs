@@ -244,7 +244,7 @@ pub fn run_application(
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
     let renderer = Box::new(Render::create_backend(
-        &Backend::Vulkan,
+        &Backend::OpenGl,
         &window,
         &window_dimensions,
         gui.context_mut(),

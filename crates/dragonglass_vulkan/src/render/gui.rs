@@ -48,7 +48,7 @@ impl GuiRender {
         let descriptor_set =
             descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
 
-        // TODO: Move texture loading out of this class
+        // FIXME: Pass the atlas texture into here
         let font_texture = {
             let mut fonts = imgui.fonts();
             let atlas_texture = fonts.build_rgba32_texture();

@@ -27,6 +27,12 @@ impl Gui {
 
         platform.attach_window(context.io_mut(), window, HiDpiMode::Rounded);
 
+        // FIXME: Store the atlas texture
+        {
+            let mut fonts = context.fonts();
+            let _atlas_texture = fonts.build_rgba32_texture();
+        }
+
         Self { context, platform }
     }
 
