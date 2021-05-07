@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
@@ -7,6 +7,7 @@ use crate::vulkan::VulkanRenderBackend;
 
 pub enum Backend {
     Vulkan,
+    OpenGl,
 }
 
 pub trait Render {
@@ -26,7 +27,9 @@ impl dyn Render {
         imgui: &mut ImguiContext,
     ) -> Result<impl Render> {
         match backend {
+            #[cfg(feature = "vulkan")]
             Backend::Vulkan => VulkanRenderBackend::new(window_handle, dimensions, imgui),
+            _ => bail!("The requested graphics backend is not available!"),
         }
     }
 }

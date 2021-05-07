@@ -8,7 +8,6 @@ edition = "2018"
 anyhow = "1.0.40"
 derive_builder = "0.10.0"
 dragonglass_world = { path = "../dragonglass_world" }
-dragonglass_vulkan = { path = "../dragonglass_vulkan" }
 log = "0.4.14"
 image = "0.23.14"
 imgui = "0.7.0"
@@ -18,7 +17,13 @@ rapier3d = "0.8.0"
 raw-window-handle = "0.3.3"
 shader-compilation = { path = "../shader-compilation" }
 
+dragonglass_vulkan = { path = "../dragonglass_vulkan", optional = true }
+
 [build-dependencies]
 log = "0.4.14"
 shader-compilation = { path = "../shader-compilation" }
 simplelog = { version = "0.10.0", features = ["termcolor"] }
+
+[features]
+default = ["vulkan"]
+vulkan = ["dragonglass_vulkan"]

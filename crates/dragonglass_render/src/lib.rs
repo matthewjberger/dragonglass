@@ -1,3 +1,4 @@
+#[cfg(feature = "vulkan")]
 mod vulkan;
 
 pub mod render;
