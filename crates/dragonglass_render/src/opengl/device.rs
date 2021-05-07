@@ -1,7 +1,7 @@
 use crate::Render;
 use anyhow::{bail, Result};
 use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
-use glutin::ContextBuilder;
+use glutin::{ContextBuilder, ContextWrapper, PossiblyCurrent};
 use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
 use nalgebra_glm as glm;
@@ -11,7 +11,9 @@ use std::sync::Arc;
 #[cfg(target_os = "windows")]
 use glutin::platform::windows::{RawContextExt, WindowExtWindows};
 
-pub struct OpenGLRenderBackend {}
+pub struct OpenGLRenderBackend {
+    context: ContextWrapper<PossiblyCurrent, ()>,
+}
 
 impl OpenGLRenderBackend {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -75,7 +77,11 @@ impl OpenGLRenderBackend {
             }
         };
 
-        Ok(Self {})
+        let context = unsafe { raw_context.make_current().unwrap() };
+
+        gl::load_with(|symbol| context.get_proc_address(symbol) as *const _);
+
+        Ok(Self { context })
     }
 }
 
