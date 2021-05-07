@@ -1,6 +1,7 @@
 use crate::Render;
 use anyhow::{bail, Result};
 use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
+use gl::types::*;
 use glutin::{ContextBuilder, ContextWrapper, PossiblyCurrent};
 use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
@@ -99,6 +100,11 @@ impl Render for OpenGLRenderBackend {
     }
 
     fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()> {
+        let red: [GLfloat; 4] = [1.0, 0.0, 0.0, 0.0];
+        unsafe {
+            gl::ClearBufferfv(gl::COLOR, 0, &red as *const f32);
+        }
+        self.context.swap_buffers()?;
         Ok(())
     }
 
