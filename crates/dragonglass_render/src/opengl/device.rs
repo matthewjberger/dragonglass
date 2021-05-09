@@ -31,6 +31,10 @@ impl Render for OpenGLRenderBackend {
     }
 
     fn load_world(&mut self, _world: &World) -> Result<()> {
+        // TODO:
+        // Create VAO's and VBO's
+        // Create shaders and shader programs
+        // Load world textures (probably as texture array)
         Ok(())
     }
 
@@ -44,6 +48,7 @@ impl Render for OpenGLRenderBackend {
         _world: &World,
         _draw_data: &DrawData,
     ) -> Result<()> {
+        // TODO: walk scenegraphs and render meshes
         let red: [GLfloat; 4] = [1.0, 0.0, 0.0, 0.0];
         unsafe {
             gl::ClearBufferfv(gl::COLOR, 0, &red as *const f32);

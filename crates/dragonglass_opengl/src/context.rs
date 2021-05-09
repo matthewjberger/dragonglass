@@ -15,6 +15,8 @@ pub unsafe fn load_context(
         #[cfg(target_os = "windows")]
         RawWindowHandle::Windows(handle) => ContextBuilder::new().build_raw_context(handle.hwnd)?,
 
+        // TODO: Support other OS's here
+
         _ => bail!("The target operating system is not supported!"),
     };
 
