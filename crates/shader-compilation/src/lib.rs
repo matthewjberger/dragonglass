@@ -7,10 +7,8 @@ type Result<T, E = Box<dyn Error>> = std::result::Result<T, E>;
 const SHADER_COMPILER_NAME: &str = "glslangValidator";
 
 pub fn compile_shaders(shader_glob: &str) -> Result<()> {
-    for entry in glob(shader_glob)? {
-        if let Ok(shader_path) = entry {
-            compile_shader(&shader_path)?;
-        }
+    for shader_path in glob(shader_glob)?.flatten() {
+        compile_shader(&shader_path)?;
     }
     Ok(())
 }
