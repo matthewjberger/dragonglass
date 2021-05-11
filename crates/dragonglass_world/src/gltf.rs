@@ -202,11 +202,13 @@ fn map_gltf_format(format: gltf::image::Format) -> Format {
 }
 
 fn load_material(primitive_material: &gltf::Material) -> Result<Material> {
-    let mut material = Material::default();
-    material.name = primitive_material
-        .name()
-        .unwrap_or(DEFAULT_NAME)
-        .to_string();
+    let mut material = Material {
+        name: primitive_material
+            .name()
+            .unwrap_or(DEFAULT_NAME)
+            .to_string(),
+        ..Default::default()
+    };
     let pbr = primitive_material.pbr_metallic_roughness();
     material.base_color_factor = glm::Vec4::from(pbr.base_color_factor());
     material.metallic_factor = pbr.metallic_factor();
@@ -623,7 +625,7 @@ fn load_skin(skin: &gltf::Skin, buffers: &[gltf::buffer::Data], entities: &[Enti
         });
     let joints = load_joints(skin, &inverse_bind_matrices, entities);
     let name = skin.name().unwrap_or(DEFAULT_NAME).to_string();
-    Skin { joints, name }
+    Skin { name, joints }
 }
 
 fn load_joints(

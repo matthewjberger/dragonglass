@@ -11,8 +11,7 @@ use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
 use rapier3d::{
-    dynamics::BodyStatus,
-    dynamics::RigidBodyBuilder,
+    dynamics::{BodyStatus, RigidBodyBuilder},
     geometry::{ColliderBuilder, InteractionGroups},
 };
 use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
@@ -433,7 +432,7 @@ impl World {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<World> {
         Ok(set_entity_serializer(&*ENTITY_SERIALIZER, || {
-            bincode::deserialize(&bytes[..])
+            bincode::deserialize(bytes)
         })?)
     }
 
@@ -442,7 +441,7 @@ impl World {
     }
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        Ok(Self::from_bytes(&std::fs::read(path)?)?)
+        Self::from_bytes(&std::fs::read(path)?)
     }
 
     pub fn roundtrip(&self) -> Result<World> {
@@ -1090,10 +1089,7 @@ impl SceneGraph {
     }
 
     pub fn find_node(&self, entity: Entity) -> Option<NodeIndex> {
-        match self.0.node_indices().find(|i| self[*i] == entity) {
-            Some(index) => Some(index),
-            None => None,
-        }
+        self.0.node_indices().find(|i| self[*i] == entity)
     }
 }
 
