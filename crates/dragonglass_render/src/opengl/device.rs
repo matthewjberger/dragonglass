@@ -323,12 +323,13 @@ void main(void)
                         Ok(mesh_render) => {
                             if let Some(mesh) = world.geometry.meshes.get(&mesh_render.name) {
                                 match alpha_mode {
-                                    AlphaMode::Opaque | AlphaMode::Mask => {
-                                        // TODO
-                                    }
-                                    AlphaMode::Blend => {
-                                        // TODO: blend
-                                    }
+                                    AlphaMode::Opaque | AlphaMode::Mask => unsafe {
+                                        gl::Disable(gl::BLEND);
+                                    },
+                                    AlphaMode::Blend => unsafe {
+                                        gl::Enable(gl::BLEND);
+                                        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+                                    },
                                 }
 
                                 for primitive in mesh.primitives.iter() {
