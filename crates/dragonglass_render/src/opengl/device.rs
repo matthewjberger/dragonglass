@@ -1,22 +1,16 @@
-use crate::Render;
+use crate::{opengl::world::WorldRender, Render};
 use anyhow::{Context, Result};
 use dragonglass_opengl::{
     gl::{self, types::*},
     glutin::{ContextWrapper, PossiblyCurrent},
-    load_context, GeometryBuffer, ShaderProgram, Texture,
+    load_context,
 };
 use dragonglass_world::{
-    AlphaMode, EntityStore, Format, Material, MeshRender, RigidBody, Transform, World,
+    AlphaMode, EntityStore, Material, MeshRender, RigidBody, Transform, World,
 };
 use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
 use std::{ffi::CString, ptr, str};
-
-struct WorldRender {
-    geometry: GeometryBuffer,
-    shader_program: ShaderProgram,
-    textures: Vec<Texture>,
-}
 
 pub struct OpenGLRenderBackend {
     context: ContextWrapper<PossiblyCurrent, ()>,
@@ -43,90 +37,7 @@ impl Render for OpenGLRenderBackend {
     }
 
     fn load_world(&mut self, world: &World) -> Result<()> {
-        let geometry = GeometryBuffer::new(
-            &world.geometry.vertices,
-            &world.geometry.indices,
-            &[3, 3, 2, 2, 4, 4, 3],
-        );
-
-        let vertex_shader_source = r#"
-#version 450 core
-layout (location = 0) in vec3 inPosition;
-layout (location = 1) in vec3 inNormal;
-layout (location = 2) in vec2 inUV0;
-layout (location = 3) in vec2 inUV1;
-layout (location = 4) in vec4 inJoint0;
-layout (location = 5) in vec4 inWeight0;
-layout (location = 6) in vec3 inColor0;
-
-uniform mat4 mvpMatrix;
-
-out vec2 outUV0;
-
-void main()
-{
-   gl_Position = mvpMatrix * vec4(inPosition, 1.0f);
-   outUV0 = inUV0;
-}
-"#;
-
-        let fragment_shader_source = r#"
-#version 450 core
-
-uniform sampler2D diffuseTexture;
-
-in vec2 outUV0;
-
-out vec4 color;
-
-void main(void)
-{
-  color = texture(diffuseTexture, outUV0);
-}
-"#;
-        let mut shader_program = ShaderProgram::new();
-        shader_program
-            .vertex_shader_source(vertex_shader_source)
-            .fragment_shader_source(fragment_shader_source)
-            .link();
-
-        // TODO
-        // Load textures into texture array for shader to use
-        let textures = world
-            .textures
-            .iter()
-            .map(|world_texture| {
-                let pixel_format = match world_texture.format {
-                    Format::R8 => gl::R8,
-                    Format::R8G8 => gl::RG,
-                    Format::R8G8B8 => gl::RGB,
-                    Format::R8G8B8A8 => gl::RGBA,
-                    Format::B8G8R8 => gl::BGR,
-                    Format::B8G8R8A8 => gl::BGRA,
-                    Format::R16 => gl::R16,
-                    Format::R16G16 => gl::RG16,
-                    Format::R16G16B16 => gl::RGB16,
-                    Format::R16G16B16A16 => gl::RGBA16,
-                };
-
-                let mut texture = Texture::new();
-                // FIXME GL: impl From on this
-                texture.load_data(
-                    world_texture.width,
-                    world_texture.height,
-                    &world_texture.pixels,
-                    pixel_format,
-                );
-                texture
-            })
-            .collect::<Vec<_>>();
-
-        self.world_render = Some(WorldRender {
-            geometry,
-            shader_program,
-            textures,
-        });
-
+        self.world_render = Some(WorldRender::new(world)?);
         Ok(())
     }
 

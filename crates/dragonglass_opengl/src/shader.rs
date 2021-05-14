@@ -1,4 +1,5 @@
-pub use gl::types::*;
+use anyhow::Result;
+use gl::types::*;
 use std::{ffi::CString, fs, ptr, str};
 
 pub enum ShaderKind {
@@ -28,18 +29,19 @@ impl Shader {
         Self { id, kind }
     }
 
-    pub fn load_file(&mut self, path: &str) {
-        let text = fs::read_to_string(path).unwrap();
-        self.load(&text);
+    pub fn load_file(&mut self, path: &str) -> Result<()> {
+        let text = fs::read_to_string(path)?;
+        self.load(&text)
     }
 
-    pub fn load(&self, source: &str) {
-        let source_str = CString::new(source.as_bytes()).unwrap();
+    pub fn load(&self, source: &str) -> Result<()> {
+        let source_str = CString::new(source.as_bytes())?;
         unsafe {
             gl::ShaderSource(self.id, 1, &source_str.as_ptr(), ptr::null());
             gl::CompileShader(self.id);
         }
         self.check_compilation();
+        Ok(())
     }
 
     // TODO: Add something to identify the shader that failed
@@ -100,51 +102,51 @@ impl ShaderProgram {
         self.id
     }
 
-    pub fn vertex_shader_file(&mut self, path: &str) -> &mut Self {
+    pub fn vertex_shader_file(&mut self, path: &str) -> Result<&mut Self> {
         self.attach_shader_file(ShaderKind::Vertex, path)
     }
 
-    pub fn vertex_shader_source(&mut self, source: &str) -> &mut Self {
+    pub fn vertex_shader_source(&mut self, source: &str) -> Result<&mut Self> {
         self.attach_shader_source(ShaderKind::Vertex, source)
     }
 
-    pub fn geometry_shader_file(&mut self, path: &str) -> &mut Self {
+    pub fn geometry_shader_file(&mut self, path: &str) -> Result<&mut Self> {
         self.attach_shader_file(ShaderKind::Geometry, path)
     }
 
-    pub fn geometry_shader_source(&mut self, source: &str) -> &mut Self {
+    pub fn geometry_shader_source(&mut self, source: &str) -> Result<&mut Self> {
         self.attach_shader_source(ShaderKind::Geometry, source)
     }
 
-    pub fn tessellation_control_shader_file(&mut self, path: &str) -> &mut Self {
+    pub fn tessellation_control_shader_file(&mut self, path: &str) -> Result<&mut Self> {
         self.attach_shader_file(ShaderKind::TessellationControl, path)
     }
 
-    pub fn tessellation_control_shader_source(&mut self, source: &str) -> &mut Self {
+    pub fn tessellation_control_shader_source(&mut self, source: &str) -> Result<&mut Self> {
         self.attach_shader_source(ShaderKind::TessellationControl, source)
     }
 
-    pub fn tessellation_evaluation_shader_file(&mut self, path: &str) -> &mut Self {
+    pub fn tessellation_evaluation_shader_file(&mut self, path: &str) -> Result<&mut Self> {
         self.attach_shader_file(ShaderKind::TessellationEvaluation, path)
     }
 
-    pub fn tessellation_evaluation_shader_source(&mut self, source: &str) -> &mut Self {
+    pub fn tessellation_evaluation_shader_source(&mut self, source: &str) -> Result<&mut Self> {
         self.attach_shader_source(ShaderKind::TessellationEvaluation, source)
     }
 
-    pub fn compute_shader_file(&mut self, path: &str) -> &mut Self {
+    pub fn compute_shader_file(&mut self, path: &str) -> Result<&mut Self> {
         self.attach_shader_file(ShaderKind::Compute, path)
     }
 
-    pub fn compute_shader_source(&mut self, source: &str) -> &mut Self {
+    pub fn compute_shader_source(&mut self, source: &str) -> Result<&mut Self> {
         self.attach_shader_source(ShaderKind::Compute, source)
     }
 
-    pub fn fragment_shader_file(&mut self, path: &str) -> &mut Self {
+    pub fn fragment_shader_file(&mut self, path: &str) -> Result<&mut Self> {
         self.attach_shader_file(ShaderKind::Fragment, path)
     }
 
-    pub fn fragment_shader_source(&mut self, source: &str) -> &mut Self {
+    pub fn fragment_shader_source(&mut self, source: &str) -> Result<&mut Self> {
         self.attach_shader_source(ShaderKind::Fragment, source)
     }
 
@@ -210,16 +212,16 @@ impl ShaderProgram {
         }
     }
 
-    fn attach_shader_file(&mut self, kind: ShaderKind, path: &str) -> &mut Self {
+    fn attach_shader_file(&mut self, kind: ShaderKind, path: &str) -> Result<&mut Self> {
         let mut shader = Shader::new(kind);
-        shader.load_file(path);
-        self.attach(&shader)
+        shader.load_file(path)?;
+        Ok(self.attach(&shader))
     }
 
-    fn attach_shader_source(&mut self, kind: ShaderKind, source: &str) -> &mut Self {
+    fn attach_shader_source(&mut self, kind: ShaderKind, source: &str) -> Result<&mut Self> {
         let shader = Shader::new(kind);
-        shader.load(source);
-        self.attach(&shader)
+        shader.load(source)?;
+        Ok(self.attach(&shader))
     }
 
     fn attach(&mut self, shader: &Shader) -> &mut Self {
