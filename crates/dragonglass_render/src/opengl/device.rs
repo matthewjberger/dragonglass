@@ -3,21 +3,19 @@ use anyhow::{Context, Result};
 use dragonglass_opengl::{
     gl::{self, types::*},
     glutin::{ContextWrapper, PossiblyCurrent},
-    load_context,
+    load_context, GeometryBuffer, ShaderProgram, Texture,
 };
 use dragonglass_world::{
-    AlphaMode, EntityStore, Format, Material, MeshRender, RigidBody, Transform, Vertex, World,
+    AlphaMode, EntityStore, Format, Material, MeshRender, RigidBody, Transform, World,
 };
 use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
-use std::{ffi::CString, mem, ptr, str};
+use std::{ffi::CString, ptr, str};
 
 struct WorldRender {
-    vao: u32,
-    vbo: u32,
-    ebo: u32,
-    shader_program: u32,
-    textures: Vec<u32>,
+    geometry: GeometryBuffer,
+    shader_program: ShaderProgram,
+    textures: Vec<Texture>,
 }
 
 pub struct OpenGLRenderBackend {
@@ -45,69 +43,12 @@ impl Render for OpenGLRenderBackend {
     }
 
     fn load_world(&mut self, world: &World) -> Result<()> {
-        // TODO: Wrap this logic in a small object with resources freed in Drop impl
-        // VAO object
-        // VBO object
+        let geometry = GeometryBuffer::new(
+            &world.geometry.vertices,
+            &world.geometry.indices,
+            &[3, 3, 2, 2, 4, 4, 3],
+        );
 
-        // Create vertex array object
-        let mut vao = 0;
-        unsafe {
-            gl::GenVertexArrays(1, &mut vao);
-            gl::BindVertexArray(vao);
-        }
-
-        // Create VBO and upload vertices to it
-        let mut vbo = 0;
-        unsafe {
-            gl::GenBuffers(1, &mut vbo);
-            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl::BufferData(
-                gl::ARRAY_BUFFER,
-                (world.geometry.vertices.len() * mem::size_of::<Vertex>()) as _,
-                world.geometry.vertices.as_ptr() as *const _,
-                gl::STATIC_DRAW,
-            );
-        }
-
-        // TODO: support not having indices at some point
-        // Create EBO and upload indices to it
-        let mut ebo = 0;
-        unsafe {
-            gl::GenBuffers(1, &mut ebo);
-            gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-            gl::BufferData(
-                gl::ELEMENT_ARRAY_BUFFER,
-                (world.geometry.indices.len() * mem::size_of::<u32>()) as _,
-                world.geometry.indices.as_ptr() as *const _,
-                gl::STATIC_DRAW,
-            );
-        }
-
-        // Describe vertex layout
-        let mut index = 0;
-        let mut offset = 0;
-        let mut add_vertex = |count: usize| {
-            unsafe {
-                gl::EnableVertexAttribArray(index);
-                gl::VertexAttribPointer(
-                    index,
-                    count as i32,
-                    gl::FLOAT,
-                    gl::FALSE,
-                    std::mem::size_of::<Vertex>() as i32,
-                    (offset * mem::size_of::<f32>()) as *const GLvoid,
-                );
-            }
-            index += 1;
-            offset += count;
-        };
-        [3, 3, 2, 2, 4, 4, 3].iter().for_each(|i| add_vertex(*i));
-
-        // Create shader program to render models
-        //     needs to take in vertex attributes as listed in Vertex struct
-        //     needs a uniform buffer with projection and view matrices
-
-        // Add vertex shader
         let vertex_shader_source = r#"
 #version 450 core
 layout (location = 0) in vec3 inPosition;
@@ -128,21 +69,7 @@ void main()
    outUV0 = inUV0;
 }
 "#;
-        let vertex_shader_source_cstr = CString::new(vertex_shader_source.as_bytes())?;
-        let vertex_shader = unsafe {
-            let vertex_shader = gl::CreateShader(gl::VERTEX_SHADER);
-            gl::ShaderSource(
-                vertex_shader,
-                1,
-                &vertex_shader_source_cstr.as_ptr(),
-                ptr::null(),
-            );
-            gl::CompileShader(vertex_shader);
-            vertex_shader
-        };
-        check_compilation(vertex_shader)?;
 
-        // Add fragment shader
         let fragment_shader_source = r#"
 #version 450 core
 
@@ -157,42 +84,19 @@ void main(void)
   color = texture(diffuseTexture, outUV0);
 }
 "#;
-        let fragment_shader_source_cstr = CString::new(fragment_shader_source.as_bytes())?;
-        let fragment_shader = unsafe {
-            let fragment_shader = gl::CreateShader(gl::FRAGMENT_SHADER);
-            gl::ShaderSource(
-                fragment_shader,
-                1,
-                &fragment_shader_source_cstr.as_ptr(),
-                ptr::null(),
-            );
-            gl::CompileShader(fragment_shader);
-            fragment_shader
-        };
-        check_compilation(fragment_shader)?;
-
-        // Create the shader program
-        let shader_program = unsafe {
-            let shader_program = gl::CreateProgram();
-            gl::AttachShader(shader_program, vertex_shader);
-            gl::AttachShader(shader_program, fragment_shader);
-            gl::LinkProgram(shader_program);
-            shader_program
-        };
-
-        // Discard the shaders
-        unsafe {
-            gl::DeleteShader(vertex_shader);
-            gl::DeleteShader(fragment_shader);
-        }
+        let mut shader_program = ShaderProgram::new();
+        shader_program
+            .vertex_shader_source(vertex_shader_source)
+            .fragment_shader_source(fragment_shader_source)
+            .link();
 
         // TODO
         // Load textures into texture array for shader to use
         let textures = world
             .textures
             .iter()
-            .map(|texture| {
-                let pixel_format = match texture.format {
+            .map(|world_texture| {
+                let pixel_format = match world_texture.format {
                     Format::R8 => gl::R8,
                     Format::R8G8 => gl::RG,
                     Format::R8G8B8 => gl::RGB,
@@ -205,34 +109,20 @@ void main(void)
                     Format::R16G16B16A16 => gl::RGBA16,
                 };
 
-                let mut id = 0;
-                unsafe {
-                    gl::GenTextures(1, &mut id);
-                    gl::ActiveTexture(gl::TEXTURE0);
-                    gl::BindTexture(gl::TEXTURE_2D, id);
-                    gl::TexImage2D(
-                        gl::TEXTURE_2D,
-                        0,
-                        pixel_format as i32,
-                        texture.width as i32,
-                        texture.height as i32,
-                        0,
-                        pixel_format,
-                        gl::UNSIGNED_BYTE,
-                        texture.pixels.as_ptr() as *const GLvoid,
-                    );
-                    gl::GenerateMipmap(gl::TEXTURE_2D);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-                }
-                id
+                let mut texture = Texture::new();
+                // FIXME GL: impl From on this
+                texture.load_data(
+                    world_texture.width,
+                    world_texture.height,
+                    &world_texture.pixels,
+                    pixel_format,
+                );
+                texture
             })
             .collect::<Vec<_>>();
 
         self.world_render = Some(WorldRender {
-            vao,
-            vbo,
-            ebo,
+            geometry,
             shader_program,
             textures,
         });
@@ -274,14 +164,12 @@ void main(void)
             }
         };
 
-        unsafe {
-            gl::BindVertexArray(world_render.vao);
-            gl::UseProgram(world_render.shader_program);
-        }
+        world_render.geometry.bind();
+        world_render.shader_program.use_program();
 
         let name: CString = CString::new("mvpMatrix".as_bytes())?;
         let mvp_location =
-            unsafe { gl::GetUniformLocation(world_render.shader_program, name.as_ptr()) };
+            unsafe { gl::GetUniformLocation(world_render.shader_program.id(), name.as_ptr()) };
 
         let aspect_ratio = dimensions[0] as f32 / std::cmp::max(dimensions[1], 1) as f32;
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
@@ -345,14 +233,8 @@ void main(void)
                                         None => Material::default(),
                                     };
 
-                                    unsafe {
-                                        gl::ActiveTexture(gl::TEXTURE0);
-                                        gl::BindTexture(
-                                            gl::TEXTURE_2D,
-                                            world_render.textures
-                                                [material.color_texture_index as usize],
-                                        );
-                                    }
+                                    world_render.textures[material.color_texture_index as usize]
+                                        .bind(0);
 
                                     // TODO: render primitive
                                     let ptr: *const u8 = ptr::null_mut();
@@ -383,38 +265,4 @@ void main(void)
     }
 
     fn toggle_wireframe(&mut self) {}
-}
-
-fn check_compilation(id: u32) -> Result<()> {
-    let mut success = gl::FALSE as GLint;
-    unsafe {
-        gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
-    }
-
-    if success == gl::TRUE as GLint {
-        log::info!("Shader compilation succeeded!");
-        return Ok(());
-    }
-
-    let mut info_log_length = 0;
-    unsafe {
-        gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut info_log_length);
-    }
-
-    let mut info_log = vec![0; info_log_length as usize];
-    unsafe {
-        gl::GetShaderInfoLog(
-            id,
-            info_log_length,
-            ptr::null_mut(),
-            info_log.as_mut_ptr() as *mut GLchar,
-        );
-    }
-
-    log::error!(
-        "ERROR: Shader compilation failed.\n{}\n",
-        str::from_utf8(&info_log)?
-    );
-
-    Ok(())
 }

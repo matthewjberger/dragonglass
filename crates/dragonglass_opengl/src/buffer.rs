@@ -1,162 +1,79 @@
-use gl::types::*;
-use std::{mem, slice};
+use gl::{self, types::*};
+use std::mem;
 
-#[derive(Default, Debug)]
-pub struct VertexArrayObject {
-    id: GLuint,
+pub struct GeometryBuffer {
+    vao: u32,
+    vbo: u32,
+    ebo: u32,
 }
 
-impl VertexArrayObject {
-    pub fn new() -> Self {
-        let mut id = 0;
+impl GeometryBuffer {
+    pub fn new<T: Copy>(vertices: &[T], indices: &[u32], vertex_attributes: &[usize]) -> Self {
+        let vao = Self::create_vao();
+        let vbo = Self::create_buffer(&vertices, gl::ARRAY_BUFFER);
+        let ebo = Self::create_buffer(&indices, gl::ELEMENT_ARRAY_BUFFER);
+        Self::add_vertex_attributes::<T>(vertex_attributes);
+        Self { vao, vbo, ebo }
+    }
+
+    fn create_vao() -> u32 {
+        let mut vao = 0;
         unsafe {
-            gl::GenVertexArrays(1, &mut id);
+            gl::GenVertexArrays(1, &mut vao);
+            gl::BindVertexArray(vao);
         }
-        VertexArrayObject { id }
+        vao
     }
 
-    pub fn bind(&self) {
+    fn create_buffer<T: Copy>(data: &[T], kind: GLuint) -> u32 {
+        let mut buffer = 0;
         unsafe {
-            gl::BindVertexArray(self.id);
-        }
-    }
-
-    pub fn configure_attribute(&self, index: u32, count: u32, total: u32, offset: u32) {
-        self.bind();
-        let float_size = mem::size_of::<GLfloat>() as u32;
-        unsafe {
-            gl::EnableVertexAttribArray(index);
-            gl::VertexAttribPointer(
-                index,
-                count as i32,
-                gl::FLOAT,
-                gl::FALSE,
-                (total * float_size) as i32,
-                (offset * float_size) as *const GLvoid,
-            );
-        }
-    }
-}
-
-pub enum DrawingHint {
-    StreamDraw,
-    StreamRead,
-    StreamCopy,
-    StaticDraw,
-    StaticRead,
-    StaticCopy,
-    DynamicDraw,
-    DynamicRead,
-    DynamicCopy,
-}
-
-pub enum BufferKind {
-    Array,
-    Element,
-}
-
-impl Default for BufferKind {
-    fn default() -> Self {
-        BufferKind::Array
-    }
-}
-
-#[derive(Default)]
-pub struct Buffer {
-    id: GLuint,
-    kind: BufferKind,
-    data: Vec<u8>,
-}
-
-impl Buffer {
-    pub fn new(kind: BufferKind) -> Self {
-        let mut id = 0;
-        unsafe {
-            gl::GenBuffers(1, &mut id);
-        }
-        Buffer {
-            id,
-            kind,
-            ..Default::default()
-        }
-    }
-
-    pub fn add_data<T>(&mut self, data: &[T]) {
-        let len = mem::size_of::<T>() * data.len();
-        let byte_slice = unsafe { slice::from_raw_parts(data.as_ptr() as *const u8, len) };
-        self.data.extend(byte_slice.iter().clone());
-    }
-
-    pub fn upload(&mut self, vao: &VertexArrayObject, hint: DrawingHint) {
-        vao.bind();
-        self.bind();
-        unsafe {
+            gl::GenBuffers(1, &mut buffer);
+            gl::BindBuffer(kind, buffer);
             gl::BufferData(
-                self.kind(),
-                (self.data.len() * mem::size_of::<u8>()) as GLsizeiptr,
-                self.data.as_ptr() as *const GLvoid,
-                Buffer::map_hint(&hint),
+                kind,
+                (data.len() * mem::size_of::<T>()) as _,
+                data.as_ptr() as *const _,
+                gl::STATIC_DRAW,
             );
         }
-        self.data.clear();
+        buffer
+    }
+
+    fn add_vertex_attributes<T: Copy>(vertex_attributes: &[usize]) {
+        let mut index = 0;
+        let mut offset = 0;
+        let mut add_vertex = |count: usize| {
+            unsafe {
+                gl::EnableVertexAttribArray(index);
+                gl::VertexAttribPointer(
+                    index,
+                    count as i32,
+                    gl::FLOAT,
+                    gl::FALSE,
+                    std::mem::size_of::<T>() as i32,
+                    (offset * mem::size_of::<f32>()) as *const GLvoid,
+                );
+            }
+            index += 1;
+            offset += count;
+        };
+        vertex_attributes.iter().for_each(|i| add_vertex(*i));
     }
 
     pub fn bind(&self) {
         unsafe {
-            gl::BindBuffer(self.kind(), self.id as u32);
+            gl::BindVertexArray(self.vao);
         }
     }
+}
 
-    pub fn free(&self) {
+impl Drop for GeometryBuffer {
+    fn drop(&mut self) {
         unsafe {
-            gl::DeleteBuffers(1, &self.id as *const u32);
-        }
-    }
-
-    pub fn type_size(&self) -> usize {
-        Buffer::map_type_size(&self.kind)
-    }
-
-    pub fn type_representation(&self) -> u32 {
-        Buffer::map_type_representation(&self.kind)
-    }
-
-    fn kind(&self) -> GLuint {
-        Buffer::map_type(&self.kind)
-    }
-
-    fn map_type(buffer_type: &BufferKind) -> GLuint {
-        match buffer_type {
-            BufferKind::Array => gl::ARRAY_BUFFER,
-            BufferKind::Element => gl::ELEMENT_ARRAY_BUFFER,
-        }
-    }
-
-    fn map_type_size(buffer_type: &BufferKind) -> usize {
-        match buffer_type {
-            BufferKind::Array => mem::size_of::<GLfloat>(),
-            BufferKind::Element => mem::size_of::<GLuint>(),
-        }
-    }
-
-    fn map_type_representation(buffer_type: &BufferKind) -> u32 {
-        match buffer_type {
-            BufferKind::Array => gl::FLOAT,
-            BufferKind::Element => gl::UNSIGNED_INT,
-        }
-    }
-
-    fn map_hint(drawing_hint: &DrawingHint) -> GLuint {
-        match drawing_hint {
-            DrawingHint::StreamDraw => gl::STREAM_DRAW,
-            DrawingHint::StreamRead => gl::STREAM_READ,
-            DrawingHint::StreamCopy => gl::STREAM_COPY,
-            DrawingHint::StaticDraw => gl::STATIC_DRAW,
-            DrawingHint::StaticRead => gl::STATIC_READ,
-            DrawingHint::StaticCopy => gl::STATIC_COPY,
-            DrawingHint::DynamicDraw => gl::DYNAMIC_DRAW,
-            DrawingHint::DynamicRead => gl::DYNAMIC_READ,
-            DrawingHint::DynamicCopy => gl::DYNAMIC_COPY,
+            gl::DeleteVertexArrays(1, self.vao as _);
+            gl::DeleteBuffers(1, self.vbo as _);
+            gl::DeleteBuffers(1, self.ebo as _);
         }
     }
 }

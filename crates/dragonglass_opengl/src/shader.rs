@@ -25,7 +25,7 @@ pub struct Shader {
 impl Shader {
     pub fn new(kind: ShaderKind) -> Shader {
         let id = unsafe { gl::CreateShader(Shader::map_type(&kind)) };
-        Shader { id, kind }
+        Self { id, kind }
     }
 
     pub fn load_file(&mut self, path: &str) {
@@ -64,7 +64,7 @@ impl Shader {
                 info_log.as_mut_ptr() as *mut GLchar,
             );
         }
-        println!(
+        log::error!(
             "ERROR: Shader compilation failed.\n{}\n",
             str::from_utf8(&info_log).unwrap()
         );
@@ -84,16 +84,20 @@ impl Shader {
 
 #[derive(Default)]
 pub struct ShaderProgram {
-    pub id: GLuint,
-    pub shader_ids: Vec<GLuint>,
+    id: GLuint,
+    shader_ids: Vec<GLuint>,
 }
 
 impl ShaderProgram {
     pub fn new() -> Self {
-        ShaderProgram {
+        Self {
             id: unsafe { gl::CreateProgram() },
             shader_ids: Vec::new(),
         }
+    }
+
+    pub fn id(&self) -> GLuint {
+        self.id
     }
 
     pub fn vertex_shader_file(&mut self, path: &str) -> &mut Self {
@@ -154,7 +158,7 @@ impl ShaderProgram {
         self.shader_ids.clear();
     }
 
-    pub fn activate(&self) {
+    pub fn use_program(&self) {
         unsafe {
             gl::UseProgram(self.id);
         }
@@ -165,14 +169,8 @@ impl ShaderProgram {
         unsafe { gl::GetUniformLocation(self.id, name.as_ptr()) }
     }
 
-    pub fn free(&self) {
-        unsafe {
-            gl::DeleteProgram(self.id);
-        }
-    }
-
     pub fn set_uniform_int(&self, name: &str, value: i32) {
-        self.activate();
+        self.use_program();
         let location = self.uniform_location(name);
         unsafe {
             gl::Uniform1i(location, value);
@@ -180,7 +178,7 @@ impl ShaderProgram {
     }
 
     pub fn set_uniform_float(&self, name: &str, value: f32) {
-        self.activate();
+        self.use_program();
         let location = self.uniform_location(name);
         unsafe {
             gl::Uniform1f(location, value);
@@ -188,7 +186,7 @@ impl ShaderProgram {
     }
 
     pub fn set_uniform_matrix4x4(&self, name: &str, data: &[GLfloat]) {
-        self.activate();
+        self.use_program();
         let location = self.uniform_location(name);
         unsafe {
             gl::UniformMatrix4fv(location, 1, gl::FALSE, data.as_ptr());
@@ -197,7 +195,7 @@ impl ShaderProgram {
 
     // TODO: Range check the slice parameters
     pub fn set_uniform_vec4(&self, name: &str, data: &[GLfloat]) {
-        self.activate();
+        self.use_program();
         let location = self.uniform_location(name);
         unsafe {
             gl::Uniform4fv(location, 1, data.as_ptr());
@@ -205,7 +203,7 @@ impl ShaderProgram {
     }
 
     pub fn set_uniform_vec3(&self, name: &str, data: &[GLfloat]) {
-        self.activate();
+        self.use_program();
         let location = self.uniform_location(name);
         unsafe {
             gl::Uniform3fv(location, 1, data.as_ptr());
@@ -230,5 +228,13 @@ impl ShaderProgram {
         }
         self.shader_ids.push(shader.id);
         self
+    }
+}
+
+impl Drop for ShaderProgram {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteProgram(self.id);
+        }
     }
 }
