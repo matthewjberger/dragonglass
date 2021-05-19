@@ -51,7 +51,7 @@ void main(void)
     pub fn new(world: &World) -> Result<Self> {
         let geometry = GeometryBuffer::new(
             &world.geometry.vertices,
-            &world.geometry.indices,
+            Some(&world.geometry.indices),
             &[3, 3, 2, 2, 4, 4, 3],
         );
 
@@ -178,7 +178,10 @@ void main(void)
                                         None => Material::default(),
                                     };
 
-                                    self.textures[material.color_texture_index as usize].bind(0);
+                                    if material.color_texture_index > -1 {
+                                        self.textures[material.color_texture_index as usize]
+                                            .bind(0);
+                                    }
 
                                     // TODO: render primitive
                                     let ptr: *const u8 = ptr::null_mut();

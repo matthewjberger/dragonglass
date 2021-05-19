@@ -4,15 +4,25 @@ use std::mem;
 pub struct GeometryBuffer {
     vao: u32,
     vbo: u32,
-    ebo: u32,
+    ebo: Option<u32>,
 }
 
 impl GeometryBuffer {
-    pub fn new<T: Copy>(vertices: &[T], indices: &[u32], vertex_attributes: &[usize]) -> Self {
+    pub fn new<T: Copy>(
+        vertices: &[T],
+        indices: Option<&[u32]>,
+        vertex_attributes: &[usize],
+    ) -> Self {
         let vao = Self::create_vao();
         let vbo = Self::create_buffer(&vertices, gl::ARRAY_BUFFER);
-        let ebo = Self::create_buffer(&indices, gl::ELEMENT_ARRAY_BUFFER);
+
+        let mut ebo = None;
+        if let Some(indices) = indices {
+            ebo = Some(Self::create_buffer(&indices, gl::ELEMENT_ARRAY_BUFFER));
+        }
+
         Self::add_vertex_attributes::<T>(vertex_attributes);
+
         Self { vao, vbo, ebo }
     }
 
@@ -73,7 +83,9 @@ impl Drop for GeometryBuffer {
         unsafe {
             gl::DeleteVertexArrays(1, self.vao as _);
             gl::DeleteBuffers(1, self.vbo as _);
-            gl::DeleteBuffers(1, self.ebo as _);
+            if let Some(ebo) = self.ebo.as_ref() {
+                gl::DeleteBuffers(1, ebo as _);
+            }
         }
     }
 }

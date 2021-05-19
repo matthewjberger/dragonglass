@@ -1,9 +1,9 @@
 use crate::{opengl::world::WorldRender, Render};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use dragonglass_opengl::{
-    gl::{self, types::*},
+    gl,
     glutin::{ContextWrapper, PossiblyCurrent},
-    load_context,
+    load_context, GeometryBuffer,
 };
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
@@ -49,13 +49,11 @@ impl Render for OpenGLRenderBackend {
         world: &World,
         _draw_data: &DrawData,
     ) -> Result<()> {
-        let color: [GLfloat; 4] = [0.0, 0.5, 0.0, 0.0];
-        let depth: [GLfloat; 1] = [1.0];
         unsafe {
             gl::Viewport(0, 0, dimensions[0] as _, dimensions[1] as _);
 
-            gl::ClearBufferfv(gl::COLOR, 0, &color as *const f32);
-            gl::ClearBufferfv(gl::DEPTH, 0, &depth as *const f32);
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
         let world_render = match self.world_render.as_ref() {
