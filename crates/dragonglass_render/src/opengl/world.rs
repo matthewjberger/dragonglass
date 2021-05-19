@@ -183,7 +183,6 @@ void main(void)
                                             .bind(0);
                                     }
 
-                                    // TODO: render primitive
                                     let ptr: *const u8 = ptr::null_mut();
                                     let ptr = unsafe {
                                         ptr.add(primitive.first_index * std::mem::size_of::<u32>())
