@@ -1,8 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use dragonglass_opengl::{gl, GeometryBuffer, ShaderProgram, Texture};
 use dragonglass_world::{
     AlphaMode, EntityStore, Format, Material, MeshRender, RigidBody, Transform, World,
 };
+use nalgebra_glm as glm;
 use std::{ffi::CString, ptr, str};
 
 pub struct WorldRender {
@@ -24,27 +25,89 @@ layout (location = 6) in vec3 inColor0;
 
 uniform mat4 mvpMatrix;
 
-out vec2 outUV0;
+out vec2 UV0;
+out vec3 Color0;
 
 void main()
 {
    gl_Position = mvpMatrix * vec4(inPosition, 1.0f);
-   outUV0 = inUV0;
+   UV0 = inUV0;
+   Color0 = inColor0;
 }
 "#;
 
     const FRAGMENT_SHADER_SOURCE: &'static str = &r#"
 #version 450 core
 
-uniform sampler2D diffuseTexture;
+struct Material {
+    vec4 baseColorFactor;
+    vec4 emissiveFactor;
+    int alphaMode;
+    float alphaCutoff;
+    float occlusionStrength;
+    bool isUnlit;
+    bool hasDiffuseTexture;
+    bool hasPhysicalTexture;
+    bool hasNormalTexture;
+    bool hasOcclusionTexture;
+    bool hasEmissiveTexture;
+}; 
 
-in vec2 outUV0;
+uniform Material material;
+
+uniform sampler2D DiffuseTexture;
+uniform sampler2D PhysicalTexture;
+uniform sampler2D NormalTexture;
+uniform sampler2D OcclusionTexture;
+uniform sampler2D EmissiveTexture;
+
+in vec2 UV0;
+in vec3 Color0;
 
 out vec4 color;
 
+vec4 srgb_to_linear(vec4 srgbIn)
+{
+    return vec4(pow(srgbIn.xyz,vec3(2.2)),srgbIn.w);
+}
+
 void main(void)
 {
-  color = texture(diffuseTexture, outUV0);
+    color = material.baseColorFactor;
+    if (material.hasDiffuseTexture) {
+        vec4 albedoMap = texture(DiffuseTexture, UV0);
+        color = srgb_to_linear(albedoMap);
+    }
+
+    color *= vec4(Color0, 1.0);
+
+    // alpha discard
+    if (material.alphaMode == 2 && color.a < material.alphaCutoff) {
+        discard;
+    }
+
+    if (material.isUnlit) {
+        color = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
+        return;
+    }
+
+    float occlusion = 1.0;
+    if (material.hasOcclusionTexture) {
+         occlusion = texture(OcclusionTexture, UV0).r;
+    }
+    color = mix(color, color * occlusion, material.occlusionStrength);
+
+    vec4 emission = vec4(0.0);
+    if (material.hasEmissiveTexture) {
+        emission = srgb_to_linear(texture(EmissiveTexture, UV0)) * vec4(material.emissiveFactor.rgb, 1.0);
+    }
+    color += vec4(emission.rgb, 0.0);
+
+    // HDR tonemapping
+    color = color / (color + vec4(1.0));
+
+    // gamma correct
+    color = pow(color, vec4(1.0/2.2));
 }
 "#;
 
@@ -178,9 +241,62 @@ void main(void)
                                         None => Material::default(),
                                     };
 
-                                    if material.color_texture_index > -1 {
-                                        self.textures[material.color_texture_index as usize]
-                                            .bind(0);
+                                    self.shader_program.set_uniform_vec4(
+                                        "material.baseColorFactor",
+                                        material.base_color_factor.as_slice(),
+                                    );
+
+                                    self.shader_program.set_uniform_vec4(
+                                        "material.emissiveFactor",
+                                        glm::vec3_to_vec4(&material.emissive_factor).as_slice(),
+                                    );
+
+                                    self.shader_program.set_uniform_int(
+                                        "material.alphaMode",
+                                        material.alpha_mode as _,
+                                    );
+
+                                    self.shader_program.set_uniform_float(
+                                        "material.alphaCutoff",
+                                        material.alpha_cutoff,
+                                    );
+
+                                    self.shader_program.set_uniform_float(
+                                        "material.occlusionStrength",
+                                        material.occlusion_strength,
+                                    );
+
+                                    self.shader_program
+                                        .set_uniform_bool("material.isUnlit", material.is_unlit);
+
+                                    for (index, descriptor) in
+                                        ["Diffuse", "Physical", "Normal", "Occlusion", "Emissive"]
+                                            .iter()
+                                            .enumerate()
+                                    {
+                                        let texture_index = match *descriptor {
+                                            "Diffuse" => material.color_texture_index,
+                                            "Physical" => material.metallic_roughness_texture_index,
+                                            "Normal" => material.normal_texture_index,
+                                            "Occlusion" => material.occlusion_texture_index,
+                                            "Emissive" => material.emissive_texture_index,
+                                            _ => bail!("Failed to find index for texture type!"),
+                                        };
+                                        let has_texture = texture_index > -1;
+
+                                        self.shader_program.set_uniform_bool(
+                                            &format!("material.has{}Texture", *descriptor),
+                                            has_texture,
+                                        );
+
+                                        self.shader_program.set_uniform_int(
+                                            &format!("{}Texture", *descriptor),
+                                            index as _,
+                                        );
+
+                                        if has_texture {
+                                            self.textures[texture_index as usize].bind(index as _);
+                                        }
                                     }
 
                                     let ptr: *const u8 = ptr::null_mut();

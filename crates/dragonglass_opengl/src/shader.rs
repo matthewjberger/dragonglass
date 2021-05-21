@@ -179,6 +179,10 @@ impl ShaderProgram {
         }
     }
 
+    pub fn set_uniform_bool(&self, name: &str, value: bool) {
+        self.set_uniform_int(name, if value { 1 } else { 0 });
+    }
+
     pub fn set_uniform_float(&self, name: &str, value: f32) {
         self.use_program();
         let location = self.uniform_location(name);

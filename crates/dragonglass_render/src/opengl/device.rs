@@ -95,6 +95,7 @@ impl Render for OpenGLRenderBackend {
             gl::Disable(gl::DEPTH_TEST);
             gl::ClearColor(1.0, 1.0, 1.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::ActiveTexture(gl::TEXTURE0);
             gl::BindTexture(gl::TEXTURE_2D, self.offscreen.color_attachment);
             self.fullscreen_quad.draw();
         }
