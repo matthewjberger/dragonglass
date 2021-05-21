@@ -9,14 +9,19 @@ use rapier3d::{
 use serde::{Deserialize, Serialize};
 
 pub type Handle = rapier3d::dynamics::RigidBodyHandle;
+pub type ColliderHandle = rapier3d::geometry::ColliderHandle;
 
 pub struct RigidBody {
     pub handle: Handle,
+    pub colliders: Vec<ColliderHandle>,
 }
 
 impl RigidBody {
     pub fn new(handle: Handle) -> Self {
-        Self { handle }
+        Self {
+            handle,
+            colliders: Vec::new(),
+        }
     }
 }
 

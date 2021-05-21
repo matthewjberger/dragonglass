@@ -228,35 +228,33 @@ fn add_cylinder_collider(
     entity: Entity,
     collision_groups: InteractionGroups,
 ) -> Result<()> {
-    let rigid_body_handle = application
+    let mut entry = application
         .world
         .ecs
-        .entry_ref(entity)?
-        .get_component::<RigidBody>()?
-        .handle;
+        .entry_mut(entity)
+        .context("entity not found")?;
+    let rigid_body = entry.get_component_mut::<RigidBody>()?;
     let (half_height, radius) = (1.0, 0.5);
     let collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
         .build();
-    application.world.physics.colliders.insert(
+    let collider_handle = application.world.physics.colliders.insert(
         collider,
-        rigid_body_handle,
+        rigid_body.handle,
         &mut application.world.physics.bodies,
     );
+    rigid_body.colliders.push(collider_handle);
     Ok(())
 }
 
 fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application
-        .world
-        .ecs
-        .entry_ref(entity)?
-        .get_component::<RigidBody>()?
-        .handle;
     let entry = application.world.ecs.entry_ref(entity)?;
+    let rigid_body = entry.get_component::<RigidBody>()?;
     let transform = entry.get_component::<Transform>()?;
-    if let Some(body) = application.world.physics.bodies.get_mut(rigid_body_handle) {
-        body.set_position(transform.as_isometry(), true);
+    if let Some(body) = application.world.physics.bodies.get_mut(rigid_body.handle) {
+        let mut position = body.position().clone();
+        position.translation.vector = transform.translation;
+        body.set_position(position, true);
     }
     Ok(())
 }
