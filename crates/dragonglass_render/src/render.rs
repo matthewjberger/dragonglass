@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
@@ -10,7 +10,10 @@ use crate::vulkan::VulkanRenderBackend;
 use crate::opengl::OpenGLRenderBackend;
 
 pub enum Backend {
+    #[cfg(feature = "vulkan")]
     Vulkan,
+
+    #[cfg(feature = "opengl")]
     OpenGl,
 }
 
@@ -23,21 +26,23 @@ pub trait Render {
     fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;
 }
 
-impl dyn Render {
-    pub fn create_backend(
-        backend: &Backend,
-        window_handle: &impl HasRawWindowHandle,
-        dimensions: &[u32; 2],
-        imgui: &mut ImguiContext,
-    ) -> Result<impl Render> {
-        match backend {
-            #[cfg(feature = "vulkan")]
-            Backend::Vulkan => VulkanRenderBackend::new(window_handle, dimensions, imgui),
+pub fn create_render_backend(
+    backend: &Backend,
+    window_handle: &impl HasRawWindowHandle,
+    dimensions: &[u32; 2],
+    imgui: &mut ImguiContext,
+) -> Result<Box<dyn Render>> {
+    match backend {
+        #[cfg(feature = "vulkan")]
+        Backend::Vulkan => {
+            let backend = VulkanRenderBackend::new(window_handle, dimensions, imgui)?;
+            Ok(Box::new(backend) as Box<dyn Render>)
+        }
 
-            #[cfg(feature = "opengl")]
-            Backend::OpenGl => OpenGLRenderBackend::new(window_handle, dimensions, imgui),
-
-            _ => bail!("The requested graphics backend is not available!"),
+        #[cfg(feature = "opengl")]
+        Backend::OpenGl => {
+            let backend = OpenGLRenderBackend::new(window_handle, dimensions, imgui)?;
+            Ok(Box::new(backend) as Box<dyn Render>)
         }
     }
 }

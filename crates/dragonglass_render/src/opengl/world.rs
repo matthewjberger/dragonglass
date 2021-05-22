@@ -172,6 +172,10 @@ void main(void)
             Format::R16G16 => gl::RG16,
             Format::R16G16B16 => gl::RGB16,
             Format::R16G16B16A16 => gl::RGBA16,
+            Format::R16F => gl::R16F,
+            Format::R16G16F => gl::RG16F,
+            Format::R16G16B16F => gl::RGB16F,
+            Format::R16G16B16A16F => gl::RGBA16F,
         };
 
         let mut texture = Texture::new();

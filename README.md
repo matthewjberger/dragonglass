@@ -14,7 +14,11 @@ Dragonglass is a 3D game engine written in Rust and using Vulkan primarily for r
 To run the visual editor for Dragonglass, run this command in the root directory:
 
 ```bash
-cargo run --release --bin editor
+# OpenGL backend (default)
+cargo run --release --bin editor -- --backend opengl
+
+# Vulkan backend
+cargo run --release --bin editor -- --backend vulkan
 ```
 
 ## Gallery

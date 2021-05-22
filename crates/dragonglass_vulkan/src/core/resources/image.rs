@@ -140,6 +140,10 @@ impl ImageDescription {
             dragonglass_world::Format::R16G16 => vk::Format::R16G16_UNORM,
             dragonglass_world::Format::R16G16B16 => vk::Format::R16G16B16_UNORM,
             dragonglass_world::Format::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
+            dragonglass_world::Format::R16F => vk::Format::R16_SFLOAT,
+            dragonglass_world::Format::R16G16F => vk::Format::R16G16_SFLOAT,
+            dragonglass_world::Format::R16G16B16F => vk::Format::R16G16B16_SFLOAT,
+            dragonglass_world::Format::R16G16B16A16F => vk::Format::R16G16B16A16_SFLOAT,
         }
     }
 

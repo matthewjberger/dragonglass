@@ -1,7 +1,7 @@
 use crate::{Name, RigidBody, WorldPhysics};
 use anyhow::{bail, Context, Result};
 use bmfont::{BMFont, OrdinateOrientation};
-use image::{io::Reader as ImageReader, DynamicImage, GenericImageView};
+use image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView};
 use lazy_static::lazy_static;
 use legion::{
     serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
@@ -17,6 +17,7 @@ use rapier3d::{
 use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::HashMap,
+    io::BufReader,
     ops::{Index, IndexMut},
     path::Path,
     sync::{Arc, RwLock},
@@ -978,6 +979,29 @@ impl Texture {
             _ => bail!("Failed to match the provided image format to a vulkan format!"),
         })
     }
+
+    pub fn from_hdr(path: impl AsRef<Path>) -> Result<Self> {
+        let file = std::fs::File::open(&path)?;
+        let decoder = HdrDecoder::new(BufReader::new(file))?;
+        let metadata = decoder.metadata();
+        let decoded = decoder.read_image_hdr()?;
+        let width = metadata.width as u32;
+        let height = metadata.height as u32;
+        let data = decoded
+            .iter()
+            .flat_map(|pixel| vec![pixel[0], pixel[1], pixel[2], 1.0])
+            .collect::<Vec<_>>();
+        let pixels =
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
+                .to_vec();
+        Ok(Self {
+            pixels,
+            format: Format::R16G16B16F,
+            width,
+            height,
+            sampler: Sampler::default(),
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -992,6 +1016,10 @@ pub enum Format {
     R16G16,
     R16G16B16,
     R16G16B16A16,
+    R16F,
+    R16G16F,
+    R16G16B16F,
+    R16G16B16A16F,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]

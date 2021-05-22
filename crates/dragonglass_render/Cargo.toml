@@ -26,6 +26,6 @@ shader-compilation = { path = "../shader-compilation" }
 simplelog = { version = "0.10.0", features = ["termcolor"] }
 
 [features]
-default = ["opengl"]
+default = ["opengl", "vulkan"]
 opengl = ["dragonglass_opengl"]
 vulkan = ["dragonglass_vulkan"]
