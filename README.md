@@ -1,6 +1,6 @@
 # Dragonglass
 
-Dragonglass is a 3D game engine written in Rust and using Vulkan primarily for rendering.
+Dragonglass is a 3D game engine written in Rust!
 
 ## Development Prerequisites
 
