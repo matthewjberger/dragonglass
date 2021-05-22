@@ -4,7 +4,7 @@ use dragonglass_world::{
     AlphaMode, EntityStore, Format, Material, MeshRender, RigidBody, Transform, World,
 };
 use nalgebra_glm as glm;
-use std::{ffi::CString, ptr, str};
+use std::{ptr, str};
 
 pub struct WorldRender {
     pub geometry: GeometryBuffer,
@@ -23,14 +23,16 @@ layout (location = 4) in vec4 inJoint0;
 layout (location = 5) in vec4 inWeight0;
 layout (location = 6) in vec3 inColor0;
 
-uniform mat4 mvpMatrix;
+uniform mat4 view;
+uniform mat4 projection;
+uniform mat4 model;
 
 out vec2 UV0;
 out vec3 Color0;
 
 void main()
 {
-   gl_Position = mvpMatrix * vec4(inPosition, 1.0f);
+   gl_Position = projection * view * model * vec4(inPosition, 1.0f);
    UV0 = inUV0;
    Color0 = inColor0;
 }
@@ -38,6 +40,23 @@ void main()
 
     const FRAGMENT_SHADER_SOURCE: &'static str = &r#"
 #version 450 core
+
+struct Light
+{
+    vec3 direction;
+    float range;
+
+    vec3 color;
+    float intensity;
+
+    vec3 position;
+    float innerConeCos;
+
+    float outerConeCos;
+    int kind;
+
+    vec2 padding;
+};
 
 struct Material {
     vec4 baseColorFactor;
@@ -60,6 +79,8 @@ uniform sampler2D PhysicalTexture;
 uniform sampler2D NormalTexture;
 uniform sampler2D OcclusionTexture;
 uniform sampler2D EmissiveTexture;
+
+uniform vec3 cameraPosition;
 
 in vec2 UV0;
 in vec3 Color0;
@@ -176,11 +197,16 @@ void main(void)
         self.geometry.bind();
         self.shader_program.use_program();
 
-        let name: CString = CString::new("mvpMatrix".as_bytes())?;
-        let mvp_location =
-            unsafe { gl::GetUniformLocation(self.shader_program.id(), name.as_ptr()) };
-
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        let camera_entity = world.active_camera()?;
+        let camera_transform = world.entity_global_transform(camera_entity)?;
+        self.shader_program
+            .set_uniform_vec3("cameraPosition", camera_transform.translation.as_slice());
+
+        self.shader_program
+            .set_uniform_matrix4x4("projection", projection.as_slice());
+        self.shader_program
+            .set_uniform_matrix4x4("view", view.as_slice());
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             for graph in world.scene.graphs.iter() {
@@ -210,10 +236,8 @@ void main(void)
                         Err(_) => world.global_transform(graph, node_index)?,
                     };
 
-                    let mvp = projection * view * model;
-                    unsafe {
-                        gl::UniformMatrix4fv(mvp_location, 1, gl::FALSE, mvp.as_ptr());
-                    }
+                    self.shader_program
+                        .set_uniform_matrix4x4("model", model.as_slice());
 
                     match world.ecs.entry_ref(entity)?.get_component::<MeshRender>() {
                         Ok(mesh_render) => {
