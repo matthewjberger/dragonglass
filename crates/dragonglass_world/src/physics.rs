@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub type Handle = rapier3d::dynamics::RigidBodyHandle;
 pub type ColliderHandle = rapier3d::geometry::ColliderHandle;
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RigidBody {
     pub handle: Handle,
     pub colliders: Vec<ColliderHandle>,

@@ -32,6 +32,7 @@ lazy_static! {
         registry.register::<MeshRender>("mesh".to_string());
         registry.register::<Skin>("skin".to_string());
         registry.register::<Light>("light".to_string());
+        registry.register::<RigidBody>("rigid_body".to_string());
         Arc::new(RwLock::new(registry))
     };
     pub static ref ENTITY_SERIALIZER: Canon = Canon::default();
@@ -49,6 +50,7 @@ pub struct World {
     pub animations: Vec<Animation>,
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
+    pub hdr_textures: Vec<Texture>,
     pub geometry: Geometry,
     pub fonts: HashMap<String, SdfFont>,
 }
@@ -445,8 +447,9 @@ impl World {
         Self::from_bytes(&std::fs::read(path)?)
     }
 
-    pub fn roundtrip(&self) -> Result<World> {
-        Self::from_bytes(&self.as_bytes()?)
+    pub fn load_hdr(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        self.hdr_textures.push(Texture::from_hdr(path)?);
+        Ok(())
     }
 }
 
@@ -475,6 +478,7 @@ where
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
+    pub skybox: Option<usize>,
 }
 
 impl Default for Scene {
@@ -482,6 +486,7 @@ impl Default for Scene {
         Self {
             name: "Unnamed Scene".to_string(),
             graphs: vec![SceneGraph::default()],
+            skybox: None,
         }
     }
 }

@@ -72,6 +72,9 @@ impl Editor {
     }
 
     fn load_hdr(path: &str, application: &mut Application) {
+        application.world.load_hdr(path).unwrap();
+        application.world.scene.skybox = Some(application.world.hdr_textures.len() - 1);
+        log::info!("{}", application.world.hdr_textures.len() - 1);
         match application.renderer.load_skybox(path) {
             Ok(_) => {
                 info!("Loaded hdr cubemap: '{}'", path);
@@ -137,11 +140,6 @@ impl ApplicationRunner for Editor {
                 application.world.save("saved_map.dga")?;
                 log::info!("Saved world!");
             }
-            (VirtualKeyCode::L, ElementState::Pressed) => {
-                application.world = World::load("saved_map.dga")?;
-                application.renderer.load_world(&application.world)?;
-                log::info!("Loaded world!");
-            }
             (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 application.world.clear()?;
@@ -164,8 +162,13 @@ impl ApplicationRunner for Editor {
             match extension.to_str() {
                 Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
                 Some("hdr") => Self::load_hdr(raw_path, application),
+                Some("dga") => {
+                    application.world = World::load(raw_path)?;
+                    application.renderer.load_world(&application.world)?;
+                    log::info!("Loaded world!");
+                }
                 _ => warn!(
-                    "File extension {:#?} is not a valid '.glb', '.gltf', or 'hdr' extension",
+                    "File extension {:#?} is not a valid '.dga', '.glb', '.gltf', or '.hdr' extension",
                     extension
                 ),
             }

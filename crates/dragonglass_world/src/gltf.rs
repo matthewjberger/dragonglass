@@ -259,6 +259,7 @@ fn load_scenes(gltf: &gltf::Document, ecs: &mut Ecs, entities: &[Entity]) -> Vec
                 .nodes()
                 .map(|node| create_scene_graph(&node, ecs, entities))
                 .collect(),
+            skybox: None,
         })
         .collect::<Vec<_>>()
 }
