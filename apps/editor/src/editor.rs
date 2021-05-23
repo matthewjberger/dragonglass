@@ -91,8 +91,9 @@ impl Editor {
 }
 
 impl ApplicationRunner for Editor {
-    fn initialize(&mut self, _application: &mut Application) -> Result<()> {
+    fn initialize(&mut self, application: &mut Application) -> Result<()> {
         self.setup_file_reloading()?;
+        application.world.add_default_light()?;
         Ok(())
     }
 
