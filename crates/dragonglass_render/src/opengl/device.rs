@@ -39,10 +39,6 @@ impl OpenGLRenderBackend {
 }
 
 impl Render for OpenGLRenderBackend {
-    fn load_skybox(&mut self, _path: &str) -> Result<()> {
-        Ok(())
-    }
-
     fn load_world(&mut self, world: &World) -> Result<()> {
         self.world_render = Some(WorldRender::new(world)?);
         Ok(())

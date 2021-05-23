@@ -50,10 +50,6 @@ impl VulkanRenderBackend {
 }
 
 impl Render for VulkanRenderBackend {
-    fn load_skybox(&mut self, path: &str) -> Result<()> {
-        self.scene.load_skybox(&self.context, path)
-    }
-
     fn load_world(&mut self, world: &World) -> Result<()> {
         self.scene.load_world(&self.context, world)?;
         Ok(())

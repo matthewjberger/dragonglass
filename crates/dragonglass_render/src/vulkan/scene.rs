@@ -11,7 +11,7 @@ use dragonglass_vulkan::{
 };
 use dragonglass_world::World;
 use imgui::Context as ImguiContext;
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 pub struct Scene {
     pub environment_maps: EnvironmentMapSet,
@@ -42,11 +42,13 @@ impl Scene {
             Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
         let mut shader_cache = ShaderCache::default();
 
+        let default_hdr_texture =
+            dragonglass_world::Texture::from_hdr("assets/skyboxes/desert.hdr")?;
         let environment_maps = EnvironmentMapSet::new(
             context,
             &transient_command_pool,
             &mut shader_cache,
-            "assets/skyboxes/desert.hdr",
+            &default_hdr_texture,
         )?;
 
         let skybox_render = SkyboxRender::new(
@@ -223,19 +225,27 @@ impl Scene {
         Ok(rendergraph)
     }
 
-    pub fn load_skybox(&mut self, context: &Context, path: impl AsRef<Path>) -> Result<()> {
-        self.environment_maps = EnvironmentMapSet::new(
-            context,
-            &self.transient_command_pool,
-            &mut self.shader_cache,
-            path,
-        )?;
-        self.skybox_render
-            .update_descriptor_set(context.device.clone(), &self.environment_maps.prefilter);
-        Ok(())
-    }
-
     pub fn load_world(&mut self, context: &Context, world: &World) -> Result<()> {
+        world
+            .scene
+            .skybox
+            .as_ref()
+            .and_then(|index| world.hdr_textures.get(*index))
+            .and_then(|texture| {
+                self.environment_maps = EnvironmentMapSet::new(
+                    context,
+                    &self.transient_command_pool,
+                    &mut self.shader_cache,
+                    texture,
+                )
+                .ok()?;
+                self.skybox_render.update_descriptor_set(
+                    context.device.clone(),
+                    &self.environment_maps.prefilter,
+                );
+                Some(())
+            });
+
         self.world_render = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         let mut rendering = WorldRender::new(
@@ -246,6 +256,7 @@ impl Scene {
         )?;
         rendering.create_pipeline(&mut self.shader_cache, offscreen_renderpass, self.samples)?;
         self.world_render = Some(rendering);
+
         Ok(())
     }
 }

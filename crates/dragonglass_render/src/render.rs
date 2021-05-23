@@ -19,8 +19,6 @@ pub enum Backend {
 
 pub trait Render {
     fn toggle_wireframe(&mut self);
-    // TODO: Make this part of the world
-    fn load_skybox(&mut self, path: &str) -> Result<()>;
     fn load_world(&mut self, world: &World) -> Result<()>;
     fn reload_asset_shaders(&mut self) -> Result<()>;
     fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;

@@ -5,9 +5,8 @@ use crate::core::{
 use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
 use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
-use image::{hdr::HdrDecoder, DynamicImage, ImageBuffer, Pixel, RgbImage};
+use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
 use std::{
-    io::BufReader,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -60,36 +59,6 @@ impl ImageDescription {
         Self::from_image(&image)
     }
 
-    // FIXME: Move this to the 'world' crate
-    #[allow(dead_code)]
-    pub fn from_hdr<P>(path: P) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
-        let file = std::fs::File::open(&path)?;
-        let decoder = HdrDecoder::new(BufReader::new(file))?;
-        let metadata = decoder.metadata();
-        let decoded = decoder.read_image_hdr()?;
-        let format = vk::Format::R32G32B32A32_SFLOAT;
-        let width = metadata.width as u32;
-        let height = metadata.height as u32;
-        let mip_levels = Self::calculate_mip_levels(width, height);
-        let data = decoded
-            .iter()
-            .flat_map(|pixel| vec![pixel[0], pixel[1], pixel[2], 1.0])
-            .collect::<Vec<_>>();
-        let pixels =
-            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
-                .to_vec();
-        Ok(Self {
-            format,
-            width,
-            height,
-            pixels,
-            mip_levels,
-        })
-    }
-
     #[allow(dead_code)]
     pub fn from_image(image: &DynamicImage) -> Result<Self> {
         let (format, (width, height)) = match image {
@@ -136,14 +105,26 @@ impl ImageDescription {
             dragonglass_world::Format::B8G8R8A8 => vk::Format::B8G8R8A8_UNORM,
             dragonglass_world::Format::R8G8B8 => vk::Format::R8G8B8_UNORM,
             dragonglass_world::Format::B8G8R8 => vk::Format::B8G8R8_UNORM,
+
             dragonglass_world::Format::R16 => vk::Format::R16_UNORM,
             dragonglass_world::Format::R16G16 => vk::Format::R16G16_UNORM,
             dragonglass_world::Format::R16G16B16 => vk::Format::R16G16B16_UNORM,
             dragonglass_world::Format::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
+
             dragonglass_world::Format::R16F => vk::Format::R16_SFLOAT,
             dragonglass_world::Format::R16G16F => vk::Format::R16G16_SFLOAT,
             dragonglass_world::Format::R16G16B16F => vk::Format::R16G16B16_SFLOAT,
             dragonglass_world::Format::R16G16B16A16F => vk::Format::R16G16B16A16_SFLOAT,
+
+            dragonglass_world::Format::R32 => vk::Format::R32_UINT,
+            dragonglass_world::Format::R32G32 => vk::Format::R32G32_UINT,
+            dragonglass_world::Format::R32G32B32 => vk::Format::R32G32B32_UINT,
+            dragonglass_world::Format::R32G32B32A32 => vk::Format::R32G32B32A32_UINT,
+
+            dragonglass_world::Format::R32F => vk::Format::R32_SFLOAT,
+            dragonglass_world::Format::R32G32F => vk::Format::R32G32_SFLOAT,
+            dragonglass_world::Format::R32G32B32F => vk::Format::R32G32B32_SFLOAT,
+            dragonglass_world::Format::R32G32B32A32F => vk::Format::R32G32B32A32_SFLOAT,
         }
     }
 

@@ -1,17 +1,17 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    world::rapier3d::dynamics::BodyStatus,
-    world::rapier3d::geometry::InteractionGroups,
-    world::MeshRender,
-    world::{legion::Entity, load_gltf, IntoQuery, World},
+    world::{
+        legion::Entity, load_gltf, rapier3d::dynamics::BodyStatus,
+        rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
+    },
 };
 use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
-use log::{error, info, warn};
+use log::{info, warn};
 use std::{
     ffi::OsStr,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -71,18 +71,22 @@ impl Editor {
         Ok(())
     }
 
-    fn load_hdr(path: &str, application: &mut Application) {
-        application.world.load_hdr(path).unwrap();
+    fn load_hdr(path: impl AsRef<Path>, application: &mut Application) -> Result<()> {
+        // FIXME: We are loading the hdr even if it's already loaded here
+        application.world.load_hdr(path)?;
         application.world.scene.skybox = Some(application.world.hdr_textures.len() - 1);
-        log::info!("{}", application.world.hdr_textures.len() - 1);
-        match application.renderer.load_skybox(path) {
+
+        // FIXME: Don't reload entire scene whenever something is added
+        match application.renderer.load_world(&application.world) {
             Ok(_) => {
-                info!("Loaded hdr cubemap: '{}'", path);
+                info!("Reloaded gltf world");
             }
             Err(error) => {
-                error!("Failed to load hdr map: {}", error);
+                warn!("Failed to load gltf world: {}", error);
             }
         }
+
+        Ok(())
     }
 }
 
@@ -161,7 +165,7 @@ impl ApplicationRunner for Editor {
         if let Some(extension) = path.extension() {
             match extension.to_str() {
                 Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
-                Some("hdr") => Self::load_hdr(raw_path, application),
+                Some("hdr") => Self::load_hdr(raw_path, application)?,
                 Some("dga") => {
                     application.world = World::load(raw_path)?;
                     application.renderer.load_world(&application.world)?;

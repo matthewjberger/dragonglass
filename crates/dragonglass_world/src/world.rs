@@ -1001,7 +1001,7 @@ impl Texture {
                 .to_vec();
         Ok(Self {
             pixels,
-            format: Format::R16G16B16F,
+            format: Format::R32G32B32A32F,
             width,
             height,
             sampler: Sampler::default(),
@@ -1025,6 +1025,14 @@ pub enum Format {
     R16G16F,
     R16G16B16F,
     R16G16B16A16F,
+    R32,
+    R32G32,
+    R32G32B32,
+    R32G32B32A32,
+    R32F,
+    R32G32F,
+    R32G32B32F,
+    R32G32B32A32F,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]

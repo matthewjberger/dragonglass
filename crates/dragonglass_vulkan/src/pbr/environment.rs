@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::{
     core::{CommandPool, Context, Cubemap, ShaderCache},
     pbr::{load_hdr_map, load_irradiance_map, load_prefilter_map, Brdflut},
@@ -19,10 +17,10 @@ impl EnvironmentMapSet {
         context: &Context,
         command_pool: &CommandPool,
         shader_cache: &mut ShaderCache,
-        path: impl AsRef<Path>,
+        hdr_texture: &dragonglass_world::Texture,
     ) -> Result<Self> {
         info!("Creating Hdr cubemap");
-        let hdr = load_hdr_map(context, command_pool, path, shader_cache)?;
+        let hdr = load_hdr_map(context, command_pool, hdr_texture, shader_cache)?;
 
         info!("Creating Brdflut");
         let brdflut = Brdflut::new(context, command_pool, shader_cache)?;

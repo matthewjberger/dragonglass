@@ -14,7 +14,7 @@ use ash::{
     vk::{self, Handle},
 };
 use nalgebra_glm as glm;
-use std::{mem, path::Path, sync::Arc};
+use std::{mem, sync::Arc};
 use vk_mem::Allocator;
 
 #[allow(dead_code)]
@@ -25,10 +25,10 @@ struct PushConstantHdr {
 pub fn load_hdr_map(
     context: &Context,
     command_pool: &CommandPool,
-    path: impl AsRef<Path>,
+    texture: &dragonglass_world::Texture,
     shader_cache: &mut ShaderCache,
 ) -> Result<Cubemap> {
-    let hdr_description = ImageDescription::from_hdr(path)?;
+    let hdr_description = ImageDescription::from_texture(texture)?;
     let hdr_texture = Texture::new(context, command_pool, &hdr_description)?;
 
     let sampler_info = vk::SamplerCreateInfo::builder()
