@@ -273,12 +273,12 @@ void main()
 }
 
 #[derive(Copy, Clone)]
-struct QuadVertex {
+struct Vertex {
     pub position: glm::Vec3,
     pub tex_coords: glm::Vec2,
 }
 
-impl QuadVertex {
+impl Vertex {
     pub fn new(position: glm::Vec3, tex_coords: glm::Vec2) -> Self {
         Self {
             position,
@@ -296,12 +296,12 @@ impl QuadGeometry {
     pub fn new() -> Self {
         #[rustfmt::skip]
         let vertices = vec![
-            QuadVertex::new(glm::vec3(-1.0,  1.0, 0.0), glm::vec2(0.0, 1.0)), 
-            QuadVertex::new(glm::vec3(-1.0, -1.0, 0.0), glm::vec2(0.0, 0.0)), 
-            QuadVertex::new(glm::vec3( 1.0, -1.0, 0.0), glm::vec2(1.0, 0.0)), 
-            QuadVertex::new(glm::vec3(-1.0,  1.0, 0.0),  glm::vec2(0.0, 1.0)),
-            QuadVertex::new(glm::vec3( 1.0, -1.0, 0.0),  glm::vec2(1.0, 0.0)),
-            QuadVertex::new(glm::vec3( 1.0,  1.0, 0.0,), glm::vec2(1.0, 1.0)),
+            Vertex::new(glm::vec3(-1.0,  1.0, 0.0), glm::vec2(0.0, 1.0)), 
+            Vertex::new(glm::vec3(-1.0, -1.0, 0.0), glm::vec2(0.0, 0.0)), 
+            Vertex::new(glm::vec3( 1.0, -1.0, 0.0), glm::vec2(1.0, 0.0)), 
+            Vertex::new(glm::vec3(-1.0,  1.0, 0.0),  glm::vec2(0.0, 1.0)),
+            Vertex::new(glm::vec3( 1.0, -1.0, 0.0),  glm::vec2(1.0, 0.0)),
+            Vertex::new(glm::vec3( 1.0,  1.0, 0.0,), glm::vec2(1.0, 1.0)),
         ];
         Self {
             geometry: GeometryBuffer::new(&vertices, None, &[3, 2]),

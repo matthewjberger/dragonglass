@@ -171,6 +171,8 @@ void main(void)
 
     color *= vec4(Color0, 1.0);
 
+    float baseAlpha = color.a;
+
     // alpha discard
     if (material.alphaMode == 2 && color.a < material.alphaCutoff) {
         discard;
@@ -248,6 +250,8 @@ void main(void)
 
     // gamma correct
     color = pow(color, vec4(1.0/2.2));
+
+    color.a = baseAlpha;
 }
 
 vec3 getNormal()

@@ -14,7 +14,7 @@ pub enum Backend {
     Vulkan,
 
     #[cfg(feature = "opengl")]
-    OpenGl,
+    OpenGL,
 }
 
 pub trait Render {
@@ -38,7 +38,7 @@ pub fn create_render_backend(
         }
 
         #[cfg(feature = "opengl")]
-        Backend::OpenGl => {
+        Backend::OpenGL => {
             let backend = OpenGLRenderBackend::new(window_handle, dimensions, imgui)?;
             Ok(Box::new(backend) as Box<dyn Render>)
         }

@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use dragonglass::{
     app::{run_application, AppConfig, Application, ApplicationRunner, MouseLook},
+    render::Backend,
     world::{
         Camera as WorldCamera, Entity, EntityStore, Hidden, IntoQuery, Light, LightKind,
         MeshRender, PerspectiveCamera, Projection, RigidBody, Transform,
@@ -187,6 +188,7 @@ fn main() -> Result<()> {
         AppConfig {
             icon: Some("assets/icon/icon.png".to_string()),
             title: "Physics Test with Rapier3D".to_string(),
+            backend: Backend::OpenGL,
             ..Default::default()
         },
     )

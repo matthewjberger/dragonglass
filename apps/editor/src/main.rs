@@ -32,7 +32,7 @@ fn main() -> Result<()> {
     let options = Options::from_args();
     let backend = match options.backend {
         RenderBackend::Vulkan => Backend::Vulkan,
-        RenderBackend::OpenGL => Backend::OpenGl,
+        RenderBackend::OpenGL => Backend::OpenGL,
     };
     run_application(
         Editor::default(),
