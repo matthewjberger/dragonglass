@@ -24,7 +24,6 @@ arg_enum! {
     about = "The visual editor for the Dragonglass game engine."
 )]
 struct Options {
-    /// Important argument.
     #[structopt(short = "b", long = "backend", possible_values = &RenderBackend::variants(), case_insensitive = true, default_value = "OpenGL")]
     backend: RenderBackend,
 }
