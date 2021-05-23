@@ -1,10 +1,58 @@
 use anyhow::{bail, Context, Result};
 use dragonglass_opengl::{gl, GeometryBuffer, ShaderProgram, Texture};
 use dragonglass_world::{
-    AlphaMode, EntityStore, Format, Material, MeshRender, RigidBody, Transform, World,
+    AlphaMode, EntityStore, Format, LightKind, Material, MeshRender, RigidBody, Transform, World,
 };
 use nalgebra_glm as glm;
 use std::{ptr, str};
+
+// TODO: This is duplicated in the vulkan backend and should be moved
+#[derive(Default, Debug, Copy, Clone)]
+pub struct Light {
+    pub direction: glm::Vec3,
+    pub range: f32,
+
+    pub color: glm::Vec3,
+    pub intensity: f32,
+
+    pub position: glm::Vec3,
+    pub inner_cone_cos: f32,
+
+    pub outer_cone_cos: f32,
+    pub kind: i32,
+
+    pub padding: glm::Vec2,
+}
+
+impl Light {
+    pub fn from_node(transform: &Transform, light: &dragonglass_world::Light) -> Self {
+        let mut inner_cone_cos: f32 = 0.0;
+        let mut outer_cone_cos: f32 = 0.0;
+        let kind = match light.kind {
+            LightKind::Directional => 0,
+            LightKind::Point => 1,
+            LightKind::Spot {
+                inner_cone_angle,
+                outer_cone_angle,
+            } => {
+                inner_cone_cos = inner_cone_angle;
+                outer_cone_cos = outer_cone_angle;
+                2
+            }
+        };
+        Self {
+            direction: -1.0 * glm::quat_rotate_vec3(&transform.rotation, &glm::Vec3::z()),
+            range: light.range,
+            color: light.color,
+            intensity: light.intensity,
+            position: transform.translation,
+            inner_cone_cos,
+            outer_cone_cos,
+            kind,
+            padding: glm::vec2(0.0, 0.0),
+        }
+    }
+}
 
 pub struct WorldRender {
     pub geometry: GeometryBuffer,
@@ -57,6 +105,9 @@ struct Light
 
     vec2 padding;
 };
+
+#define MAX_NUMBER_OF_LIGHTS 4
+uniform Light lights[MAX_NUMBER_OF_LIGHTS];
 
 struct Material {
     vec4 baseColorFactor;
@@ -208,6 +259,32 @@ void main(void)
 
         self.geometry.bind();
         self.shader_program.use_program();
+
+        let world_lights = world
+            .lights()?
+            .iter()
+            .map(|(transform, light)| Light::from_node(transform, light))
+            .collect::<Vec<_>>();
+        for (index, light) in world_lights.iter().enumerate() {
+            let name = |key: &str| format!("lights[{}].{}", index, key);
+
+            self.shader_program
+                .set_uniform_vec3(&name("direction"), light.direction.as_slice());
+            self.shader_program
+                .set_uniform_float(&name("range"), light.range);
+            self.shader_program
+                .set_uniform_vec3(&name("color"), light.color.as_slice());
+            self.shader_program
+                .set_uniform_float(&name("intensity"), light.intensity);
+            self.shader_program
+                .set_uniform_vec3(&name("position"), light.position.as_slice());
+            self.shader_program
+                .set_uniform_float(&name("innerConeCos"), light.inner_cone_cos);
+            self.shader_program
+                .set_uniform_float(&name("outerConeCos"), light.outer_cone_cos);
+            self.shader_program
+                .set_uniform_int(&name("kind"), light.kind);
+        }
 
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
         let camera_entity = world.active_camera()?;
