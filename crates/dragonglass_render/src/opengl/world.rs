@@ -75,13 +75,17 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 model;
 
+out vec3 Position;
 out vec2 UV0;
+out vec3 Normal;
 out vec3 Color0;
 
 void main()
 {
-   gl_Position = projection * view * model * vec4(inPosition, 1.0f);
+   Position = vec3(model * vec4(inPosition, 1.0));
+   gl_Position = projection * view * vec4(Position, 1.0);
    UV0 = inUV0;
+   Normal = mat3(model) * inNormal;
    Color0 = inColor0;
 }
 "#;
@@ -108,6 +112,7 @@ struct Light
 
 #define MAX_NUMBER_OF_LIGHTS 4
 uniform Light lights[MAX_NUMBER_OF_LIGHTS];
+uniform int numberOfLights;
 
 struct Material {
     vec4 baseColorFactor;
@@ -115,6 +120,8 @@ struct Material {
     int alphaMode;
     float alphaCutoff;
     float occlusionStrength;
+    float metallicFactor;
+    float roughnessFactor;
     bool isUnlit;
     bool hasDiffuseTexture;
     bool hasPhysicalTexture;
@@ -133,7 +140,9 @@ uniform sampler2D EmissiveTexture;
 
 uniform vec3 cameraPosition;
 
+in vec3 Position;
 in vec2 UV0;
+in vec3 Normal;
 in vec3 Color0;
 
 out vec4 color;
@@ -143,9 +152,18 @@ vec4 srgb_to_linear(vec4 srgbIn)
     return vec4(pow(srgbIn.xyz,vec3(2.2)),srgbIn.w);
 }
 
+const float PI = 3.14159265359;
+
+vec3 getNormal();
+float DistributionGGX(vec3 N, vec3 H, float roughness);
+float GeometrySchlickGGX(float NdotV, float roughness);
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
+vec3 fresnelSchlick(float cosTheta, vec3 F0);
+
 void main(void)
 {
     color = material.baseColorFactor;
+
     if (material.hasDiffuseTexture) {
         vec4 albedoMap = texture(DiffuseTexture, UV0);
         color = srgb_to_linear(albedoMap);
@@ -162,6 +180,56 @@ void main(void)
         color = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
         return;
     }
+
+    float metallic = material.metallicFactor;
+    float roughness = material.roughnessFactor;
+    if (material.hasPhysicalTexture)
+    {
+        vec4 physicalDescriptor = texture(PhysicalTexture, UV0);
+        roughness *= physicalDescriptor.g;
+        metallic *= physicalDescriptor.b;
+    }
+
+    // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
+    // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
+    vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, color.rgb, metallic);
+
+    vec3 N = getNormal();
+    vec3 V = normalize(cameraPosition - Position);
+    vec3 R = reflect(-V, N); 
+
+    // reflectance equation
+    vec3 Lo = vec3(0.0);
+    for(int i = 0; i < numberOfLights; ++i) 
+    {
+        Light light = lights[i];
+
+        vec3 L = normalize(light.position - Position);
+        vec3 H = normalize(V + L);
+        float distance = length(light.position - Position);
+        float attenuation = 1.0 / (distance * distance);
+        vec3 radiance = light.color * attenuation;
+
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 nominator = NDF * G * F;
+        float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
+        vec3 specular = nominator / denominator;
+
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic;
+
+        float NdotL = max(dot(N, L), 0.0);
+
+        Lo += (kD * color.rgb / PI + specular) * radiance * NdotL;
+    }
+
+    color *= vec4(0.03);
+    color += vec4(Lo, 0.0);
 
     float occlusion = 1.0;
     if (material.hasOcclusionTexture) {
@@ -180,6 +248,67 @@ void main(void)
 
     // gamma correct
     color = pow(color, vec4(1.0/2.2));
+}
+
+vec3 getNormal()
+{
+    if (!material.hasNormalTexture) {
+        return Normal;
+    }
+
+    vec3 tangentNormal = texture(NormalTexture, UV0).xyz * 2.0 - 1.0;
+
+    vec3 Q1  = dFdx(Position);
+    vec3 Q2  = dFdy(Position);
+    vec2 st1 = dFdx(UV0);
+    vec2 st2 = dFdy(UV0);
+
+    vec3 N   = normalize(Normal);
+    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
+    vec3 B  = -normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+
+    return normalize(TBN * tangentNormal);
+}
+
+float DistributionGGX(vec3 N, vec3 H, float roughness)
+{
+    float a = roughness*roughness;
+    float a2 = a*a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+
+    float nom   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return nom / denom;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
 }
 "#;
 
@@ -286,6 +415,9 @@ void main(void)
                 .set_uniform_int(&name("kind"), light.kind);
         }
 
+        self.shader_program
+            .set_uniform_int("numberOfLights", world_lights.len() as _);
+
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
         let camera_entity = world.active_camera()?;
         let camera_transform = world.entity_global_transform(camera_entity)?;
@@ -379,8 +511,15 @@ void main(void)
                                         material.occlusion_strength,
                                     );
 
-                                    self.shader_program
-                                        .set_uniform_bool("material.isUnlit", material.is_unlit);
+                                    self.shader_program.set_uniform_float(
+                                        "material.metallicFactor",
+                                        material.metallic_factor,
+                                    );
+
+                                    self.shader_program.set_uniform_float(
+                                        "material.roughnessFactor",
+                                        material.roughness_factor,
+                                    );
 
                                     for (index, descriptor) in
                                         ["Diffuse", "Physical", "Normal", "Occlusion", "Emissive"]
