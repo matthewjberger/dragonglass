@@ -145,7 +145,8 @@ in vec2 UV0;
 in vec3 Normal;
 in vec3 Color0;
 
-out vec4 color;
+layout (location = 0) out vec4 color;
+layout (location = 1) out vec4 brightColor;
 
 vec4 srgb_to_linear(vec4 srgbIn)
 {
@@ -244,14 +245,16 @@ void main(void)
         emission = srgb_to_linear(texture(EmissiveTexture, UV0)) * vec4(material.emissiveFactor.rgb, 1.0);
     }
     color += vec4(emission.rgb, 0.0);
-
-    // HDR tonemapping
-    color = color / (color + vec4(1.0));
-
-    // gamma correct
-    color = pow(color, vec4(1.0/2.2));
-
     color.a = baseAlpha;
+
+    float brightness = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+    if (brightness > 1.0)
+    {
+        brightColor = vec4(color.rgb, 1.0);
+    }
+    else {
+        brightColor = vec4(0.0, 0.0, 0.0, 1.0);
+    }
 }
 
 vec3 getNormal()

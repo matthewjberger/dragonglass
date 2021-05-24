@@ -74,7 +74,7 @@ impl Render for OpenGLRenderBackend {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.offscreen.framebuffer);
             gl::Enable(gl::DEPTH_TEST);
-            gl::ClearColor(0.1, 0.1, 0.1, 1.0);
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             gl::Enable(gl::DEPTH_TEST);
         }
@@ -92,7 +92,7 @@ impl Render for OpenGLRenderBackend {
             gl::ClearColor(1.0, 1.0, 1.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::ActiveTexture(gl::TEXTURE0);
-            gl::BindTexture(gl::TEXTURE_2D, self.offscreen.color_attachment);
+            gl::BindTexture(gl::TEXTURE_2D, self.offscreen.color_attachments[0]);
             self.fullscreen_quad.draw();
         }
 
@@ -105,7 +105,7 @@ impl Render for OpenGLRenderBackend {
 
 struct OffscreenFramebuffer {
     pub framebuffer: u32,
-    pub color_attachment: u32,
+    pub color_attachments: Vec<u32>,
     pub depth_rbo: u32,
 }
 
@@ -117,32 +117,43 @@ impl OffscreenFramebuffer {
             gl::GenFramebuffers(1, &mut framebuffer);
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
 
-            // Color attachment for the offscreen framebuffer
-            let mut color_attachment = 0;
-            gl::GenTextures(1, &mut color_attachment);
-            gl::BindTexture(gl::TEXTURE_2D, color_attachment);
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGB as _,
-                screen_width,
-                screen_height,
-                0,
-                gl::RGB,
-                gl::UNSIGNED_BYTE,
-                std::ptr::null(),
-            );
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+            // Color attachments for the offscreen framebuffer
+            let mut color_attachments = Vec::new();
+            let number_of_color_attachments = 2;
+            for index in 0..number_of_color_attachments {
+                let mut color_attachment = 0;
+                gl::GenTextures(1, &mut color_attachment);
+                gl::BindTexture(gl::TEXTURE_2D, color_attachment);
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    gl::RGBA16F as _,
+                    screen_width,
+                    screen_height,
+                    0,
+                    gl::RGBA,
+                    gl::FLOAT,
+                    std::ptr::null(),
+                );
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as _);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as _);
 
-            // Attach the color texture
-            gl::FramebufferTexture2D(
-                gl::FRAMEBUFFER,
-                gl::COLOR_ATTACHMENT0,
-                gl::TEXTURE_2D,
-                color_attachment,
-                0,
-            );
+                // Attach the color texture
+                gl::FramebufferTexture2D(
+                    gl::FRAMEBUFFER,
+                    gl::COLOR_ATTACHMENT0 + index,
+                    gl::TEXTURE_2D,
+                    color_attachment,
+                    0,
+                );
+
+                color_attachments.push(color_attachment);
+            }
+
+            let attachments = (0..color_attachments.len()).map(|i| gl::COLOR_ATTACHMENT0 + i as u32).collect::<Vec<_>>();
+            gl::DrawBuffers(attachments.len() as _, attachments.as_ptr() as *const _);
 
             // Renderbuffer object for the Depth/Stencil attachment of the offscreen framebuffer
             let mut depth_rbo = 0;
@@ -171,7 +182,7 @@ impl OffscreenFramebuffer {
 
             Ok(Self {
                 framebuffer,
-                color_attachment,
+                color_attachments,
                 depth_rbo,
             })
         }
@@ -260,6 +271,17 @@ void main()
     // for(int i = 0; i < 9; i++)
     //     col += sampleTex[i] * kernel[i];
     // FragColor = vec4(col, 1.0);
+
+    const float gamma = 2.2;
+    const float exposure = 1.0;
+
+    // tone mapping
+    vec3 result = vec3(1.0) - exp(-FragColor.rgb * exposure);
+
+    // gamma correct
+    result = pow(result, vec3(1.0 / gamma));
+
+    FragColor = vec4(result, 1.0);
 }
 "#;
 
