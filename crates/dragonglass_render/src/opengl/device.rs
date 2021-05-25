@@ -14,6 +14,7 @@ use nalgebra_glm as glm;
 pub struct OpenGLRenderBackend {
     context: ContextWrapper<PossiblyCurrent, ()>,
     offscreen: OffscreenFramebuffer,
+    blur_program: ShaderProgram,
     fullscreen_program: ShaderProgram,
     fullscreen_quad: QuadGeometry,
     world_render: Option<WorldRender>,
@@ -30,6 +31,7 @@ impl OpenGLRenderBackend {
         Ok(Self {
             context,
             offscreen: OffscreenFramebuffer::new(dimensions[0] as i32, dimensions[1] as i32)?,
+            blur_program: blur_shader_program()?,
             fullscreen_program: fullscreen_shader_program()?,
             fullscreen_quad: QuadGeometry::new(),
             world_render: None,
@@ -84,8 +86,28 @@ impl Render for OpenGLRenderBackend {
             world_render.render(world, aspect_ratio)?;
         }
 
+        // Blur the second color attachment for bloom
+        let mut horizontal = true;
+        let mut first_iteration = true;
+        let amount = 10;
+        self.blur_program.use_program();
+        self.blur_program.set_uniform_int("image", 0);
+        for _ in 0..amount {
+            unsafe {
+                gl::BindFramebuffer(gl::FRAMEBUFFER, self.offscreen.pingpong_framebuffers[if horizontal { 1 } else { 0 }]);
+                self.blur_program.set_uniform_bool("horizontal", horizontal);
+                gl::ActiveTexture(gl::TEXTURE0);
+                gl::BindTexture(gl::TEXTURE_2D, if first_iteration { self.offscreen.color_attachments[1] } else { self.offscreen.pingpong_textures[if horizontal { 0 } else { 1 }] });
+                self.fullscreen_quad.draw();
+                horizontal = !horizontal;
+                first_iteration = false;
+            }
+        }
+
         // Second pass
         self.fullscreen_program.use_program();
+        self.fullscreen_program.set_uniform_int("screenTexture", 0);
+        self.fullscreen_program.set_uniform_int("blurredScreenTexture", 1);
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0); // default framebuffer
             gl::Disable(gl::DEPTH_TEST);
@@ -93,6 +115,8 @@ impl Render for OpenGLRenderBackend {
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::ActiveTexture(gl::TEXTURE0);
             gl::BindTexture(gl::TEXTURE_2D, self.offscreen.color_attachments[0]);
+            gl::ActiveTexture(gl::TEXTURE1);
+            gl::BindTexture(gl::TEXTURE_2D, self.offscreen.color_attachments[1]);
             self.fullscreen_quad.draw();
         }
 
@@ -107,6 +131,8 @@ struct OffscreenFramebuffer {
     pub framebuffer: u32,
     pub color_attachments: Vec<u32>,
     pub depth_rbo: u32,
+    pub pingpong_framebuffers: [u32; 2],
+    pub pingpong_textures: [u32; 2],
 }
 
 impl OffscreenFramebuffer {
@@ -180,13 +206,97 @@ impl OffscreenFramebuffer {
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
 
+            let mut pingpong_framebuffers = [0_u32; 2];
+            let mut pingpong_textures =[0_u32; 2];
+
+            gl::GenFramebuffers(2, pingpong_framebuffers.as_mut_ptr() as *mut _);
+            gl::GenTextures(2, pingpong_textures.as_mut_ptr() as *mut _);
+
+            for (fbo, texture) in pingpong_framebuffers.iter().zip(pingpong_textures.iter()) {
+                gl::BindFramebuffer(gl::FRAMEBUFFER, *fbo);
+                gl::BindTexture(gl::TEXTURE_2D, *texture);
+                gl::TexImage2D(
+                    gl::TEXTURE_2D, 0, gl::RGBA16F as _, screen_width, screen_height, 0, gl::RGBA, gl::FLOAT, std::ptr::null(),
+                );
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as _);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as _);
+
+                gl::FramebufferTexture2D(
+                    gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, *fbo, 0
+                );
+            }
+
             Ok(Self {
                 framebuffer,
                 color_attachments,
                 depth_rbo,
+                pingpong_framebuffers,
+                pingpong_textures,
             })
         }
     }
+}
+
+fn blur_shader_program() -> Result<ShaderProgram> {
+    const VERTEX_SHADER_SOURCE: &'static str = &r#"
+#version 450 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoords;
+
+out vec2 TexCoords;
+
+void main()
+{
+    gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0); 
+    TexCoords = aTexCoords;
+}  
+"#;
+
+    const FRAGMENT_SHADER_SOURCE: &'static str = &r#"
+#version 450 core
+
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D image;
+
+uniform bool horizontal;
+uniform float weight[5] = float[] (0.2270270270, 0.1945945946, 0.1216216216, 0.0540540541, 0.0162162162);
+
+void main()
+{             
+    vec2 tex_offset = 1.0 / textureSize(image, 0); // gets size of single texel
+    vec3 result = texture(image, TexCoords).rgb * weight[0];
+    if(horizontal)
+    {
+        for(int i = 1; i < 5; ++i)
+        {
+        result += texture(image, TexCoords + vec2(tex_offset.x * i, 0.0)).rgb * weight[i];
+        result += texture(image, TexCoords - vec2(tex_offset.x * i, 0.0)).rgb * weight[i];
+        }
+    }
+    else
+    {
+        for(int i = 1; i < 5; ++i)
+        {
+            result += texture(image, TexCoords + vec2(0.0, tex_offset.y * i)).rgb * weight[i];
+            result += texture(image, TexCoords - vec2(0.0, tex_offset.y * i)).rgb * weight[i];
+        }
+    }
+    FragColor = vec4(result, 1.0);
+}
+"#;
+
+    let mut shader_program = ShaderProgram::new();
+    shader_program
+        .vertex_shader_source(VERTEX_SHADER_SOURCE)?
+        .fragment_shader_source(FRAGMENT_SHADER_SOURCE)?
+        .link();
+
+    Ok(shader_program)
 }
 
 fn fullscreen_shader_program() -> Result<ShaderProgram> {
@@ -212,71 +322,20 @@ out vec4 FragColor;
 in vec2 TexCoords;
 
 uniform sampler2D screenTexture;
+uniform sampler2D blurredScreenTexture;
 
 void main()
 { 
-    // Normal
-    FragColor = texture(screenTexture, TexCoords);
-
-    // Invert colors
-    // FragColor = vec4(vec3(1.0 - texture(screenTexture, TexCoords)), 1.0);
-
-    // Grayscale
-    // FragColor = texture(screenTexture, TexCoords);
-    // float average = 0.2126 * FragColor.r + 0.7152 * FragColor.g + 0.0722 * FragColor.b;
-    // FragColor = vec4(average, average, average, 1.0);
-
-    /* Kernels */
-
-    // Sharpen Kernel
-    // float kernel[9] = float[](
-    //     -1, -1, -1,
-    //     -1,  9, -1,
-    //     -1, -1, -1
-    // );
-
-    // Blur Kernel
-    // float kernel[9] = float[](
-    //     1.0 / 16, 2.0 / 16, 1.0 / 16,
-    //     2.0 / 16, 4.0 / 16, 2.0 / 16,
-    //     1.0 / 16, 2.0 / 16, 1.0 / 16  
-    // );   
-
-    // Edge Detection
-    // float kernel[9] = float[](
-    //     1, 1, 1,
-    //     1, -8, 1,
-    //     1, 1, 1
-    // );
-
-    // Apply a kernel
-    // const float offset = 1.0 / 300.0;  
-    // vec2 offsets[9] = vec2[](
-    //     vec2(-offset,  offset), // top-left
-    //     vec2( 0.0f,    offset), // top-center
-    //     vec2( offset,  offset), // top-right
-    //     vec2(-offset,  0.0f),   // center-left
-    //     vec2( 0.0f,    0.0f),   // center-center
-    //     vec2( offset,  0.0f),   // center-right
-    //     vec2(-offset, -offset), // bottom-left
-    //     vec2( 0.0f,   -offset), // bottom-center
-    //     vec2( offset, -offset)  // bottom-right    
-    // );
-    // vec3 sampleTex[9];
-    // for(int i = 0; i < 9; i++)
-    // {
-    //     sampleTex[i] = vec3(texture(screenTexture, TexCoords.st + offsets[i]));
-    // }
-    // vec3 col = vec3(0.0);
-    // for(int i = 0; i < 9; i++)
-    //     col += sampleTex[i] * kernel[i];
-    // FragColor = vec4(col, 1.0);
-
     const float gamma = 2.2;
     const float exposure = 1.0;
 
+    vec3 hdrColor = texture(screenTexture, TexCoords).rgb;
+    vec3 bloomColor = texture(blurredScreenTexture, TexCoords).rgb;
+
+    hdrColor += bloomColor;
+
     // tone mapping
-    vec3 result = vec3(1.0) - exp(-FragColor.rgb * exposure);
+    vec3 result = vec3(1.0) - exp(-hdrColor * exposure);
 
     // gamma correct
     result = pow(result, vec3(1.0 / gamma));

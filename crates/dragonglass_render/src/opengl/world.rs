@@ -231,7 +231,7 @@ void main(void)
         Lo += (kD * color.rgb / PI + specular) * radiance * NdotL;
     }
 
-    color *= vec4(0.03);
+    color *= vec4(0.3);
     color += vec4(Lo, 0.0);
 
     float occlusion = 1.0;
