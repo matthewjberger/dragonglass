@@ -4,13 +4,13 @@ use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
 
 #[cfg(target_os = "windows")]
-const BACKEND: wgpu::BackendBit = wgpu::BackendBit::DX12;
+const _BACKEND: wgpu::Backend = wgpu::Backend::Dx12;
 
 #[cfg(target_os = "macos")]
-const BACKEND: wgpu::BackendBit = wgpu::BackendBit::METAL;
+const _BACKEND: wgpu::Backend = wgpu::Backend::Metal;
 
 #[cfg(target_os = "linux")]
-const BACKEND: wgpu::BackendBit = wgpu::BackendBit::VULKAN;
+const _BACKEND: wgpu::Backend = wgpu::Backend::Vulkan;
 
 pub trait Render {
     fn toggle_wireframe(&mut self);
@@ -20,9 +20,9 @@ pub trait Render {
 }
 
 pub fn create_render_backend(
-    window_handle: &impl HasRawWindowHandle,
-    dimensions: &[u32; 2],
-    imgui: &mut ImguiContext,
+    _window_handle: &impl HasRawWindowHandle,
+    _dimensions: &[u32; 2],
+    _imgui: &mut ImguiContext,
 ) -> Result<Box<dyn Render>> {
     unimplemented!("no backend available yet!")
 }
