@@ -4,7 +4,7 @@ use crate::{
     state::{Input, System},
 };
 use anyhow::Result;
-use dragonglass_render::{create_render_backend, Backend, Render};
+use dragonglass_render::{create_render_backend, Render};
 use dragonglass_world::{
     legion::IntoQuery,
     load_gltf,
@@ -29,7 +29,6 @@ pub struct AppConfig {
     pub is_fullscreen: bool, // TODO: This isn't respected yet
     pub title: String,
     pub icon: Option<String>,
-    pub backend: Backend,
 }
 
 impl Default for AppConfig {
@@ -39,7 +38,6 @@ impl Default for AppConfig {
             height: 600,
             is_fullscreen: false,
             title: "Dragonglass Application".to_string(),
-            backend: Backend::Vulkan,
             icon: None,
         }
     }
@@ -245,12 +243,7 @@ pub fn run_application(
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let renderer = create_render_backend(
-        &configuration.backend,
-        &window,
-        &window_dimensions,
-        gui.context_mut(),
-    )?;
+    let renderer = create_render_backend(&window, &window_dimensions, gui.context_mut())?;
 
     let mut world = World::new()?;
     world.fonts.insert(

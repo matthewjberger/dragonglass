@@ -1,14 +1,28 @@
-#[cfg(feature = "vulkan")]
-mod vulkan;
+use anyhow::Result;
+use dragonglass_world::World;
+use imgui::{Context as ImguiContext, DrawData};
+use raw_window_handle::HasRawWindowHandle;
 
-#[cfg(feature = "opengl")]
-mod opengl;
+#[cfg(target_os = "windows")]
+const BACKEND: wgpu::BackendBit = wgpu::BackendBit::DX12;
 
-pub mod render;
+#[cfg(target_os = "macos")]
+const BACKEND: wgpu::BackendBit = wgpu::BackendBit::METAL;
 
-pub use crate::render::{create_render_backend, Backend, Render};
+#[cfg(target_os = "linux")]
+const BACKEND: wgpu::BackendBit = wgpu::BackendBit::VULKAN;
 
-unsafe fn byte_slice_from<T: Sized>(data: &T) -> &[u8] {
-    let data_ptr = (data as *const T) as *const u8;
-    std::slice::from_raw_parts(data_ptr, std::mem::size_of::<T>())
+pub trait Render {
+    fn toggle_wireframe(&mut self);
+    fn load_world(&mut self, world: &World) -> Result<()>;
+    fn reload_asset_shaders(&mut self) -> Result<()>;
+    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;
+}
+
+pub fn create_render_backend(
+    window_handle: &impl HasRawWindowHandle,
+    dimensions: &[u32; 2],
+    imgui: &mut ImguiContext,
+) -> Result<Box<dyn Render>> {
+    unimplemented!("no backend available yet!")
 }
