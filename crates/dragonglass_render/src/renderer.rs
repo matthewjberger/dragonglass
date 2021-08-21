@@ -45,7 +45,7 @@ impl Renderer {
             format: swapchain_format,
             width: dimensions[0],
             height: dimensions[1],
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::Fifo,
         };
 
         surface.configure(&device, &config);
