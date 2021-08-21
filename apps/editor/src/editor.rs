@@ -6,55 +6,24 @@ use dragonglass::{
         rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
     },
 };
-use hotwatch::{Event, Hotwatch};
 use imgui::{im_str, Condition, Ui, Window};
 use log::{info, warn};
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::path::{Path, PathBuf};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 pub struct Editor {
     camera: MouseOrbit,
-    _hotwatch: Option<Hotwatch>,
-    reload_shaders: Arc<AtomicBool>,
 }
 
 impl Default for Editor {
     fn default() -> Self {
         Self {
             camera: MouseOrbit::default(),
-            _hotwatch: None,
-            reload_shaders: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 impl Editor {
-    fn setup_file_reloading(&mut self) -> Result<()> {
-        let reload_shaders = self.reload_shaders.clone();
-        let mut hotwatch = Hotwatch::new()?;
-        hotwatch.watch("assets/shaders/model", move |event: Event| {
-            if let Event::Write(path) = event {
-                if let Some(extension) = path.extension() {
-                    // Don't need to reload shaders again
-                    // after a .spv file is generated
-                    if extension == OsStr::new("spv") {
-                        return;
-                    }
-                    reload_shaders.store(true, Ordering::Release);
-                }
-            }
-        })?;
-        self._hotwatch = Some(hotwatch);
-        Ok(())
-    }
-
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
         load_gltf(path, &mut application.world)?;
 
@@ -92,7 +61,6 @@ impl Editor {
 
 impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
-        self.setup_file_reloading()?;
         application.world.add_default_light()?;
         Ok(())
     }
@@ -107,11 +75,6 @@ impl ApplicationRunner for Editor {
     }
 
     fn update(&mut self, application: &mut Application) -> Result<()> {
-        if self.reload_shaders.load(Ordering::Acquire) {
-            application.renderer.reload_asset_shaders()?;
-        }
-        self.reload_shaders.store(false, Ordering::Release);
-
         if application.input.is_key_pressed(VirtualKeyCode::Escape) {
             application.system.exit_requested = true;
         }
@@ -145,7 +108,6 @@ impl ApplicationRunner for Editor {
                 application.world.save("saved_map.dga")?;
                 log::info!("Saved world!");
             }
-            (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 application.world.clear()?;
                 if let Err(error) = application.renderer.load_world(&application.world) {

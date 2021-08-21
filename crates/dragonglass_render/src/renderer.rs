@@ -12,6 +12,7 @@ const BACKEND: wgpu::Backends = wgpu::Backends::METAL;
 #[cfg(target_os = "linux")]
 const BACKEND: wgpu::Backends = wgpu::Backends::VULKAN;
 
+#[allow(dead_code)]
 pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -137,15 +138,7 @@ impl Renderer {
         Ok((device, queue))
     }
 
-    fn create_shader() {}
-
-    pub fn toggle_wireframe(&mut self) {}
-
     pub fn load_world(&mut self, _world: &World) -> Result<()> {
-        Ok(())
-    }
-
-    pub fn reload_asset_shaders(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -165,8 +158,6 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // An encoder is needed to create the actual commands to send to the gpu
-        // This builds a command buffer that we can send to gpu
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -174,7 +165,6 @@ impl Renderer {
             });
 
         {
-            // Record a render pass
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
