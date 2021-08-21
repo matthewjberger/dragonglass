@@ -305,6 +305,25 @@ fn run_loop(
             application.update()?;
             application.render(draw_data)?;
         }
+        // FIXME window events can be grouped
+        Event::WindowEvent {
+            event: WindowEvent::Resized(physical_size),
+            window_id,
+        } if window_id == application.window.id() => {
+            application
+                .renderer
+                .resize([physical_size.width, physical_size.height]);
+        }
+        Event::WindowEvent {
+            event:
+                WindowEvent::ScaleFactorChanged {
+                    ref new_inner_size, ..
+                },
+            window_id,
+        } if window_id == application.window.id() => {
+            let size = **new_inner_size;
+            application.renderer.resize([size.width, size.height]);
+        }
         Event::WindowEvent {
             event: WindowEvent::DroppedFile(ref path),
             ..

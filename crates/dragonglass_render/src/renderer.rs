@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use dragonglass_world::World;
 use imgui::{Context as ImguiContext, DrawData};
+use log::error;
 use raw_window_handle::HasRawWindowHandle;
 
 #[cfg(target_os = "windows")]
@@ -142,16 +143,40 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn on_resize(&mut self) -> Result<()> {
-        Ok(())
+    pub fn resize(&mut self, dimensions: [u32; 2]) {
+        if dimensions[0] == 0 || dimensions[1] == 0 {
+            return;
+        }
+        self.dimensions = dimensions;
+        self.config.width = dimensions[0];
+        self.config.height = dimensions[1];
+        self.surface.configure(&self.device, &self.config);
     }
 
     pub fn render(
         &mut self,
+        dimensions: &[u32; 2],
+        world: &World,
+        draw_data: &DrawData,
+    ) -> Result<()> {
+        match self.render_frame(dimensions, world, draw_data) {
+            Ok(_) => {}
+            // Recreate the swapchain if lost
+            Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
+            // The system is out of memory, we should probably quit
+            // Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+            // All other errors should be resolved by the next frame
+            Err(e) => error!("{:?}", e),
+        }
+        Ok(())
+    }
+
+    fn render_frame(
+        &mut self,
         _dimensions: &[u32; 2],
         _world: &World,
         _draw_data: &DrawData,
-    ) -> Result<()> {
+    ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_frame()?.output;
 
         let view = frame
