@@ -121,11 +121,12 @@ impl ApplicationRunner for Game {
         if let Some(entity) = self.player.as_ref() {
             activate_first_person(application, *entity)?;
             let rigid_body = RigidBodyBuilder::new(RigidBodyType::Dynamic)
-                .translation(
-                    transform.translation.x,
-                    transform.translation.y,
-                    transform.translation.z,
-                )
+                // FIXME NOW
+                // .translation(
+                //     transform.translation.x,
+                //     transform.translation.y,
+                //     transform.translation.z,
+                // )
                 .lock_rotations()
                 .build();
             let handle = application.world.physics.bodies.insert(rigid_body);
@@ -139,16 +140,6 @@ impl ApplicationRunner for Game {
             add_cylinder_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
         }
 
-        Ok(())
-    }
-
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Physics Test"))
-            .size([100.0, 40.0], Condition::FirstUseEver)
-            .no_decoration()
-            .build(ui, || {
-                ui.text(im_str!("Physics test"));
-            });
         Ok(())
     }
 
@@ -214,11 +205,12 @@ fn add_box_collider(
     let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
         .collision_groups(collision_groups)
         .build();
-    application.world.physics.colliders.insert(
-        collider,
-        rigid_body_handle,
-        &mut application.world.physics.bodies,
-    );
+    // FIXME NOW
+    // application.world.physics.colliders.insert(
+    //     collider,
+    //     rigid_body_handle,
+    //     &mut application.world.physics.bodies,
+    // );
     Ok(())
 }
 
@@ -237,12 +229,13 @@ fn add_cylinder_collider(
     let collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
         .build();
-    let collider_handle = application.world.physics.colliders.insert(
-        collider,
-        rigid_body.handle,
-        &mut application.world.physics.bodies,
-    );
-    rigid_body.colliders.push(collider_handle);
+    // FIXME NOW
+    // let collider_handle = application.world.physics.colliders.insert(
+    //     collider,
+    //     rigid_body.handle,
+    //     &mut application.world.physics.bodies,
+    // );
+    // rigid_body.colliders.push(collider_handle);
     Ok(())
 }
 
