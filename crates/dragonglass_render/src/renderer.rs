@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use dragonglass_world::World;
-use imgui::{Context as ImguiContext, DrawData};
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
 
@@ -27,7 +26,6 @@ impl Renderer {
     pub async fn new(
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
-        _imgui: &mut ImguiContext,
     ) -> Result<Self> {
         let instance = wgpu::Instance::new(BACKEND);
 
@@ -153,13 +151,8 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
-    pub fn render(
-        &mut self,
-        dimensions: &[u32; 2],
-        world: &World,
-        draw_data: &DrawData,
-    ) -> Result<()> {
-        match self.render_frame(dimensions, world, draw_data) {
+    pub fn render(&mut self, dimensions: &[u32; 2], world: &World) -> Result<()> {
+        match self.render_frame(dimensions, world) {
             Ok(_) => {}
             // Recreate the swapchain if lost
             Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
@@ -175,7 +168,6 @@ impl Renderer {
         &mut self,
         _dimensions: &[u32; 2],
         _world: &World,
-        _draw_data: &DrawData,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_frame()?.output;
 

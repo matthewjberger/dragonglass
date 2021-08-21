@@ -6,7 +6,6 @@ use dragonglass::{
         MeshRender, PerspectiveCamera, Projection, RigidBody, Transform,
     },
 };
-use imgui::{im_str, Condition, Ui, Window};
 use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::{RigidBodyBuilder, RigidBodyType},

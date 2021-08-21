@@ -6,7 +6,6 @@ use dragonglass::{
         rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
     },
 };
-use imgui::{im_str, Condition, Ui, Window};
 use log::{info, warn};
 use std::path::{Path, PathBuf};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
@@ -62,15 +61,6 @@ impl Editor {
 impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
         application.world.add_default_light()?;
-        Ok(())
-    }
-
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Scene Info"))
-            .collapsed(true, Condition::FirstUseEver)
-            .build(ui, || {
-                ui.text(im_str!(" ",));
-            });
         Ok(())
     }
 
