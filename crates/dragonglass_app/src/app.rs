@@ -157,7 +157,7 @@ impl Application {
         let mut picked_entity = None;
         if let Some((handle, _)) = hit {
             let collider = &self.world.physics.colliders[handle];
-            let rigid_body_handle = collider.parent();
+            let rigid_body_handle = collider.parent().unwrap();
             let mut query = <(Entity, &RigidBody)>::query();
             for (entity, rigid_body) in query.iter(&self.world.ecs) {
                 if rigid_body.handle == rigid_body_handle {
