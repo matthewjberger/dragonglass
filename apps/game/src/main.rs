@@ -9,7 +9,7 @@ use dragonglass::{
 use imgui::{im_str, Condition, Ui, Window};
 use nalgebra_glm as glm;
 use rapier3d::{
-    dynamics::{BodyStatus, RigidBodyBuilder},
+    dynamics::{RigidBodyBuilder, RigidBodyType},
     geometry::{ColliderBuilder, InteractionGroups},
 };
 use winit::event::{ElementState, VirtualKeyCode};
@@ -111,7 +111,7 @@ impl ApplicationRunner for Game {
         for entity in level_meshes.into_iter() {
             application
                 .world
-                .add_rigid_body(entity, BodyStatus::Static)?;
+                .add_rigid_body(entity, RigidBodyType::Static)?;
             // add_box_collider(application, entity, LEVEL_COLLISION_GROUP)?;
             application
                 .world
@@ -121,7 +121,7 @@ impl ApplicationRunner for Game {
         // Setup player
         if let Some(entity) = self.player.as_ref() {
             activate_first_person(application, *entity)?;
-            let rigid_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
+            let rigid_body = RigidBodyBuilder::new(RigidBodyType::Dynamic)
                 .translation(
                     transform.translation.x,
                     transform.translation.y,

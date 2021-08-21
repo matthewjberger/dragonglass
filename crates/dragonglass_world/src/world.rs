@@ -11,7 +11,7 @@ use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
 use rapier3d::{
-    dynamics::{BodyStatus, RigidBodyBuilder},
+    dynamics::{RigidBodyBuilder, RigidBodyType},
     geometry::{ColliderBuilder, InteractionGroups},
 };
 use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
@@ -402,20 +402,21 @@ impl World {
             let collider = ColliderBuilder::trimesh(vertices, indices)
                 .collision_groups(collision_groups)
                 .build();
-            self.physics
-                .colliders
-                .insert(collider, rigid_body_handle, &mut self.physics.bodies);
+            // FIXME NOW
+            // self.physics
+            //     .colliders
+            //     .insert(collider, rigid_body_handle, &mut self.physics.bodies);
         }
         Ok(())
     }
 
-    pub fn add_rigid_body(&mut self, entity: Entity, body_status: BodyStatus) -> Result<()> {
+    pub fn add_rigid_body(&mut self, entity: Entity, rigid_body_type: RigidBodyType) -> Result<()> {
         let handle = {
             let isometry =
                 Transform::from(self.entity_global_transform_matrix(entity)?).as_isometry();
 
             // Insert a corresponding rigid body
-            let rigid_body = RigidBodyBuilder::new(body_status)
+            let rigid_body = RigidBodyBuilder::new(rigid_body_type)
                 .position(isometry)
                 .build();
             self.physics.bodies.insert(rigid_body)

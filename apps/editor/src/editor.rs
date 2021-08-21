@@ -2,7 +2,7 @@ use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     world::{
-        legion::Entity, load_gltf, rapier3d::dynamics::BodyStatus,
+        legion::Entity, load_gltf, rapier3d::dynamics::RigidBodyType,
         rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
     },
 };
@@ -149,7 +149,7 @@ impl ApplicationRunner for Editor {
         for entity in entities.into_iter() {
             application
                 .world
-                .add_rigid_body(entity, BodyStatus::Static)?;
+                .add_rigid_body(entity, RigidBodyType::Static)?;
             application
                 .world
                 .add_trimesh_collider(entity, InteractionGroups::all())?;
