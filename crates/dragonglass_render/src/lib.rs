@@ -12,17 +12,33 @@ const _BACKEND: wgpu::Backend = wgpu::Backend::Metal;
 #[cfg(target_os = "linux")]
 const _BACKEND: wgpu::Backend = wgpu::Backend::Vulkan;
 
-pub trait Render {
-    fn toggle_wireframe(&mut self);
-    fn load_world(&mut self, world: &World) -> Result<()>;
-    fn reload_asset_shaders(&mut self) -> Result<()>;
-    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()>;
-}
+pub struct Renderer {}
 
-pub fn create_render_backend(
-    _window_handle: &impl HasRawWindowHandle,
-    _dimensions: &[u32; 2],
-    _imgui: &mut ImguiContext,
-) -> Result<Box<dyn Render>> {
-    unimplemented!("no backend available yet!")
+impl Renderer {
+    pub async fn new(
+        _window_handle: &impl HasRawWindowHandle,
+        _dimensions: &[u32; 2],
+        _imgui: &mut ImguiContext,
+    ) -> Result<Self> {
+        Ok(Self {})
+    }
+
+    pub fn toggle_wireframe(&mut self) {}
+
+    pub fn load_world(&mut self, _world: &World) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn reload_asset_shaders(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn render(
+        &mut self,
+        _dimensions: &[u32; 2],
+        _world: &World,
+        _draw_data: &DrawData,
+    ) -> Result<()> {
+        Ok(())
+    }
 }

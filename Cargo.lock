@@ -662,6 +662,7 @@ dependencies = [
  "imgui-winit-support",
  "log",
  "nalgebra-glm 0.12.0",
+ "pollster",
  "serde",
  "simplelog",
  "winit",
@@ -826,6 +827,7 @@ dependencies = [
  "log",
  "nalgebra 0.26.2",
  "nalgebra-glm 0.12.0",
+ "pollster",
  "rapier3d",
  "winit",
 ]
@@ -1773,6 +1775,12 @@ dependencies = [
  "deflate",
  "miniz_oxide 0.3.7",
 ]
+
+[[package]]
+name = "pollster"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb20dcc30536a1508e75d47dd0e399bb2fe7354dcf35cda9127f2bf1ed92e30e"
 
 [[package]]
 name = "proc-macro-crate"

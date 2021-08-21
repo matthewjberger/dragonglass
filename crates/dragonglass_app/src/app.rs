@@ -4,7 +4,7 @@ use crate::{
     state::{Input, System},
 };
 use anyhow::Result;
-use dragonglass_render::{create_render_backend, Render};
+use dragonglass_render::Renderer;
 use dragonglass_world::{
     legion::IntoQuery,
     load_gltf,
@@ -67,7 +67,7 @@ pub struct Application {
     pub world: World,
     pub input: Input,
     pub system: System,
-    pub renderer: Box<dyn Render>,
+    pub renderer: Renderer,
     pub window: Window,
 }
 
@@ -243,7 +243,11 @@ pub fn run_application(
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let renderer = create_render_backend(&window, &window_dimensions, gui.context_mut())?;
+    let renderer = pollster::block_on(Renderer::new(
+        &window,
+        &window_dimensions,
+        gui.context_mut(),
+    ))?;
 
     let mut world = World::new()?;
     world.fonts.insert(

@@ -13,6 +13,7 @@ imgui = "0.7.0"
 imgui-winit-support = "0.7.0"
 log = "0.4.14"
 nalgebra-glm = "0.12.0"
+pollster = "0.2.4"
 serde = { version = "1.0.125", features = ["derive"] }
 simplelog = { version = "0.10.0", features = ["termcolor"] }
 winit = "0.24.0"
