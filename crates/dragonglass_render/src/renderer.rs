@@ -1,8 +1,8 @@
+use crate::world::WorldRender;
 use anyhow::{Context, Result};
 use dragonglass_world::World;
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
-use wgpu::util::DeviceExt;
 
 #[cfg(target_os = "windows")]
 const BACKEND: wgpu::Backends = wgpu::Backends::DX12;
@@ -13,68 +13,13 @@ const BACKEND: wgpu::Backends = wgpu::Backends::METAL;
 #[cfg(target_os = "linux")]
 const BACKEND: wgpu::Backends = wgpu::Backends::VULKAN;
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        tex_coords: [0.4131759, 0.00759614],
-    },
-    Vertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        tex_coords: [0.0048659444, 0.43041354],
-    },
-    Vertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        tex_coords: [0.28081453, 0.949397],
-    },
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        tex_coords: [0.85967, 0.84732914],
-    },
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        tex_coords: [0.9414737, 0.2652641],
-    },
-];
-
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, 0];
-
 #[allow(dead_code)]
 pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
+    world_render: Option<WorldRender>,
     dimensions: [u32; 2],
 }
 
@@ -105,81 +50,13 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
-        // Create vertex buffer
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        // Create index buffer
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        // Create shader module
-
-        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
-        });
-
-        // Create render pipeline
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "main",
-                buffers: &[Vertex::descriptor()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "main",
-                targets: &[wgpu::ColorTargetState {
-                    format: swapchain_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                }],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                clamp_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-        });
-
         Ok(Self {
             surface,
             device,
             queue,
             config,
-            render_pipeline,
+            world_render: None,
             dimensions: *dimensions,
-            vertex_buffer,
-            index_buffer,
         })
     }
 
@@ -211,7 +88,8 @@ impl Renderer {
         Ok((device, queue))
     }
 
-    pub fn load_world(&mut self, _world: &World) -> Result<()> {
+    pub fn load_world(&mut self, world: &World) -> Result<()> {
+        self.world_render = Some(WorldRender::new(&self.device, self.config.format, world));
         Ok(())
     }
 
@@ -274,12 +152,17 @@ impl Renderer {
                 depth_stencil_attachment: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            if let Some(world_render) = self.world_render.as_ref() {
+                render_pass.set_pipeline(&world_render.render_pipeline);
 
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.set_vertex_buffer(0, world_render.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    world_render.index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint16,
+                );
 
-            render_pass.draw_indexed(0..(INDICES.len() as _), 0, 0..1);
+                render_pass.draw_indexed(0..(world_render.number_of_indices as _), 0, 0..1);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

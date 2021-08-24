@@ -182,38 +182,6 @@ fn main() -> Result<()> {
     )
 }
 
-#[allow(dead_code)]
-fn add_box_collider(
-    application: &mut Application,
-    entity: Entity,
-    collision_groups: InteractionGroups,
-) -> Result<()> {
-    let bounding_box = {
-        let entry = application.world.ecs.entry_ref(entity)?;
-        let mesh = entry.get_component::<MeshRender>()?;
-        application.world.geometry.meshes[&mesh.name].bounding_box()
-    };
-    let entry = application.world.ecs.entry_ref(entity)?;
-    let transform = entry.get_component::<Transform>()?;
-    let rigid_body_handle = application
-        .world
-        .ecs
-        .entry_ref(entity)?
-        .get_component::<RigidBody>()?
-        .handle;
-    let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-    let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
-        .collision_groups(collision_groups)
-        .build();
-    // FIXME NOW
-    // application.world.physics.colliders.insert(
-    //     collider,
-    //     rigid_body_handle,
-    //     &mut application.world.physics.bodies,
-    // );
-    Ok(())
-}
-
 fn add_cylinder_collider(
     application: &mut Application,
     entity: Entity,
