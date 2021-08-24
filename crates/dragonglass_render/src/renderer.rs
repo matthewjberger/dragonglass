@@ -153,15 +153,7 @@ impl Renderer {
             });
 
             if let Some(world_render) = self.world_render.as_ref() {
-                render_pass.set_pipeline(&world_render.render_pipeline);
-
-                render_pass.set_vertex_buffer(0, world_render.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    world_render.index_buffer.slice(..),
-                    wgpu::IndexFormat::Uint16,
-                );
-
-                render_pass.draw_indexed(0..(world_render.number_of_indices as _), 0, 0..1);
+                world_render.render(&mut render_pass);
             }
         }
 

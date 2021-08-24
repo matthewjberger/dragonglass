@@ -1,4 +1,6 @@
+use anyhow::Result;
 use dragonglass_world::World;
+use nalgebra_glm as glm;
 use wgpu::util::DeviceExt;
 
 pub(crate) struct WorldRender {
@@ -6,6 +8,9 @@ pub(crate) struct WorldRender {
     pub index_buffer: wgpu::Buffer,
     pub number_of_indices: usize,
     pub render_pipeline: wgpu::RenderPipeline,
+    pub uniform_data: UniformData,
+    pub uniform_buffer: wgpu::Buffer,
+    pub uniform_bind_group: wgpu::BindGroup,
 }
 
 impl WorldRender {
@@ -68,12 +73,59 @@ impl WorldRender {
             },
         });
 
+        let uniform_data = UniformData::default();
+
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniform_data]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("uniform_bind_group_layout"),
+            });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("uniform_bind_group"),
+        });
+
+        // How to upload uniforms
+        // queue.write_buffer(&uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));
+
         Self {
             vertex_buffer,
             index_buffer,
             number_of_indices: world.geometry.indices.len(),
             render_pipeline,
+            uniform_data,
+            uniform_buffer,
+            uniform_bind_group,
         }
+    }
+
+    pub fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'b>) {
+        render_pass.set_pipeline(&self.render_pipeline);
+
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+        render_pass.draw_indexed(0..(self.number_of_indices as _), 0, 0..1);
     }
 
     fn vertex_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -127,4 +179,12 @@ impl WorldRender {
             ],
         }
     }
+}
+
+#[repr(C)]
+#[derive(Default, Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct UniformData {
+    pub view: glm::Mat4,
+    pub projection: glm::Mat4,
+    pub model: glm::Mat4,
 }
