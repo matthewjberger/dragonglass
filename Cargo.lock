@@ -172,6 +172,20 @@ name = "bytemuck"
 version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e215f8c2f9f79cb53c8335e687ffd07d5bfcb6fe5fc80723762d0be46e7cc54"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "byteorder"
@@ -664,6 +678,7 @@ name = "dragonglass_render"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "derive_builder",
  "dragonglass_world",
  "image",
@@ -682,6 +697,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "bmfont",
+ "bytemuck",
  "gltf",
  "image",
  "lazy_static",
@@ -1273,6 +1289,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d506eb7e08d6329505faa8a3a00a5dcc6de9f76e0c77e4b75763ae3c770831ff"
 dependencies = [
  "approx",
+ "bytemuck",
  "matrixmultiply",
  "nalgebra-macros",
  "num-complex",

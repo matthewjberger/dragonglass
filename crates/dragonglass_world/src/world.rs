@@ -828,7 +828,8 @@ impl Geometry {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: glm::Vec3,
     pub normal: glm::Vec3,
