@@ -119,15 +119,6 @@ impl WorldRender {
         }
     }
 
-    pub fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'b>) {
-        render_pass.set_pipeline(&self.render_pipeline);
-
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-        render_pass.draw_indexed(0..(self.number_of_indices as _), 0, 0..1);
-    }
-
     fn vertex_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<dragonglass_world::Vertex>() as wgpu::BufferAddress,
