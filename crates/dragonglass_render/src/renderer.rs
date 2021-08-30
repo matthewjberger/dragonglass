@@ -89,7 +89,7 @@ impl Renderer {
     }
 
     pub fn load_world(&mut self, world: &World) -> Result<()> {
-        self.world_render = Some(WorldRender::new(&self.device, self.config.format, world));
+        self.world_render = Some(WorldRender::new(&self.device, self.config.format, world)?);
         Ok(())
     }
 
