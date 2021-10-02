@@ -1,12 +1,19 @@
 [[block]]
-struct UniformData {
+struct WorldUniform {
     view: mat4x4<f32>;
     projection: mat4x4<f32>;
+}
+
+[[block]]
+struct EntityUniform {
     model: mat4x4<f32>;
 }
-[[group(1), binding(0)]]
-var<uniform> uniformData: UniformData;
 
+[[group(0), binding(0)]]
+var<uniform> worldUniform: WorldUniform;
+
+[[group(1), binding(0)]]
+var<uniform> entityUniform: EntityUniform;
 
 struct VertexInput {
     [[location(0)]] position: vec3<f32>;
@@ -29,7 +36,7 @@ fn main(
 ) -> VertexOutput {
     var out: VertexOutput;
     out.color = model.color_0;
-    out.clip_position = vec4<f32>(model.position, 1.0);
+    out.clip_position = vec4<f32>(worldUniform.projection * worldUniform.view * entityUniform.model * model.position, 1.0);
     return out;
 }
  
