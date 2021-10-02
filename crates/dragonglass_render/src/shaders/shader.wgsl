@@ -2,12 +2,12 @@
 struct WorldUniform {
     view: mat4x4<f32>;
     projection: mat4x4<f32>;
-}
+};
 
 [[block]]
 struct EntityUniform {
     model: mat4x4<f32>;
-}
+};
 
 [[group(0), binding(0)]]
 var<uniform> worldUniform: WorldUniform;

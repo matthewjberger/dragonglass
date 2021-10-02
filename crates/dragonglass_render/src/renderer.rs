@@ -1,6 +1,6 @@
 use crate::world::WorldRender;
 use anyhow::{Context, Result};
-use dragonglass_world::World;
+use dragonglass_world::{EntityStore, MeshRender, World};
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
 
@@ -119,8 +119,14 @@ impl Renderer {
     fn render_frame(
         &mut self,
         _dimensions: &[u32; 2],
-        _world: &World,
+        world: &World,
     ) -> Result<(), wgpu::SurfaceError> {
+        if let Some(world_render) = self.world_render.as_mut() {
+            world_render
+                .update(&self.queue, world)
+                .expect("Failed to update world!");
+        }
+
         let frame = self.surface.get_current_frame()?.output;
 
         let view = frame
@@ -155,24 +161,46 @@ impl Renderer {
             if let Some(world_render) = self.world_render.as_ref() {
                 render_pass.set_pipeline(&world_render.render_pipeline);
 
-                // Set world uniforms
-                // rpass.set_bind_group(0, &self.global_group, &[]);
-                //
-                // Set entity uniforms
-                // for i in 0..self.bunnies.len() {
-                //     let offset =
-                //         (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
-                //     rpass.set_bind_group(1, &self.local_group, &[offset]);
-                //     draw_stuff
-                // }
-
                 render_pass.set_vertex_buffer(0, world_render.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(
                     world_render.index_buffer.slice(..),
                     wgpu::IndexFormat::Uint16,
                 );
 
-                render_pass.draw_indexed(0..(world_render.number_of_indices as _), 0, 0..1);
+                render_pass.set_bind_group(0, &world_render.world_uniforms.bind_group, &[]);
+
+                let uniform_alignment = self.device.limits().min_uniform_buffer_offset_alignment;
+                let uniform_alignment = 256;
+                for node in world.flatten_scenegraphs().iter() {
+                    let entity = world
+                        .ecs
+                        .entry_ref(node.entity)
+                        .expect("Failed to get entity!");
+
+                    let mesh_component_result = entity.get_component::<MeshRender>();
+                    match mesh_component_result {
+                        Ok(mesh_component) => {
+                            if let Some(mesh) = world.geometry.meshes.get(&mesh_component.name) {
+                                let offset = (node.offset as wgpu::DynamicOffset)
+                                    * (uniform_alignment as wgpu::DynamicOffset);
+                                render_pass.set_bind_group(
+                                    1,
+                                    &world_render.entity_uniforms.bind_group,
+                                    &[offset],
+                                );
+
+                                for primitive in mesh.primitives.iter() {
+                                    let first_index = primitive.first_index as u32;
+                                    let last_index = (primitive.first_index
+                                        + primitive.number_of_indices)
+                                        as u32;
+                                    render_pass.draw_indexed(first_index..last_index, 0, 0..1);
+                                }
+                            }
+                        }
+                        Err(_) => return Ok(()),
+                    }
+                }
             }
         }
 

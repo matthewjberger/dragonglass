@@ -4,6 +4,8 @@ use anyhow::Result;
 use nalgebra_glm as glm;
 use wgpu::util::DeviceExt;
 
+use super::WorldRender;
+
 pub(crate) struct UniformBuffer<T>
 where
     T: bytemuck::Pod + bytemuck::Zeroable,
@@ -77,10 +79,12 @@ impl UniformBuffer<EntityUniformData> {
     pub fn new(device: &wgpu::Device) -> Result<Self> {
         let data = EntityUniformData::default();
 
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let uniform_alignment = 256;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Entity Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[data]),
+            size: (WorldRender::MAX_NUMBER_OF_MESHES as wgpu::BufferAddress) * uniform_alignment,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -114,9 +118,5 @@ impl UniformBuffer<EntityUniformData> {
             bind_group_layout,
             bind_group,
         })
-    }
-
-    pub fn upload(&self, queue: &wgpu::Queue) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.data]));
     }
 }

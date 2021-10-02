@@ -428,6 +428,22 @@ impl World {
         Ok(())
     }
 
+    pub fn flatten_scenegraphs(&self) -> Vec<SceneGraphNode> {
+        let mut offset = 0;
+        self.scene
+            .graphs
+            .iter()
+            .flat_map(|graph| {
+                let mut graph_nodes = graph.collect_nodes().expect("Failed to collect nodes");
+                graph_nodes
+                    .iter_mut()
+                    .for_each(|node| node.offset += offset);
+                offset += graph_nodes.len() as u32;
+                graph_nodes
+            })
+            .collect::<Vec<_>>()
+    }
+
     pub fn as_bytes(&self) -> Result<Vec<u8>> {
         Ok(set_entity_serializer(&*ENTITY_SERIALIZER, || {
             bincode::serialize(&self)
@@ -1102,6 +1118,17 @@ impl SceneGraph {
         incoming_walker.next_node(&self.0)
     }
 
+    pub fn collect_nodes(&self) -> Result<Vec<SceneGraphNode>> {
+        let mut nodes = Vec::new();
+        let mut linear_offset = 0;
+        self.walk(|node_index| {
+            nodes.push(SceneGraphNode::new(self[node_index], linear_offset));
+            linear_offset += 1;
+            Ok(())
+        })?;
+        return Ok(nodes);
+    }
+
     pub fn walk(&self, mut action: impl FnMut(NodeIndex) -> Result<()>) -> Result<()> {
         for node_index in self.0.node_indices() {
             if self.has_parents(node_index) {
@@ -1147,6 +1174,17 @@ impl Index<NodeIndex> for SceneGraph {
 impl IndexMut<NodeIndex> for SceneGraph {
     fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
         &mut self.0[index]
+    }
+}
+
+pub struct SceneGraphNode {
+    pub entity: Entity,
+    pub offset: u32,
+}
+
+impl SceneGraphNode {
+    pub fn new(entity: Entity, offset: u32) -> Self {
+        Self { entity, offset }
     }
 }
 

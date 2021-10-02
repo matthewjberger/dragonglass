@@ -1,7 +1,7 @@
-use crate::world::uniforms::{UniformBuffer, WorldUniformData};
+use crate::world::uniforms::{self, UniformBuffer, WorldUniformData};
 use anyhow::Result;
-use dragonglass_world::World;
-use wgpu::util::DeviceExt;
+use dragonglass_world::{EntityStore, World};
+use wgpu::{util::DeviceExt, Queue};
 
 use super::EntityUniformData;
 
@@ -15,6 +15,9 @@ pub(crate) struct WorldRender {
 }
 
 impl WorldRender {
+    // This does not need to be matched in the shader
+    pub const MAX_NUMBER_OF_MESHES: usize = 500;
+
     pub fn new(
         device: &wgpu::Device,
         texture_format: wgpu::TextureFormat,
@@ -92,6 +95,33 @@ impl WorldRender {
             world_uniforms,
             entity_uniforms,
         })
+    }
+
+    pub fn update(&self, queue: &Queue, world: &World) -> Result<()> {
+        // let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
+
+        let uniform_alignment = 256;
+
+        let mut buffers = vec![EntityUniformData::default(); Self::MAX_NUMBER_OF_MESHES];
+
+        let mut ubo_offset = 0;
+        for graph in world.scene.graphs.iter() {
+            graph.walk(|node_index| {
+                let model = world.global_transform(graph, node_index)?;
+                buffers[ubo_offset] = EntityUniformData { model };
+                ubo_offset += 1;
+                Ok(())
+            })?;
+        }
+
+        queue.write_buffer(&self.entity_uniforms.buffer, 0, unsafe {
+            std::slice::from_raw_parts(
+                buffers.as_ptr() as *const u8,
+                buffers.len() * uniform_alignment as usize,
+            )
+        });
+
+        Ok(())
     }
 
     fn vertex_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
