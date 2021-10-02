@@ -3,12 +3,15 @@ use anyhow::Result;
 use dragonglass_world::World;
 use wgpu::util::DeviceExt;
 
+use super::EntityUniformData;
+
 pub(crate) struct WorldRender {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub number_of_indices: usize,
     pub render_pipeline: wgpu::RenderPipeline,
     pub world_uniforms: UniformBuffer<WorldUniformData>,
+    pub entity_uniforms: UniformBuffer<EntityUniformData>,
 }
 
 impl WorldRender {
@@ -75,14 +78,13 @@ impl WorldRender {
             },
         });
 
-        let world_uniforms = UniformBuffer::<WorldUniformData>::new(device)?;
-
         Ok(Self {
             vertex_buffer,
             index_buffer,
             number_of_indices: world.geometry.indices.len(),
             render_pipeline,
-            world_uniforms,
+            world_uniforms: UniformBuffer::<WorldUniformData>::new(device)?,
+            entity_uniforms: UniformBuffer::<EntityUniformData>::new(device)?,
         })
     }
 
