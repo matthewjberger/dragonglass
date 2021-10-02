@@ -155,6 +155,17 @@ impl Renderer {
             if let Some(world_render) = self.world_render.as_ref() {
                 render_pass.set_pipeline(&world_render.render_pipeline);
 
+                // Set world uniforms
+                // rpass.set_bind_group(0, &self.global_group, &[]);
+                //
+                // Set entity uniforms
+                // for i in 0..self.bunnies.len() {
+                //     let offset =
+                //         (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
+                //     rpass.set_bind_group(1, &self.local_group, &[offset]);
+                //     draw_stuff
+                // }
+
                 render_pass.set_vertex_buffer(0, world_render.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(
                     world_render.index_buffer.slice(..),
