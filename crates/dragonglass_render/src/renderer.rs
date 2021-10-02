@@ -169,7 +169,7 @@ impl Renderer {
 
                 render_pass.set_bind_group(0, &world_render.world_uniforms.bind_group, &[]);
 
-                let uniform_alignment = self.device.limits().min_uniform_buffer_offset_alignment;
+                // let uniform_alignment = self.device.limits().min_uniform_buffer_offset_alignment;
                 let uniform_alignment = 256;
                 for node in world.flatten_scenegraphs().iter() {
                     let entity = world
