@@ -37,10 +37,16 @@ impl WorldRender {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
+        let world_uniforms = UniformBuffer::<WorldUniformData>::new(device)?;
+        let entity_uniforms = UniformBuffer::<EntityUniformData>::new(device)?;
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("World Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[
+                    &world_uniforms.bind_group_layout,
+                    &entity_uniforms.bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -83,8 +89,8 @@ impl WorldRender {
             index_buffer,
             number_of_indices: world.geometry.indices.len(),
             render_pipeline,
-            world_uniforms: UniformBuffer::<WorldUniformData>::new(device)?,
-            entity_uniforms: UniformBuffer::<EntityUniformData>::new(device)?,
+            world_uniforms,
+            entity_uniforms,
         })
     }
 

@@ -1,3 +1,5 @@
+use std::mem;
+
 use anyhow::Result;
 use nalgebra_glm as glm;
 use wgpu::util::DeviceExt;
@@ -8,6 +10,7 @@ where
 {
     pub data: T,
     pub buffer: wgpu::Buffer,
+    pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -29,6 +32,7 @@ impl UniformBuffer<WorldUniformData> {
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("World Uniform Buffer Layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
@@ -39,7 +43,6 @@ impl UniformBuffer<WorldUniformData> {
                 },
                 count: None,
             }],
-            label: Some("World Uniform Buffer Layout"),
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -54,6 +57,7 @@ impl UniformBuffer<WorldUniformData> {
         Ok(Self {
             data,
             buffer,
+            bind_group_layout,
             bind_group,
         })
     }
@@ -80,17 +84,19 @@ impl UniformBuffer<EntityUniformData> {
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Entity Uniform Buffer Layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                    has_dynamic_offset: true,
+                    min_binding_size: wgpu::BufferSize::new(
+                        mem::size_of::<EntityUniformData>() as _
+                    ),
                 },
                 count: None,
             }],
-            label: Some("Entity Uniform Buffer Layout"),
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -105,6 +111,7 @@ impl UniformBuffer<EntityUniformData> {
         Ok(Self {
             data,
             buffer,
+            bind_group_layout,
             bind_group,
         })
     }
