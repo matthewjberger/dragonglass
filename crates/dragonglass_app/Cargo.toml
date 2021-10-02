@@ -5,13 +5,13 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.43"
+anyhow = "1.0.44"
 dragonglass_render = { path = "../dragonglass_render" }
 dragonglass_world = { path = "../dragonglass_world" }
 image = "0.23.14"
 log = "0.4.14"
 nalgebra-glm = "0.15.0"
 pollster = "0.2.4"
-serde = { version = "1.0.127", features = ["derive"] }
-simplelog = { version = "0.10.0", features = ["termcolor"] }
+serde = { version = "1.0.130", features = ["derive"] }
+simplelog = { version = "0.10.2", features = ["termcolor"] }
 winit = "0.25.0"
