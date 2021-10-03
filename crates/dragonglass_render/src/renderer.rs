@@ -118,12 +118,19 @@ impl Renderer {
 
     fn render_frame(
         &mut self,
-        _dimensions: &[u32; 2],
+        dimensions: &[u32; 2],
         world: &World,
     ) -> Result<(), wgpu::SurfaceError> {
+        let height = if dimensions[1] > 0 {
+            dimensions[1] as f32
+        } else {
+            1.0
+        };
+        let aspect_ratio = dimensions[0] as f32 / height as f32;
+
         if let Some(world_render) = self.world_render.as_mut() {
             world_render
-                .update(&self.queue, world)
+                .update(&self.queue, world, aspect_ratio)
                 .expect("Failed to update world!");
         }
 

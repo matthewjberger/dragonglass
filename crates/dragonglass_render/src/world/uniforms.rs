@@ -1,19 +1,16 @@
-use std::mem;
-
+use super::WorldRender;
 use anyhow::Result;
 use nalgebra_glm as glm;
-use wgpu::util::DeviceExt;
-
-use super::WorldRender;
+use std::{marker::PhantomData, mem};
 
 pub(crate) struct UniformBuffer<T>
 where
     T: bytemuck::Pod + bytemuck::Zeroable,
 {
-    pub data: T,
     pub buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    _marker: PhantomData<T>,
 }
 
 #[repr(C)]
@@ -25,12 +22,11 @@ pub(crate) struct WorldUniformData {
 
 impl UniformBuffer<WorldUniformData> {
     pub fn new(device: &wgpu::Device) -> Result<Self> {
-        let data = WorldUniformData::default();
-
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("World Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[data]),
+            size: std::mem::size_of::<WorldUniformData>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: true,
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -57,15 +53,15 @@ impl UniformBuffer<WorldUniformData> {
         });
 
         Ok(Self {
-            data,
             buffer,
             bind_group_layout,
             bind_group,
+            _marker: PhantomData::default(),
         })
     }
 
-    pub fn upload(&self, queue: &wgpu::Queue) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.data]));
+    pub fn upload(&self, queue: &wgpu::Queue, data: WorldUniformData) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[data]));
     }
 }
 
@@ -77,8 +73,6 @@ pub(crate) struct EntityUniformData {
 
 impl UniformBuffer<EntityUniformData> {
     pub fn new(device: &wgpu::Device) -> Result<Self> {
-        let data = EntityUniformData::default();
-
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Entity Uniform Buffer"),
             size: (WorldRender::MAX_NUMBER_OF_MESHES as wgpu::BufferAddress)
@@ -117,10 +111,14 @@ impl UniformBuffer<EntityUniformData> {
         });
 
         Ok(Self {
-            data,
             buffer,
             bind_group_layout,
             bind_group,
+            _marker: PhantomData::default(),
         })
+    }
+
+    pub fn upload_all(&self, queue: &wgpu::Queue, data: &[EntityUniformData]) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(data));
     }
 }

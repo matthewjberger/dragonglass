@@ -95,7 +95,12 @@ impl WorldRender {
         })
     }
 
-    pub fn update(&self, queue: &Queue, world: &World) -> Result<()> {
+    pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
+        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+
+        self.world_uniforms
+            .upload(queue, WorldUniformData { view, projection });
+
         let mut buffers = vec![EntityUniformData::default(); Self::MAX_NUMBER_OF_MESHES];
 
         let mut ubo_offset = 0;
@@ -108,12 +113,7 @@ impl WorldRender {
             })?;
         }
 
-        queue.write_buffer(&self.entity_uniforms.buffer, 0, unsafe {
-            std::slice::from_raw_parts(
-                buffers.as_ptr() as *const u8,
-                buffers.len() * wgpu::BIND_BUFFER_ALIGNMENT as usize,
-            )
-        });
+        self.entity_uniforms.upload_all(queue, &buffers);
 
         Ok(())
     }
