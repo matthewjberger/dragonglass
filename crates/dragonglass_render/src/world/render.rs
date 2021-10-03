@@ -1,6 +1,6 @@
-use crate::world::uniforms::{self, UniformBuffer, WorldUniformData};
+use crate::world::uniforms::{UniformBuffer, WorldUniformData};
 use anyhow::Result;
-use dragonglass_world::{EntityStore, World};
+use dragonglass_world::World;
 use wgpu::{util::DeviceExt, Queue};
 
 use super::EntityUniformData;
@@ -8,7 +8,6 @@ use super::EntityUniformData;
 pub(crate) struct WorldRender {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
-    pub number_of_indices: usize,
     pub render_pipeline: wgpu::RenderPipeline,
     pub world_uniforms: UniformBuffer<WorldUniformData>,
     pub entity_uniforms: UniformBuffer<EntityUniformData>,
@@ -90,7 +89,6 @@ impl WorldRender {
         Ok(Self {
             vertex_buffer,
             index_buffer,
-            number_of_indices: world.geometry.indices.len(),
             render_pipeline,
             world_uniforms,
             entity_uniforms,
@@ -98,10 +96,6 @@ impl WorldRender {
     }
 
     pub fn update(&self, queue: &Queue, world: &World) -> Result<()> {
-        // let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
-
-        let uniform_alignment = 256;
-
         let mut buffers = vec![EntityUniformData::default(); Self::MAX_NUMBER_OF_MESHES];
 
         let mut ubo_offset = 0;
@@ -117,7 +111,7 @@ impl WorldRender {
         queue.write_buffer(&self.entity_uniforms.buffer, 0, unsafe {
             std::slice::from_raw_parts(
                 buffers.as_ptr() as *const u8,
-                buffers.len() * uniform_alignment as usize,
+                buffers.len() * wgpu::BIND_BUFFER_ALIGNMENT as usize,
             )
         });
 

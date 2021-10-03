@@ -32,11 +32,11 @@ struct VertexOutput {
 
 [[stage(vertex)]]
 fn main(
-    model: VertexInput
+    vertex_input: VertexInput
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.color = model.color_0;
-    out.clip_position = vec4<f32>(worldUniform.projection * worldUniform.view * entityUniform.model * model.position, 1.0);
+    out.color = vertex_input.color_0;
+    out.clip_position = worldUniform.projection * worldUniform.view * entityUniform.model * vec4<f32>(vertex_input.position, 1.0);
     return out;
 }
  

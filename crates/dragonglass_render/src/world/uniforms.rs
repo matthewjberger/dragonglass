@@ -79,10 +79,10 @@ impl UniformBuffer<EntityUniformData> {
     pub fn new(device: &wgpu::Device) -> Result<Self> {
         let data = EntityUniformData::default();
 
-        let uniform_alignment = 256;
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Entity Uniform Buffer"),
-            size: (WorldRender::MAX_NUMBER_OF_MESHES as wgpu::BufferAddress) * uniform_alignment,
+            size: (WorldRender::MAX_NUMBER_OF_MESHES as wgpu::BufferAddress)
+                * wgpu::BIND_BUFFER_ALIGNMENT,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -107,7 +107,11 @@ impl UniformBuffer<EntityUniformData> {
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: buffer.as_entire_binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &buffer,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(mem::size_of::<EntityUniformData>() as _),
+                }),
             }],
             label: Some("Entity Uniform Buffer Bind Group"),
         });
