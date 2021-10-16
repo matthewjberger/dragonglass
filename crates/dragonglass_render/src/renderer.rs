@@ -1,8 +1,9 @@
-use crate::world::WorldRender;
 use anyhow::{Context, Result};
 use dragonglass_world::{EntityStore, MeshRender, World};
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
+
+use crate::world::render::WorldRender;
 
 #[cfg(target_os = "windows")]
 const BACKEND: wgpu::Backends = wgpu::Backends::DX12;
@@ -68,6 +69,7 @@ impl Renderer {
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
                 compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
             })
             .await
             .context("Failed to request a GPU adapter!")
@@ -134,7 +136,7 @@ impl Renderer {
                 .expect("Failed to update world!");
         }
 
-        let frame = self.surface.get_current_frame()?.output;
+        let frame = self.surface.get_current_texture()?;
 
         let view = frame
             .texture
@@ -187,7 +189,8 @@ impl Renderer {
                         Ok(mesh_component) => {
                             if let Some(mesh) = world.geometry.meshes.get(&mesh_component.name) {
                                 let offset = (node.offset as wgpu::DynamicOffset)
-                                    * (wgpu::BIND_BUFFER_ALIGNMENT as wgpu::DynamicOffset);
+                                    * (wgpu::Limits::default().min_uniform_buffer_offset_alignment
+                                        as wgpu::DynamicOffset);
                                 render_pass.set_bind_group(
                                     1,
                                     &world_render.entity_uniforms.bind_group,
@@ -210,6 +213,7 @@ impl Renderer {
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+        frame.present();
 
         Ok(())
     }

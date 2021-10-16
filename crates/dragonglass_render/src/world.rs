@@ -1,4 +1,2 @@
-pub use self::{render::*, uniforms::*};
-
-mod render;
-mod uniforms;
+pub(crate) mod render;
+pub(crate) mod uniforms;

@@ -1,7 +1,8 @@
-use super::WorldRender;
 use anyhow::Result;
 use nalgebra_glm as glm;
 use std::{marker::PhantomData, mem};
+
+use super::render::WorldRender;
 
 pub(crate) struct UniformBuffer<T>
 where
@@ -76,7 +77,7 @@ impl UniformBuffer<EntityUniformData> {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Entity Uniform Buffer"),
             size: (WorldRender::MAX_NUMBER_OF_MESHES as wgpu::BufferAddress)
-                * wgpu::BIND_BUFFER_ALIGNMENT,
+                * u64::from(wgpu::Limits::default().min_uniform_buffer_offset_alignment),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

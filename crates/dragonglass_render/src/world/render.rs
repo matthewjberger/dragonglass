@@ -3,7 +3,7 @@ use anyhow::Result;
 use dragonglass_world::World;
 use wgpu::{util::DeviceExt, Queue};
 
-use super::EntityUniformData;
+use super::uniforms::EntityUniformData;
 
 pub(crate) struct WorldRender {
     pub vertex_buffer: wgpu::Buffer,
