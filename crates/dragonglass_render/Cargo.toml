@@ -13,6 +13,7 @@ image = "0.23.14"
 log = "0.4.14"
 nalgebra-glm = "0.15.0"
 petgraph = "0.6.0"
-rapier3d = "0.11.1"
+rapier3d = { version = "0.11.1", features = ["serde-serialize", "wasm-bindgen"] }
 raw-window-handle = "0.3.3"
-wgpu = "0.11.0"
+wgpu = { version = "0.11.0", features=["webgl"] }
+getrandom = { version = "0.2", features = ["js"] }

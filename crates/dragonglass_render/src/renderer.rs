@@ -5,6 +5,9 @@ use raw_window_handle::HasRawWindowHandle;
 
 use crate::world::render::WorldRender;
 
+#[cfg(target_family = "wasm")]
+const BACKEND: wgpu::Backends = wgpu::Backends::BROWSER_WEBGPU;
+
 #[cfg(target_os = "windows")]
 const BACKEND: wgpu::Backends = wgpu::Backends::DX12;
 

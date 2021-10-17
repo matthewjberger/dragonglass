@@ -11,6 +11,5 @@ dragonglass = { path = "../.." }
 log = "0.4.14"
 nalgebra = "0.29.0"
 nalgebra-glm = "0.15.0"
-imgui = "0.8.0"
-winit = "0.25.0"
+winit = { version = "0.25.0", features=["web-sys"] }
 structopt = "0.3.23"
