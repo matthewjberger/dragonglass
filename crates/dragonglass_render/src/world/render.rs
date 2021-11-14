@@ -1,6 +1,15 @@
 use anyhow::Result;
 use dragonglass_world::World;
+use nalgebra_glm as glm;
+use petgraph::graph::UnGraph;
 use wgpu::{util::DeviceExt, Queue};
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct WorldUniform {
+    view: glm::Mat4,
+    projection: glm::Mat4,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -35,11 +44,13 @@ const VERTICES: &[Vertex] = &[
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 pub(crate) struct WorldRender {
+    pub render_pipeline: wgpu::RenderPipeline,
+    uniform_bind_group: wgpu::BindGroup,
+    uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     number_of_vertices: u32,
     number_of_indices: u32,
-    pub render_pipeline: wgpu::RenderPipeline,
 }
 
 impl WorldRender {
@@ -53,9 +64,24 @@ impl WorldRender {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("uniform_bind_group_layout"),
+            });
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&uniform_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -95,23 +121,46 @@ impl WorldRender {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("World Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[WorldUniform::default()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("uniform_bind_group"),
+        });
+
         Ok(Self {
-            number_of_vertices: VERTICES.len() as u32,
-            number_of_indices: INDICES.len() as u32,
+            render_pipeline,
+            uniform_buffer,
+            uniform_bind_group,
             vertex_buffer,
             index_buffer,
-            render_pipeline,
+            number_of_vertices: VERTICES.len() as u32,
+            number_of_indices: INDICES.len() as u32,
         })
     }
 
     pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
-        let (_projection, _view) = world.active_camera_matrices(aspect_ratio)?;
+        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[WorldUniform { view, projection }]),
+        );
         Ok(())
     }
 
     pub fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
         render_pass.set_pipeline(&self.render_pipeline);
 
+        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
