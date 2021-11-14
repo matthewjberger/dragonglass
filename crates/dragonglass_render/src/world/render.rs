@@ -17,8 +17,44 @@ struct UniformBinding {
 }
 
 impl UniformBinding {
-    pub fn update(&self, queue: &Queue, offset: BufferAddress, data: impl bytemuck::Pod) {
-        queue.write_buffer(&self.buffer, offset, bytemuck::cast_slice(&[data]));
+    pub fn upload_uniform_data(
+        &self,
+        queue: &Queue,
+        offset: BufferAddress,
+        data: &[impl bytemuck::Pod],
+    ) {
+        queue.write_buffer(&self.buffer, offset, bytemuck::cast_slice(data));
+    }
+}
+
+struct Geometry {
+    vertex_buffer: wgpu::Buffer,
+    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    index_buffer: wgpu::Buffer,
+}
+
+impl Geometry {
+    pub const MAX_VERTICES: u32 = 10_000;
+    pub const MAX_INDICES: u32 = 10_000;
+
+    pub fn upload_vertices(
+        &self,
+        queue: &Queue,
+        offset: BufferAddress,
+        data: &[impl bytemuck::Pod],
+    ) {
+        // TODO: Check if the vertex buffer needs to be resized
+        queue.write_buffer(&self.vertex_buffer, offset, bytemuck::cast_slice(data));
+    }
+
+    pub fn upload_indices(
+        &self,
+        queue: &Queue,
+        offset: BufferAddress,
+        data: &[impl bytemuck::Pod],
+    ) {
+        // TODO: Check if the index buffer needs to be resized
+        queue.write_buffer(&self.index_buffer, offset, bytemuck::cast_slice(data));
     }
 }
 
@@ -57,19 +93,16 @@ const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 pub(crate) struct WorldRender {
     pub render_pipeline: wgpu::RenderPipeline,
     uniform_binding: UniformBinding,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    number_of_indices: u32,
+    geometry: Geometry,
 }
 
 impl WorldRender {
-    pub const MAX_VERTICES: u32 = 10_000;
-    pub const MAX_INDICES: u32 = 10_000;
-
     pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Result<Self> {
         let shader = Self::create_shader_module(device);
 
         let uniform_binding = Self::create_uniform_buffer(device);
+
+        let geometry = Self::create_geometry(&device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -77,19 +110,13 @@ impl WorldRender {
             push_constant_ranges: &[],
         });
 
-        let vertex_buffer_layout = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
-        };
-
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[vertex_buffer_layout],
+                buffers: &[geometry.vertex_buffer_layout.clone()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -101,26 +128,10 @@ impl WorldRender {
             multisample: wgpu::MultisampleState::default(),
         });
 
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Vertex Buffer"),
-            size: u64::from(Self::MAX_VERTICES * std::mem::size_of::<Vertex>() as u32),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Index Buffer"),
-            size: u64::from(Self::MAX_INDICES * std::mem::size_of::<u32>() as u32),
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         Ok(Self {
             render_pipeline,
             uniform_binding,
-            vertex_buffer,
-            index_buffer,
-            number_of_indices: INDICES.len() as u32,
+            geometry,
         })
     }
 
@@ -168,18 +179,55 @@ impl WorldRender {
         }
     }
 
+    fn create_geometry(device: &wgpu::Device) -> Geometry {
+        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        };
+
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Vertex Buffer"),
+            size: u64::from(Geometry::MAX_VERTICES * std::mem::size_of::<Vertex>() as u32),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Index Buffer"),
+            size: u64::from(Geometry::MAX_INDICES * std::mem::size_of::<u32>() as u32),
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        Geometry {
+            vertex_buffer,
+            vertex_buffer_layout,
+            index_buffer,
+        }
+    }
+
     pub fn load(&self, queue: &Queue, _world: &World) -> Result<()> {
-        // TODO: Check if the vertex buffer needs to be resized
-        // TODO: Check if the index buffer needs to be resized
-        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(VERTICES));
-        queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(INDICES));
+        self.geometry.upload_vertices(queue, 0, VERTICES);
+        self.geometry.upload_indices(queue, 0, INDICES);
         Ok(())
     }
 
     pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
         self.uniform_binding
-            .update(queue, 0, WorldUniform { view, projection });
+            .upload_uniform_data(queue, 0, &[WorldUniform { view, projection }]);
         Ok(())
     }
 
@@ -187,9 +235,12 @@ impl WorldRender {
         render_pass.set_pipeline(&self.render_pipeline);
 
         render_pass.set_bind_group(0, &self.uniform_binding.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.set_vertex_buffer(0, self.geometry.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(
+            self.geometry.index_buffer.slice(..),
+            wgpu::IndexFormat::Uint16,
+        );
 
-        render_pass.draw_indexed(0..self.number_of_indices, 0, 0..1);
+        render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
     }
 }
