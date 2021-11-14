@@ -4,61 +4,6 @@ use nalgebra_glm as glm;
 use wgpu::{util::DeviceExt, BufferAddress, Queue};
 
 #[repr(C)]
-#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct WorldUniform {
-    view: glm::Mat4,
-    projection: glm::Mat4,
-}
-
-struct UniformBinding {
-    buffer: wgpu::Buffer,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
-}
-
-impl UniformBinding {
-    pub fn upload_uniform_data(
-        &self,
-        queue: &Queue,
-        offset: BufferAddress,
-        data: &[impl bytemuck::Pod],
-    ) {
-        queue.write_buffer(&self.buffer, offset, bytemuck::cast_slice(data));
-    }
-}
-
-struct Geometry {
-    vertex_buffer: wgpu::Buffer,
-    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
-    index_buffer: wgpu::Buffer,
-}
-
-impl Geometry {
-    pub const MAX_VERTICES: u32 = 10_000;
-    pub const MAX_INDICES: u32 = 10_000;
-
-    pub fn upload_vertices(
-        &self,
-        queue: &Queue,
-        offset: BufferAddress,
-        data: &[impl bytemuck::Pod],
-    ) {
-        // TODO: Check if the vertex buffer needs to be resized
-        queue.write_buffer(&self.vertex_buffer, offset, bytemuck::cast_slice(data));
-    }
-
-    pub fn upload_indices(
-        &self,
-        queue: &Queue,
-        offset: BufferAddress,
-        data: &[impl bytemuck::Pod],
-    ) {
-        // TODO: Check if the index buffer needs to be resized
-        queue.write_buffer(&self.index_buffer, offset, bytemuck::cast_slice(data));
-    }
-}
-
-#[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 3],
@@ -91,45 +36,16 @@ const VERTICES: &[Vertex] = &[
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 pub(crate) struct WorldRender {
-    pub render_pipeline: wgpu::RenderPipeline,
+    pipeline: wgpu::RenderPipeline,
     uniform_binding: UniformBinding,
     geometry: Geometry,
 }
 
 impl WorldRender {
     pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Result<Self> {
-        let shader = Self::create_shader_module(device);
-
-        let uniform_binding = Self::create_uniform_buffer(device);
-
-        let geometry = Self::create_geometry(&device);
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&uniform_binding.bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[geometry.vertex_buffer_layout.clone()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[texture_format.into()],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-        });
-
+        let (uniform_binding, geometry, pipeline) = Self::create_pipeline(device, texture_format);
         Ok(Self {
-            render_pipeline,
+            pipeline,
             uniform_binding,
             geometry,
         })
@@ -218,6 +134,41 @@ impl WorldRender {
         }
     }
 
+    fn create_pipeline(
+        device: &wgpu::Device,
+        texture_format: wgpu::TextureFormat,
+    ) -> (UniformBinding, Geometry, wgpu::RenderPipeline) {
+        let uniform_binding = Self::create_uniform_buffer(device);
+        let geometry = Self::create_geometry(&device);
+        let shader = Self::create_shader_module(device);
+
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&uniform_binding.bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[geometry.vertex_buffer_layout.clone()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[texture_format.into()],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+        });
+
+        (uniform_binding, geometry, pipeline)
+    }
+
     pub fn load(&self, queue: &Queue, _world: &World) -> Result<()> {
         self.geometry.upload_vertices(queue, 0, VERTICES);
         self.geometry.upload_indices(queue, 0, INDICES);
@@ -232,7 +183,7 @@ impl WorldRender {
     }
 
     pub fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
-        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_pipeline(&self.pipeline);
 
         render_pass.set_bind_group(0, &self.uniform_binding.bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.geometry.vertex_buffer.slice(..));
@@ -242,5 +193,60 @@ impl WorldRender {
         );
 
         render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+    }
+}
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct WorldUniform {
+    view: glm::Mat4,
+    projection: glm::Mat4,
+}
+
+struct UniformBinding {
+    buffer: wgpu::Buffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
+}
+
+impl UniformBinding {
+    pub fn upload_uniform_data(
+        &self,
+        queue: &Queue,
+        offset: BufferAddress,
+        data: &[impl bytemuck::Pod],
+    ) {
+        queue.write_buffer(&self.buffer, offset, bytemuck::cast_slice(data));
+    }
+}
+
+struct Geometry {
+    vertex_buffer: wgpu::Buffer,
+    vertex_buffer_layout: wgpu::VertexBufferLayout<'static>,
+    index_buffer: wgpu::Buffer,
+}
+
+impl Geometry {
+    pub const MAX_VERTICES: u32 = 10_000;
+    pub const MAX_INDICES: u32 = 10_000;
+
+    pub fn upload_vertices(
+        &self,
+        queue: &Queue,
+        offset: BufferAddress,
+        data: &[impl bytemuck::Pod],
+    ) {
+        // TODO: Check if the vertex buffer needs to be resized
+        queue.write_buffer(&self.vertex_buffer, offset, bytemuck::cast_slice(data));
+    }
+
+    pub fn upload_indices(
+        &self,
+        queue: &Queue,
+        offset: BufferAddress,
+        data: &[impl bytemuck::Pod],
+    ) {
+        // TODO: Check if the index buffer needs to be resized
+        queue.write_buffer(&self.index_buffer, offset, bytemuck::cast_slice(data));
     }
 }
