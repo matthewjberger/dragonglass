@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
-use dragonglass_world::{EntityStore, MeshRender, World};
+use dragonglass_world::World;
 use log::error;
-use rapier3d::crossbeam::deque::Worker;
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::world::render::WorldRender;
@@ -55,7 +54,7 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
-        let world_render = WorldRender::new(&device, config.format, &World::default())?;
+        let world_render = WorldRender::new(&device, config.format)?;
 
         Ok(Self {
             surface,
@@ -97,8 +96,7 @@ impl Renderer {
     }
 
     pub fn load_world(&mut self, world: &World) -> Result<()> {
-        self.world_render = WorldRender::new(&self.device, self.config.format, world)?;
-        Ok(())
+        self.world_render.load(&self.queue, world)
     }
 
     pub fn resize(&mut self, dimensions: [u32; 2]) {

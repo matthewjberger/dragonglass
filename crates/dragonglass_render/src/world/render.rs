@@ -1,7 +1,6 @@
 use anyhow::Result;
 use dragonglass_world::World;
 use nalgebra_glm as glm;
-use petgraph::graph::UnGraph;
 use wgpu::{util::DeviceExt, Queue};
 
 #[repr(C)]
@@ -49,16 +48,14 @@ pub(crate) struct WorldRender {
     uniform_buffer: wgpu::Buffer,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    number_of_vertices: u32,
     number_of_indices: u32,
 }
 
 impl WorldRender {
-    pub fn new(
-        device: &wgpu::Device,
-        texture_format: wgpu::TextureFormat,
-        world: &World,
-    ) -> Result<Self> {
+    pub const MAX_VERTICES: u32 = 10_000;
+    pub const MAX_INDICES: u32 = 10_000;
+
+    pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Result<Self> {
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
@@ -109,16 +106,18 @@ impl WorldRender {
             multisample: wgpu::MultisampleState::default(),
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
+            size: u64::from(Self::MAX_VERTICES * std::mem::size_of::<Vertex>() as u32),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
+            size: u64::from(Self::MAX_INDICES * std::mem::size_of::<u32>() as u32),
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -142,9 +141,16 @@ impl WorldRender {
             uniform_bind_group,
             vertex_buffer,
             index_buffer,
-            number_of_vertices: VERTICES.len() as u32,
             number_of_indices: INDICES.len() as u32,
         })
+    }
+
+    pub fn load(&self, queue: &Queue, _world: &World) -> Result<()> {
+        // TODO: Check if the vertex buffer needs to be resized
+        // TODO: Check if the index buffer needs to be resized
+        queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(VERTICES));
+        queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(INDICES));
+        Ok(())
     }
 
     pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
