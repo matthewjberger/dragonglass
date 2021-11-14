@@ -1,172 +1,120 @@
-use crate::world::uniforms::{UniformBuffer, WorldUniformData};
 use anyhow::Result;
 use dragonglass_world::World;
 use wgpu::{util::DeviceExt, Queue};
 
-use super::uniforms::EntityUniformData;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [-0.0868241, 0.49240386, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // A
+    Vertex {
+        position: [-0.49513406, 0.06958647, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // B
+    Vertex {
+        position: [-0.21918549, -0.44939706, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // C
+    Vertex {
+        position: [0.35966998, -0.3473291, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // D
+    Vertex {
+        position: [0.44147372, 0.2347359, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // E
+];
+
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 pub(crate) struct WorldRender {
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    number_of_vertices: u32,
+    number_of_indices: u32,
     pub render_pipeline: wgpu::RenderPipeline,
-    pub world_uniforms: UniformBuffer<WorldUniformData>,
-    pub entity_uniforms: UniformBuffer<EntityUniformData>,
 }
 
 impl WorldRender {
-    // This does not need to be matched in the shader
-    pub const MAX_NUMBER_OF_MESHES: usize = 500;
-
     pub fn new(
         device: &wgpu::Device,
         texture_format: wgpu::TextureFormat,
         world: &World,
     ) -> Result<Self> {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("World Vertex Buffer"),
-            contents: bytemuck::cast_slice(&world.geometry.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("World Index Buffer"),
-            contents: bytemuck::cast_slice(&world.geometry.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
         });
 
-        let world_uniforms = UniformBuffer::<WorldUniformData>::new(device)?;
-        let entity_uniforms = UniformBuffer::<EntityUniformData>::new(device)?;
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("World Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    &world_uniforms.bind_group_layout,
-                    &entity_uniforms.bind_group_layout,
-                ],
-                push_constant_ranges: &[],
-            });
+        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3],
+        };
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            label: None,
+            layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "main",
-                buffers: &[Self::vertex_descriptor()],
+                entry_point: "vs_main",
+                buffers: &[vertex_buffer_layout],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "main",
-                targets: &[wgpu::ColorTargetState {
-                    format: texture_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                }],
+                entry_point: "fs_main",
+                targets: &[texture_format.into()],
             }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                clamp_depth: false,
-                conservative: false,
-            },
+            primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: wgpu::MultisampleState::default(),
+        });
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         Ok(Self {
+            number_of_vertices: VERTICES.len() as u32,
+            number_of_indices: INDICES.len() as u32,
             vertex_buffer,
             index_buffer,
             render_pipeline,
-            world_uniforms,
-            entity_uniforms,
         })
     }
 
     pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
-        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
-
-        self.world_uniforms
-            .upload(queue, WorldUniformData { view, projection });
-
-        let mut buffers = vec![EntityUniformData::default(); Self::MAX_NUMBER_OF_MESHES];
-
-        let mut ubo_offset = 0;
-        for graph in world.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let model = world.global_transform(graph, node_index)?;
-                buffers[ubo_offset] = EntityUniformData { model };
-                ubo_offset += 1;
-                Ok(())
-            })?;
-        }
-
-        self.entity_uniforms.upload_all(queue, &buffers);
-
+        let (_projection, _view) = world.active_camera_matrices(aspect_ratio)?;
         Ok(())
     }
 
-    fn vertex_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<dragonglass_world::Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            // [3, 3, 2, 2, 4, 4, 3]
-            attributes: &[
-                // Position
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // Normal
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // UV_0
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 6]>() as wgpu::BufferAddress,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                // UV_1
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                // JOINT_0
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 10]>() as wgpu::BufferAddress,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // JOINT_1
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 14]>() as wgpu::BufferAddress,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // COLOR_0
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 18]>() as wgpu::BufferAddress,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
+    pub fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+        render_pass.set_pipeline(&self.render_pipeline);
+
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+        render_pass.draw_indexed(0..self.number_of_indices, 0, 0..1);
     }
 }

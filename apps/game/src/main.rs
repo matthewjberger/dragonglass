@@ -192,9 +192,9 @@ fn add_cylinder_collider(
         .ecs
         .entry_mut(entity)
         .context("entity not found")?;
-    let rigid_body = entry.get_component_mut::<RigidBody>()?;
+    let _rigid_body = entry.get_component_mut::<RigidBody>()?;
     let (half_height, radius) = (1.0, 0.5);
-    let collider = ColliderBuilder::cylinder(half_height, radius)
+    let _collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
         .build();
     // FIXME NOW
