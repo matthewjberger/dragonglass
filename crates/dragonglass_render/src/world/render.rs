@@ -5,33 +5,33 @@ use std::mem::size_of;
 use wgpu::{util::DeviceExt, BufferAddress, Queue};
 
 pub(crate) struct WorldRender {
-    pipeline: wgpu::RenderPipeline,
-    uniform_binding: UniformBinding,
-    geometry: Geometry,
+    render: Render,
 }
 
 impl WorldRender {
     pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Result<Self> {
-        let (uniform_binding, geometry, pipeline) = create_pipeline(device, texture_format);
         Ok(Self {
-            pipeline,
-            uniform_binding,
-            geometry,
+            render: Render::new(device, texture_format),
         })
     }
 
     pub fn load(&self, queue: &Queue, world: &World) -> Result<()> {
-        self.geometry
+        self.render
+            .geometry
             .upload_vertices(queue, 0, &world.geometry.vertices);
-        self.geometry
+        self.render
+            .geometry
             .upload_indices(queue, 0, &world.geometry.indices);
         Ok(())
     }
 
     pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
-        self.uniform_binding
-            .upload_uniform_data(queue, 0, &[WorldUniform { view, projection }]);
+        self.render.uniform_binding.upload_uniform_data(
+            queue,
+            0,
+            &[WorldUniform { view, projection }],
+        );
         Ok(())
     }
 
@@ -40,14 +40,7 @@ impl WorldRender {
         render_pass: &'b mut wgpu::RenderPass<'a>,
         world: &'a World,
     ) -> Result<()> {
-        render_pass.set_pipeline(&self.pipeline);
-
-        render_pass.set_bind_group(0, &self.uniform_binding.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.geometry.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(
-            self.geometry.index_buffer.slice(..),
-            wgpu::IndexFormat::Uint16,
-        );
+        self.render.bind(render_pass);
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             for graph in world.scene.graphs.iter() {
@@ -120,11 +113,62 @@ impl WorldRender {
     }
 }
 
-#[repr(C)]
-#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct WorldUniform {
-    view: glm::Mat4,
-    projection: glm::Mat4,
+struct Render {
+    pipeline: wgpu::RenderPipeline,
+    uniform_binding: UniformBinding,
+    geometry: Geometry,
+}
+
+impl Render {
+    pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Self {
+        let uniform_binding = UniformBinding::new(device);
+        let geometry = Geometry::new(device);
+
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
+        });
+
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[&uniform_binding.bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[geometry.vertex_buffer_layout.clone()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[texture_format.into()],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+        });
+
+        Self {
+            pipeline,
+            uniform_binding,
+            geometry,
+        }
+    }
+
+    pub fn bind<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.uniform_binding.bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.geometry.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(
+            self.geometry.index_buffer.slice(..),
+            wgpu::IndexFormat::Uint16,
+        );
+    }
 }
 
 struct UniformBinding {
@@ -179,6 +223,13 @@ impl UniformBinding {
     ) {
         queue.write_buffer(&self.buffer, offset, bytemuck::cast_slice(data));
     }
+}
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct WorldUniform {
+    view: glm::Mat4,
+    projection: glm::Mat4,
 }
 
 struct Geometry {
@@ -286,43 +337,4 @@ impl Geometry {
         // TODO: Check if the index buffer needs to be resized
         queue.write_buffer(&self.index_buffer, offset, bytemuck::cast_slice(data));
     }
-}
-
-fn create_pipeline(
-    device: &wgpu::Device,
-    texture_format: wgpu::TextureFormat,
-) -> (UniformBinding, Geometry, wgpu::RenderPipeline) {
-    let uniform_binding = UniformBinding::new(device);
-    let geometry = Geometry::new(device);
-
-    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: Some("Shader"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
-    });
-
-    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[&uniform_binding.bind_group_layout],
-        push_constant_ranges: &[],
-    });
-
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
-        layout: Some(&layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[geometry.vertex_buffer_layout.clone()],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[texture_format.into()],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-    });
-
-    (uniform_binding, geometry, pipeline)
 }
