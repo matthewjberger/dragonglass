@@ -168,7 +168,9 @@ impl Renderer {
             self.world_render
                 .update(&self.queue, world, aspect_ratio)
                 .expect("Failed to update world!");
-            self.world_render.render(&mut render_pass);
+            self.world_render
+                .render(&mut render_pass, world)
+                .expect("Failed to render world!");
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

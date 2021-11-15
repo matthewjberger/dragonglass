@@ -1,39 +1,8 @@
-use anyhow::Result;
-use dragonglass_world::World;
+use anyhow::{Context, Result};
+use dragonglass_world::{AlphaMode, EntityStore, MeshRender, RigidBody, Transform, Vertex, World};
 use nalgebra_glm as glm;
+use std::mem::size_of;
 use wgpu::{util::DeviceExt, BufferAddress, Queue};
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
-}
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        color: [0.5, 0.0, 0.5],
-    }, // A
-    Vertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        color: [0.5, 0.0, 0.5],
-    }, // B
-    Vertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        color: [0.5, 0.0, 0.5],
-    }, // C
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        color: [0.5, 0.0, 0.5],
-    }, // D
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        color: [0.5, 0.0, 0.5],
-    }, // E
-];
-
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 pub(crate) struct WorldRender {
     pipeline: wgpu::RenderPipeline,
@@ -97,17 +66,53 @@ impl WorldRender {
 
     fn create_geometry(device: &wgpu::Device) -> Geometry {
         let vertex_buffer_layout = wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
+                // position
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                // normal
                 wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: size_of::<glm::Vec3>() as _,
                     shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // uv_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>()) as _,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                // uv_1
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>() + size_of::<glm::Vec2>()) as _,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                // joint_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>() + 2 * size_of::<glm::Vec2>()) as _,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // weight_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>()
+                        + 2 * size_of::<glm::Vec2>()
+                        + size_of::<glm::Vec4>()) as _,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // color_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>()
+                        + 2 * size_of::<glm::Vec2>()
+                        + 2 * size_of::<glm::Vec4>()) as _,
+                    shader_location: 6,
                     format: wgpu::VertexFormat::Float32x3,
                 },
             ],
@@ -169,9 +174,11 @@ impl WorldRender {
         (uniform_binding, geometry, pipeline)
     }
 
-    pub fn load(&self, queue: &Queue, _world: &World) -> Result<()> {
-        self.geometry.upload_vertices(queue, 0, VERTICES);
-        self.geometry.upload_indices(queue, 0, INDICES);
+    pub fn load(&self, queue: &Queue, world: &World) -> Result<()> {
+        self.geometry
+            .upload_vertices(queue, 0, &world.geometry.vertices);
+        self.geometry
+            .upload_indices(queue, 0, &world.geometry.indices);
         Ok(())
     }
 
@@ -182,7 +189,11 @@ impl WorldRender {
         Ok(())
     }
 
-    pub fn render<'a, 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+    pub fn render<'a, 'b>(
+        &'a self,
+        render_pass: &'b mut wgpu::RenderPass<'a>,
+        world: &'a World,
+    ) -> Result<()> {
         render_pass.set_pipeline(&self.pipeline);
 
         render_pass.set_bind_group(0, &self.uniform_binding.bind_group, &[]);
@@ -192,7 +203,74 @@ impl WorldRender {
             wgpu::IndexFormat::Uint16,
         );
 
-        render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1);
+        for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
+            for graph in world.scene.graphs.iter() {
+                graph.walk(|node_index| {
+                    let entity = graph[node_index];
+                    let entry = world.ecs.entry_ref(entity)?;
+
+                    let mesh_name = match entry.get_component::<MeshRender>().ok() {
+                        Some(mesh_render) => &mesh_render.name,
+                        None => return Ok(()),
+                    };
+
+                    let mesh = match world.geometry.meshes.get(mesh_name) {
+                        Some(mesh) => mesh,
+                        None => return Ok(()),
+                    };
+
+                    match alpha_mode {
+                        AlphaMode::Opaque | AlphaMode::Mask => {} /* Disable blending*/
+                        AlphaMode::Blend => {}                    /* Enable blending */
+                    }
+
+                    // Render rigid bodies at the transform specified by the physics world instead of the scenegraph
+                    // NOTE: The rigid body collider scaling should be the same as the scale of the entity transform
+                    //       otherwise this won't look right. It's probably best to just not scale entities that have rigid bodies
+                    //       with colliders on them.
+                    let model = match entry.get_component::<RigidBody>() {
+                        Ok(rigid_body) => {
+                            let body = world
+                                .physics
+                                .bodies
+                                .get(rigid_body.handle)
+                                .context("Failed to acquire physics body to render!")?;
+                            let position = body.position();
+                            let translation = position.translation.vector;
+                            let rotation = *position.rotation.quaternion();
+                            let scale =
+                                Transform::from(world.global_transform(graph, node_index)?).scale;
+                            Transform::new(translation, rotation, scale).matrix()
+                        }
+                        Err(_) => world.global_transform(graph, node_index)?,
+                    };
+
+                    // TODO: Assign model matrix
+
+                    for primitive in mesh.primitives.iter() {
+                        // TODO: Use material
+                        // let material = match primitive.material_index {
+                        //     Some(material_index) => {
+                        //         let primitive_material = world.material_at_index(material_index)?;
+                        //         if primitive_material.alpha_mode != *alpha_mode {
+                        //             continue;
+                        //         }
+                        //         primitive_material.clone()
+                        //     }
+                        //     None => Material::default(),
+                        // };
+
+                        let start = primitive.first_index as u32;
+                        let end = start + (primitive.number_of_indices as u32);
+                        render_pass.draw_indexed(start..end, 0, 0..1);
+                    }
+
+                    Ok(())
+                })?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -227,8 +305,9 @@ struct Geometry {
 }
 
 impl Geometry {
-    pub const MAX_VERTICES: u32 = 10_000;
-    pub const MAX_INDICES: u32 = 10_000;
+    // TODO: Determine these using the wgpu::limits
+    pub const MAX_VERTICES: u32 = 1_000_000;
+    pub const MAX_INDICES: u32 = 1_000_000;
 
     pub fn upload_vertices(
         &self,
