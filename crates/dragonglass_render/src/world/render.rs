@@ -12,166 +12,12 @@ pub(crate) struct WorldRender {
 
 impl WorldRender {
     pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Result<Self> {
-        let (uniform_binding, geometry, pipeline) = Self::create_pipeline(device, texture_format);
+        let (uniform_binding, geometry, pipeline) = create_pipeline(device, texture_format);
         Ok(Self {
             pipeline,
             uniform_binding,
             geometry,
         })
-    }
-
-    fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
-        device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
-        })
-    }
-
-    fn create_uniform_buffer(device: &wgpu::Device) -> UniformBinding {
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("World Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[WorldUniform::default()]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-            label: Some("World Uniform Buffer Bind Group Layout"),
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-            label: Some("World Uniform Buffer Bind Group"),
-        });
-
-        UniformBinding {
-            buffer,
-            bind_group_layout,
-            bind_group,
-        }
-    }
-
-    fn create_geometry(device: &wgpu::Device) -> Geometry {
-        let vertex_buffer_layout = wgpu::VertexBufferLayout {
-            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                // position
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // normal
-                wgpu::VertexAttribute {
-                    offset: size_of::<glm::Vec3>() as _,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // uv_0
-                wgpu::VertexAttribute {
-                    offset: (2 * size_of::<glm::Vec3>()) as _,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                // uv_1
-                wgpu::VertexAttribute {
-                    offset: (2 * size_of::<glm::Vec3>() + size_of::<glm::Vec2>()) as _,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                // joint_0
-                wgpu::VertexAttribute {
-                    offset: (2 * size_of::<glm::Vec3>() + 2 * size_of::<glm::Vec2>()) as _,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // weight_0
-                wgpu::VertexAttribute {
-                    offset: (2 * size_of::<glm::Vec3>()
-                        + 2 * size_of::<glm::Vec2>()
-                        + size_of::<glm::Vec4>()) as _,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                // color_0
-                wgpu::VertexAttribute {
-                    offset: (2 * size_of::<glm::Vec3>()
-                        + 2 * size_of::<glm::Vec2>()
-                        + 2 * size_of::<glm::Vec4>()) as _,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        };
-
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Vertex Buffer"),
-            size: u64::from(Geometry::MAX_VERTICES * std::mem::size_of::<Vertex>() as u32),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Index Buffer"),
-            size: u64::from(Geometry::MAX_INDICES * std::mem::size_of::<u32>() as u32),
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        Geometry {
-            vertex_buffer,
-            vertex_buffer_layout,
-            index_buffer,
-        }
-    }
-
-    fn create_pipeline(
-        device: &wgpu::Device,
-        texture_format: wgpu::TextureFormat,
-    ) -> (UniformBinding, Geometry, wgpu::RenderPipeline) {
-        let uniform_binding = Self::create_uniform_buffer(device);
-        let geometry = Self::create_geometry(&device);
-        let shader = Self::create_shader_module(device);
-
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&uniform_binding.bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[geometry.vertex_buffer_layout.clone()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[texture_format.into()],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-        });
-
-        (uniform_binding, geometry, pipeline)
     }
 
     pub fn load(&self, queue: &Queue, world: &World) -> Result<()> {
@@ -288,6 +134,43 @@ struct UniformBinding {
 }
 
 impl UniformBinding {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("World Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[WorldUniform::default()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("World Uniform Buffer Bind Group Layout"),
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+            label: Some("World Uniform Buffer Bind Group"),
+        });
+
+        Self {
+            buffer,
+            bind_group_layout,
+            bind_group,
+        }
+    }
+
     pub fn upload_uniform_data(
         &self,
         queue: &Queue,
@@ -309,6 +192,81 @@ impl Geometry {
     pub const MAX_VERTICES: u32 = 1_000_000;
     pub const MAX_INDICES: u32 = 1_000_000;
 
+    pub fn new(device: &wgpu::Device) -> Self {
+        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                // position
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // normal
+                wgpu::VertexAttribute {
+                    offset: size_of::<glm::Vec3>() as _,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // uv_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>()) as _,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                // uv_1
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>() + size_of::<glm::Vec2>()) as _,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                // joint_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>() + 2 * size_of::<glm::Vec2>()) as _,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // weight_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>()
+                        + 2 * size_of::<glm::Vec2>()
+                        + size_of::<glm::Vec4>()) as _,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                // color_0
+                wgpu::VertexAttribute {
+                    offset: (2 * size_of::<glm::Vec3>()
+                        + 2 * size_of::<glm::Vec2>()
+                        + 2 * size_of::<glm::Vec4>()) as _,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        };
+
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Vertex Buffer"),
+            size: u64::from(Geometry::MAX_VERTICES * size_of::<Vertex>() as u32),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Index Buffer"),
+            size: u64::from(Geometry::MAX_INDICES * size_of::<u32>() as u32),
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        Geometry {
+            vertex_buffer,
+            vertex_buffer_layout,
+            index_buffer,
+        }
+    }
+
     pub fn upload_vertices(
         &self,
         queue: &Queue,
@@ -328,4 +286,43 @@ impl Geometry {
         // TODO: Check if the index buffer needs to be resized
         queue.write_buffer(&self.index_buffer, offset, bytemuck::cast_slice(data));
     }
+}
+
+fn create_pipeline(
+    device: &wgpu::Device,
+    texture_format: wgpu::TextureFormat,
+) -> (UniformBinding, Geometry, wgpu::RenderPipeline) {
+    let uniform_binding = UniformBinding::new(device);
+    let geometry = Geometry::new(device);
+
+    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        label: Some("Shader"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/shader.wgsl").into()),
+    });
+
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[&uniform_binding.bind_group_layout],
+        push_constant_ranges: &[],
+    });
+
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: "vs_main",
+            buffers: &[geometry.vertex_buffer_layout.clone()],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: "fs_main",
+            targets: &[texture_format.into()],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+    });
+
+    (uniform_binding, geometry, pipeline)
 }
