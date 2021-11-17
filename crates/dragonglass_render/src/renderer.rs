@@ -3,7 +3,7 @@ use dragonglass_world::World;
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
 
-use crate::world::render::WorldRender;
+use crate::world::{render::WorldRender, texture::Texture};
 
 #[cfg(target_family = "wasm")]
 const BACKEND: wgpu::Backends = wgpu::Backends::BROWSER_WEBGPU;
@@ -25,6 +25,7 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     world_render: WorldRender,
     dimensions: [u32; 2],
+    depth_texture: Texture,
 }
 
 impl Renderer {
@@ -54,6 +55,9 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+        let depth_texture =
+            Texture::create_depth_texture(&device, dimensions[0], dimensions[1], "Depth Texture");
+
         let world_render = WorldRender::new(&device, config.format)?;
 
         Ok(Self {
@@ -63,6 +67,7 @@ impl Renderer {
             config,
             world_render,
             dimensions: *dimensions,
+            depth_texture,
         })
     }
 
@@ -107,6 +112,12 @@ impl Renderer {
         self.config.width = dimensions[0];
         self.config.height = dimensions[1];
         self.surface.configure(&self.device, &self.config);
+        self.depth_texture = Texture::create_depth_texture(
+            &self.device,
+            dimensions[0],
+            dimensions[1],
+            "Depth Texture",
+        );
     }
 
     pub fn render(&mut self, dimensions: &[u32; 2], world: &World) -> Result<()> {
@@ -162,12 +173,19 @@ impl Renderer {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             self.world_render
                 .update(&self.queue, world, aspect_ratio)
-                .expect("Failed to update world!");
+                .expect("Failed to update world render!");
             self.world_render
                 .render(&mut render_pass, world)
                 .expect("Failed to render world!");
