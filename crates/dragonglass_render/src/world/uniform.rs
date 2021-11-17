@@ -11,7 +11,7 @@ pub(crate) struct Geometry {
 
 impl Geometry {
     // TODO: Determine these using the wgpu::limits
-    pub const MAX_VERTICES: u32 = 1_000_000;
+    pub const MAX_VERTICES: u32 = 7_000_000;
     pub const MAX_INDICES: u32 = 1_000_000;
 
     pub fn new(device: &wgpu::Device) -> Self {
@@ -169,75 +169,5 @@ impl UniformBinding {
 pub(crate) struct Uniform {
     pub view: glm::Mat4,
     pub projection: glm::Mat4,
-}
-
-pub(crate) struct DynamicUniformBinding {
-    pub alignment: wgpu::BufferAddress,
-    pub buffer: wgpu::Buffer,
-    pub bind_group_layout: wgpu::BindGroupLayout,
-    pub bind_group: wgpu::BindGroup,
-}
-
-impl DynamicUniformBinding {
-    pub const MAX_NUMBER_OF_MESHES: usize = 10_000;
-
-    pub fn new(device: &wgpu::Device) -> Self {
-        let alignment = device.limits().min_uniform_buffer_offset_alignment as wgpu::BufferAddress;
-
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Dynamic Uniform Buffer"),
-            size: (Self::MAX_NUMBER_OF_MESHES as wgpu::BufferAddress) * alignment,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: true,
-                    min_binding_size: wgpu::BufferSize::new(size_of::<DynamicUniform>() as _),
-                },
-                count: None,
-            }],
-            label: Some("Dynamic Uniform Buffer Bind Group Layout"),
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &buffer,
-                    offset: 0,
-                    size: wgpu::BufferSize::new(size_of::<DynamicUniform>() as _),
-                }),
-            }],
-            label: Some("World Uniform Buffer Bind Group"),
-        });
-
-        Self {
-            alignment,
-            buffer,
-            bind_group_layout,
-            bind_group,
-        }
-    }
-
-    pub fn upload_uniform_data(&self, queue: &Queue, offset: BufferAddress, data: &[impl Copy]) {
-        queue.write_buffer(&self.buffer, offset, unsafe {
-            std::slice::from_raw_parts(
-                data.as_ptr() as *const u8,
-                data.len() * self.alignment as usize,
-            )
-        });
-    }
-}
-
-#[repr(C, align(256))]
-#[derive(Default, Copy, Clone, Debug, bytemuck::Zeroable)]
-pub(crate) struct DynamicUniform {
     pub model: glm::Mat4,
 }

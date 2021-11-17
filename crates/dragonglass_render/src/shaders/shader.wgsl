@@ -4,16 +4,10 @@
 struct Uniform {
     view: mat4x4<f32>;
     projection: mat4x4<f32>;
+    model: mat4x4<f32>;
 };
 [[group(0), binding(0)]]
 var<uniform> ubo: Uniform;
-
-[[block]]
-struct DynamicUniform {
-    model: mat4x4<f32>;
-};
-[[group(1), binding(0)]]
-var<uniform> mesh_ubo: DynamicUniform;
 
 struct VertexInput {
     [[location(0)]] position: vec3<f32>;
@@ -26,7 +20,7 @@ struct VertexInput {
 };
 
 struct VertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
+    [[builtin(position)]] position: vec4<f32>;
     [[location(0)]] color: vec3<f32>;
     [[location(1)]] uv: vec2<f32>;
 };
@@ -38,7 +32,7 @@ fn vs_main(
     var output: VertexOutput;
     output.color = vertex.color_0;
     output.uv = vertex.uv_0;
-    output.clip_position = ubo.projection * ubo.view * vec4<f32>(vertex.position, 1.0);
+    output.position = ubo.projection * ubo.view * ubo.model * vec4<f32>(vertex.position, 1.0);
     return output;
 }
 

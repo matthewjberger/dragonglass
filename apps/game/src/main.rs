@@ -292,7 +292,7 @@ fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
         let impulse = jump_strength * glm::Vec3::y();
         rigid_body.apply_impulse(impulse, true);
     }
-    sync_transform_to_rigid_body(application, entity)?;
+    // sync_transform_to_rigid_body(application, entity)?;
     Ok(())
 }
 

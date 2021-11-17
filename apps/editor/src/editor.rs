@@ -131,19 +131,20 @@ impl ApplicationRunner for Editor {
             }
         }
 
-        let mut query = <(Entity, &MeshRender)>::query();
-        let entities = query
-            .iter(&mut application.world.ecs)
-            .map(|(e, _)| *e)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            application
-                .world
-                .add_rigid_body(entity, RigidBodyType::Static)?;
-            application
-                .world
-                .add_trimesh_collider(entity, InteractionGroups::all())?;
-        }
+        // TODO: Add trimesh colliders
+        // let mut query = <(Entity, &MeshRender)>::query();
+        // let entities = query
+        //     .iter(&mut application.world.ecs)
+        //     .map(|(e, _)| *e)
+        //     .collect::<Vec<_>>();
+        // for entity in entities.into_iter() {
+        //     application
+        //         .world
+        //         .add_rigid_body(entity, RigidBodyType::Static)?;
+        //     application
+        //         .world
+        //         .add_trimesh_collider(entity, InteractionGroups::all())?;
+        // }
 
         Ok(())
     }

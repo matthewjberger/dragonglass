@@ -1,9 +1,10 @@
 use crate::world::{
     texture::Texture,
-    uniform::{DynamicUniform, DynamicUniformBinding, Geometry, Uniform, UniformBinding},
+    uniform::{Geometry, Uniform, UniformBinding},
 };
 use anyhow::Result;
 use dragonglass_world::{AlphaMode, EntityStore, MeshRender, World};
+use nalgebra_glm as glm;
 use wgpu::Queue;
 
 pub(crate) struct WorldRender {
@@ -31,42 +32,28 @@ impl WorldRender {
     pub fn update(&self, queue: &Queue, world: &World, aspect_ratio: f32) -> Result<()> {
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
 
-        self.render
-            .uniform_binding
-            .upload_uniform_data(queue, 0, &[Uniform { view, projection }]);
-
-        if world.scene.graphs.is_empty() {
-            return Ok(());
-        }
-
-        // Upload mesh ubos
-        let mut mesh_ubos =
-            vec![DynamicUniform::default(); DynamicUniformBinding::MAX_NUMBER_OF_MESHES];
-        let mut ubo_offset = 0;
-        for graph in world.scene.graphs.iter() {
-            graph.walk(|node_index| {
-                let model = world.global_transform(graph, node_index)?;
-                mesh_ubos[ubo_offset] = DynamicUniform { model };
-                ubo_offset += 1;
-                Ok(())
-            })?;
-        }
-        self.render
-            .dynamic_uniform_binding
-            .upload_uniform_data(queue, 0, &mesh_ubos);
+        self.render.uniform_binding.upload_uniform_data(
+            queue,
+            0,
+            &[Uniform {
+                view,
+                projection,
+                model: glm::Mat4::identity(),
+            }],
+        );
 
         Ok(())
     }
 
     pub fn render<'a, 'b>(
         &'a self,
+        queue: &Queue,
         render_pass: &'b mut wgpu::RenderPass<'a>,
         world: &'a World,
     ) -> Result<()> {
         self.render.bind(render_pass);
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
-            let mut ubo_offset = 0;
             for graph in world.scene.graphs.iter() {
                 graph.walk(|node_index| {
                     let entity = graph[node_index];
@@ -82,9 +69,11 @@ impl WorldRender {
                         None => return Ok(()),
                     };
 
-                    self.render.bind_dynamic_ubo(render_pass, ubo_offset);
-
-                    ubo_offset += 1;
+                    self.render.uniform_binding.upload_uniform_data(
+                        queue,
+                        (std::mem::size_of::<glm::Mat4>() * 2) as _,
+                        &[world.entity_global_transform_matrix(entity)?],
+                    );
 
                     match alpha_mode {
                         AlphaMode::Opaque | AlphaMode::Mask => {} /* Disable blending*/
@@ -110,7 +99,6 @@ struct Render {
     pipeline: wgpu::RenderPipeline,
     geometry: Geometry,
     uniform_binding: UniformBinding,
-    dynamic_uniform_binding: DynamicUniformBinding,
 }
 
 impl Render {
@@ -118,7 +106,6 @@ impl Render {
         let geometry = Geometry::new(device);
 
         let uniform_binding = UniformBinding::new(device);
-        let dynamic_uniform_binding = DynamicUniformBinding::new(device);
 
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -127,10 +114,7 @@ impl Render {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[
-                &uniform_binding.bind_group_layout,
-                &dynamic_uniform_binding.bind_group_layout,
-            ],
+            bind_group_layouts: &[&uniform_binding.bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -165,7 +149,6 @@ impl Render {
             pipeline,
             geometry,
             uniform_binding,
-            dynamic_uniform_binding,
         }
     }
 
@@ -177,15 +160,5 @@ impl Render {
             wgpu::IndexFormat::Uint32,
         );
         render_pass.set_bind_group(0, &self.uniform_binding.bind_group, &[]);
-    }
-
-    pub fn bind_dynamic_ubo<'a, 'b>(
-        &'a self,
-        render_pass: &'b mut wgpu::RenderPass<'a>,
-        offset: u32,
-    ) {
-        let offset = (offset as wgpu::DynamicOffset)
-            * (self.dynamic_uniform_binding.alignment as wgpu::DynamicOffset);
-        render_pass.set_bind_group(1, &self.dynamic_uniform_binding.bind_group, &[offset]);
     }
 }
