@@ -160,7 +160,7 @@ impl World {
         }
         if !found {
             // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
-            // Not found in the scenegraph, so the entity just has a local transform
+            // Not found in the scenegraph, so the entity just have a local transform
             transform = self
                 .ecs
                 .entry_ref(entity)?
@@ -364,7 +364,6 @@ impl World {
         Ok(joint_matrices)
     }
 
-    // FIXME
     pub fn add_trimesh_collider(
         &mut self,
         entity: Entity,
@@ -403,7 +402,10 @@ impl World {
             let collider = ColliderBuilder::trimesh(vertices, indices)
                 .collision_groups(collision_groups)
                 .build();
-            self.physics.colliders.insert(collider);
+            // FIXME NOW
+            // self.physics
+            //     .colliders
+            //     .insert(collider, rigid_body_handle, &mut self.physics.bodies);
         }
         Ok(())
     }

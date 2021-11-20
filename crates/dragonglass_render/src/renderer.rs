@@ -145,10 +145,6 @@ impl Renderer {
         };
         let aspect_ratio = dimensions[0] as f32 / height as f32;
 
-        self.world_render
-            .update(&self.queue, world, aspect_ratio)
-            .expect("Failed to update world render!");
-
         let frame = self.surface.get_current_texture()?;
 
         let view = frame
@@ -188,7 +184,10 @@ impl Renderer {
             });
 
             self.world_render
-                .render(&self.queue, &mut render_pass, world)
+                .update(&self.queue, world, aspect_ratio)
+                .expect("Failed to update world render!");
+            self.world_render
+                .render(&mut render_pass, world)
                 .expect("Failed to render world!");
         }
 
