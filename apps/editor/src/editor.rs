@@ -131,6 +131,7 @@ impl ApplicationRunner for Editor {
             }
         }
 
+        // TODO: Add trimesh colliders for 3D picking
         // let mut query = <(Entity, &MeshRender)>::query();
         // let entities = query
         //     .iter(&mut application.world.ecs)
@@ -158,11 +159,13 @@ impl ApplicationRunner for Editor {
             return Ok(());
         }
 
-        if (MouseButton::Left, ElementState::Pressed) == (button, state) {
-            // if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
-            //     log::info!("Picked entity: {:?}", entity);
-            // }
-        }
+        // TODO: Allow mouse picking
+        // if (MouseButton::Left, ElementState::Pressed) == (button, state) {
+        //     if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
+        //         log::info!("Picked entity: {:?}", entity);
+        //     }
+        // }
+
         Ok(())
     }
 }

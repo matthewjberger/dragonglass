@@ -2,8 +2,8 @@ use crate::world::{
     texture::Texture,
     uniform::{DynamicUniform, DynamicUniformBinding, Geometry, Uniform, UniformBinding},
 };
-use anyhow::Result;
-use dragonglass_world::{AlphaMode, EntityStore, MeshRender, World};
+use anyhow::{Context, Result};
+use dragonglass_world::{AlphaMode, EntityStore, MeshRender, RigidBody, Transform, World};
 use nalgebra_glm as glm;
 use wgpu::Queue;
 
@@ -46,11 +46,30 @@ impl WorldRender {
         let mut ubo_offset = 0;
         for graph in world.scene.graphs.iter() {
             graph.walk(|node_index| {
-                let model = world.global_transform(graph, node_index)?;
-                // let model = glm::translate(
-                //     &glm::Mat4::identity(),
-                //     &glm::vec3(0.0, 4.0 * ubo_offset as f32, 0.0),
-                // );
+                let entity = graph[node_index];
+                let entry = world.ecs.entry_ref(entity)?;
+
+                // Render rigid bodies at the transform specified by the physics world instead of the scenegraph
+                // NOTE: The rigid body collider scaling should be the same as the scale of the entity transform
+                //       otherwise this won't look right. It's probably best to just not scale entities that have rigid bodies
+                //       with colliders on them.
+                let model = match entry.get_component::<RigidBody>() {
+                    Ok(rigid_body) => {
+                        let body = world
+                            .physics
+                            .bodies
+                            .get(rigid_body.handle)
+                            .context("Failed to acquire physics body to render!")?;
+                        let position = body.position();
+                        let translation = position.translation.vector;
+                        let rotation = *position.rotation.quaternion();
+                        let scale =
+                            Transform::from(world.global_transform(graph, node_index)?).scale;
+                        Transform::new(translation, rotation, scale).matrix()
+                    }
+                    Err(_) => world.global_transform(graph, node_index)?,
+                };
+
                 mesh_ubos[ubo_offset] = DynamicUniform { model };
                 ubo_offset += 1;
                 Ok(())
