@@ -46,11 +46,11 @@ impl WorldRender {
         let mut ubo_offset = 0;
         for graph in world.scene.graphs.iter() {
             graph.walk(|node_index| {
-                // let model = world.global_transform(graph, node_index)?;
-                let model = glm::translate(
-                    &glm::Mat4::identity(),
-                    &glm::vec3(0.0, 4.0 * ubo_offset as f32, 0.0),
-                );
+                let model = world.global_transform(graph, node_index)?;
+                // let model = glm::translate(
+                //     &glm::Mat4::identity(),
+                //     &glm::vec3(0.0, 4.0 * ubo_offset as f32, 0.0),
+                // );
                 mesh_ubos[ubo_offset] = DynamicUniform { model };
                 ubo_offset += 1;
                 Ok(())
@@ -79,17 +79,21 @@ impl WorldRender {
 
                     let mesh_name = match entry.get_component::<MeshRender>().ok() {
                         Some(mesh_render) => &mesh_render.name,
-                        None => return Ok(()),
+                        None => {
+                            ubo_offset += 1;
+                            return Ok(());
+                        }
                     };
 
                     let mesh = match world.geometry.meshes.get(mesh_name) {
                         Some(mesh) => mesh,
-                        None => return Ok(()),
+                        None => {
+                            ubo_offset += 1;
+                            return Ok(());
+                        }
                     };
 
                     self.render.bind_dynamic_ubo(render_pass, ubo_offset);
-
-                    ubo_offset += 1;
 
                     match alpha_mode {
                         AlphaMode::Opaque | AlphaMode::Mask => {} /* Disable blending*/
@@ -102,6 +106,7 @@ impl WorldRender {
                         render_pass.draw_indexed(start..end, 0, 0..1);
                     }
 
+                    ubo_offset += 1;
                     Ok(())
                 })?;
             }

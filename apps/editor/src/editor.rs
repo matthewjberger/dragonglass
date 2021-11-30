@@ -69,11 +69,11 @@ impl ApplicationRunner for Editor {
             application.system.exit_requested = true;
         }
 
-        // if !application.world.animations.is_empty() {
-        //     application
-        //         .world
-        //         .animate(0, 0.75 * application.system.delta_time as f32)?;
-        // }
+        if !application.world.animations.is_empty() {
+            application
+                .world
+                .animate(0, 0.75 * application.system.delta_time as f32)?;
+        }
 
         if !application.input.allowed {
             return Ok(());
@@ -131,19 +131,19 @@ impl ApplicationRunner for Editor {
             }
         }
 
-        let mut query = <(Entity, &MeshRender)>::query();
-        let entities = query
-            .iter(&mut application.world.ecs)
-            .map(|(e, _)| *e)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            application
-                .world
-                .add_rigid_body(entity, RigidBodyType::Static)?;
-            application
-                .world
-                .add_trimesh_collider(entity, InteractionGroups::all())?;
-        }
+        // let mut query = <(Entity, &MeshRender)>::query();
+        // let entities = query
+        //     .iter(&mut application.world.ecs)
+        //     .map(|(e, _)| *e)
+        //     .collect::<Vec<_>>();
+        // for entity in entities.into_iter() {
+        //     application
+        //         .world
+        //         .add_rigid_body(entity, RigidBodyType::Static)?;
+        //     application
+        //         .world
+        //         .add_trimesh_collider(entity, InteractionGroups::all())?;
+        // }
 
         Ok(())
     }
@@ -159,9 +159,9 @@ impl ApplicationRunner for Editor {
         }
 
         if (MouseButton::Left, ElementState::Pressed) == (button, state) {
-            if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
-                log::info!("Picked entity: {:?}", entity);
-            }
+            // if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
+            //     log::info!("Picked entity: {:?}", entity);
+            // }
         }
         Ok(())
     }
