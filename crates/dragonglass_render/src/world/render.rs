@@ -19,15 +19,7 @@ impl WorldRender {
         })
     }
 
-    pub fn load(&self, device: &wgpu::Device, queue: &Queue, world: &World) -> Result<()> {
-        // let textures = world
-        //     .textures
-        //     .iter()
-        //     .map(|world_texture| {
-        //         Texture::from_world_texture(device, queue, world_texture, "World Texture")
-        //     })
-        //     .collect::<Result<Vec<_>>>()?;
-
+    pub fn load(&self, queue: &Queue, world: &World) -> Result<()> {
         self.render
             .geometry
             .upload_vertices(queue, 0, &world.geometry.vertices);
@@ -145,7 +137,6 @@ impl WorldRender {
 
 struct Render {
     pipeline: wgpu::RenderPipeline,
-    textures: Vec<Texture>,
     geometry: Geometry,
     uniform_binding: UniformBinding,
     dynamic_uniform_binding: DynamicUniformBinding,
@@ -201,7 +192,6 @@ impl Render {
 
         Self {
             pipeline,
-            textures: Vec::new(),
             geometry,
             uniform_binding,
             dynamic_uniform_binding,
@@ -226,16 +216,5 @@ impl Render {
         let offset = (offset as wgpu::DynamicOffset)
             * (self.dynamic_uniform_binding.alignment as wgpu::DynamicOffset);
         render_pass.set_bind_group(1, &self.dynamic_uniform_binding.bind_group, &[offset]);
-    }
-
-    pub fn clear_textures(&mut self) {
-        self.textures.clear();
-    }
-
-    pub fn upload_textures(&mut self, textures: Vec<Texture>, offset: usize) {
-        textures
-            .into_iter()
-            .skip(offset)
-            .for_each(|t| self.textures.push(t))
     }
 }

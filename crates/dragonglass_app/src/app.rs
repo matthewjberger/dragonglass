@@ -238,12 +238,10 @@ pub fn run_application(
     let renderer = pollster::block_on(Renderer::new(&window, &window_dimensions))?;
 
     let mut world = World::new()?;
-
-    // TODO: Insert a default SDF font into the world
-    // world.fonts.insert(
-    //     "default".to_string(),
-    //     SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
-    // );
+    world.fonts.insert(
+        "default".to_string(),
+        SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
+    );
 
     let mut state = Application {
         world,

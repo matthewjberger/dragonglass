@@ -101,7 +101,7 @@ impl Renderer {
     }
 
     pub fn load_world(&mut self, world: &World) -> Result<()> {
-        self.world_render.load(&self.device, &self.queue, world)
+        self.world_render.load(&self.queue, world)
     }
 
     pub fn resize(&mut self, dimensions: [u32; 2]) {
