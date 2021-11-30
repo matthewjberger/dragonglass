@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use dragonglass_gui::{Gui, RenderPass as GuiRenderPass, ScreenDescriptor};
+use dragonglass_gui::{egui::CtxRef, Gui, RenderPass as GuiRenderPass, ScreenDescriptor};
 use dragonglass_world::World;
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
@@ -141,8 +141,9 @@ impl Renderer {
         window: &winit::window::Window,
         dimensions: &[u32; 2],
         world: &World,
+        action: impl FnMut(CtxRef) -> Result<()>,
     ) -> Result<()> {
-        match self.render_frame(window, dimensions, world) {
+        match self.render_frame(window, dimensions, world, action) {
             Ok(_) => {}
             // Recreate the swapchain if lost
             Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
@@ -159,6 +160,7 @@ impl Renderer {
         window: &winit::window::Window,
         dimensions: &[u32; 2],
         world: &World,
+        action: impl FnMut(CtxRef) -> Result<()>,
     ) -> Result<(), wgpu::SurfaceError> {
         let height = if dimensions[1] > 0 {
             dimensions[1] as f32
@@ -213,18 +215,21 @@ impl Renderer {
                 .expect("Failed to render world!");
         }
 
-        self.gui.render(
-            &self.device,
-            &self.queue,
-            &ScreenDescriptor {
-                physical_width: dimensions[0],
-                physical_height: dimensions[1],
-                scale_factor: window.scale_factor() as _,
-            },
-            &window,
-            &mut encoder,
-            &view,
-        );
+        self.gui
+            .render(
+                &self.device,
+                &self.queue,
+                &ScreenDescriptor {
+                    physical_width: dimensions[0],
+                    physical_height: dimensions[1],
+                    scale_factor: window.scale_factor() as _,
+                },
+                &window,
+                &mut encoder,
+                &view,
+                action,
+            )
+            .expect("Failed to render gui!");
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();

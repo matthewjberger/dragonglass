@@ -698,6 +698,7 @@ name = "dragonglass_app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dragonglass_gui",
  "dragonglass_render",
  "dragonglass_world",
  "image",
@@ -713,6 +714,7 @@ dependencies = [
 name = "dragonglass_gui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "egui",
  "egui_wgpu_backend",
  "egui_winit_platform",

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use egui::{epaint::ClippedMesh, CtxRef, FontDefinitions};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
@@ -109,15 +110,11 @@ impl Gui {
         window: &Window,
         encoder: &mut CommandEncoder,
         output_view: &wgpu::TextureView,
-    ) {
+        mut action: impl FnMut(CtxRef) -> Result<()>,
+    ) -> Result<()> {
         self.start_frame(screen_descriptor.scale_factor as _);
 
-        // Draw UI
-        egui::Window::new("My Window")
-            .resizable(true)
-            .show(&self.context(), |ui| {
-                ui.label("Hello World!");
-            });
+        action(self.context())?;
 
         let paint_jobs = self.end_frame(&window);
 
@@ -133,6 +130,8 @@ impl Gui {
 
         self.renderpass
             .execute(encoder, &output_view, &paint_jobs, &screen_descriptor, None)
-            .expect("Failed to execute egui renderpass!");
+            .context("Failed to execute egui renderpass!")?;
+
+        Ok(())
     }
 }

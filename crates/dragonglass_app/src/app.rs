@@ -3,6 +3,7 @@ use crate::{
     state::{Input, System},
 };
 use anyhow::Result;
+use dragonglass_gui::egui::CtxRef;
 use dragonglass_render::Renderer;
 use dragonglass_world::{
     legion::IntoQuery,
@@ -174,15 +175,22 @@ impl Application {
         Ok(())
     }
 
-    pub fn render(&mut self) -> Result<()> {
-        self.renderer
-            .render(&self.window, &self.system.window_dimensions, &self.world)?;
-        Ok(())
+    pub fn render(&mut self, action: impl FnMut(CtxRef) -> Result<()>) -> Result<()> {
+        self.renderer.render(
+            &self.window,
+            &self.system.window_dimensions,
+            &self.world,
+            action,
+        )
     }
 }
 
 pub trait ApplicationRunner {
     fn initialize(&mut self, _application: &mut Application) -> Result<()> {
+        Ok(())
+    }
+
+    fn update_gui(&mut self, context: CtxRef) -> Result<()> {
         Ok(())
     }
 
@@ -289,7 +297,7 @@ fn run_loop(
         Event::MainEventsCleared => {
             runner.update(application)?;
             application.update()?;
-            application.render()?;
+            application.render(|context| runner.update_gui(context))?;
         }
         // FIXME window events can be grouped
         Event::WindowEvent {

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
+    gui::egui,
     world::{
         legion::Entity, load_gltf, rapier3d::dynamics::RigidBodyType,
         rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
@@ -166,6 +167,15 @@ impl ApplicationRunner for Editor {
         //     }
         // }
 
+        Ok(())
+    }
+
+    fn update_gui(&mut self, context: dragonglass::gui::egui::CtxRef) -> Result<()> {
+        egui::Window::new("My Window")
+            .resizable(true)
+            .show(&context, |ui| {
+                ui.label("Hello World!");
+            });
         Ok(())
     }
 }
