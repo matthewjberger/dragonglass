@@ -1,8 +1,8 @@
 use crate::{
-    AlphaMode, Animation, BoundingBox, Camera, Channel, Ecs, Entity, Filter, Format, Geometry,
+    AlphaMode, Animation, BoundingBox, Camera, Channel, Ecs, Entity, Filter, Geometry,
     Interpolation, Joint, Light, LightKind, Material, Mesh, MeshRender, MorphTarget, Name,
     OrthographicCamera, PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin,
-    Texture, Transform, TransformationSet, Vertex, World, WrappingMode,
+    Texture, TextureFormat, Transform, TransformationSet, Vertex, World, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -174,30 +174,26 @@ fn load_textures(gltf: &gltf::Document, images: &[gltf::image::Data]) -> Result<
         let image_index = texture.source().index();
         let image = images.get(image_index).context(image_error_message)?;
 
-        let texture = Texture {
-            pixels: image.pixels.to_vec(),
-            format: map_gltf_format(image.format),
-            width: image.width,
-            height: image.height,
-            sampler,
-        };
+        let mut texture = Texture::from_bytes(&image.pixels)?;
+        texture.format = map_gltf_format(image.format);
+        texture.sampler = sampler;
         textures.push(texture);
     }
     Ok(textures)
 }
 
-fn map_gltf_format(format: gltf::image::Format) -> Format {
+fn map_gltf_format(format: gltf::image::Format) -> TextureFormat {
     match format {
-        gltf::image::Format::R8 => Format::R8,
-        gltf::image::Format::R8G8 => Format::R8G8,
-        gltf::image::Format::R8G8B8 => Format::R8G8B8,
-        gltf::image::Format::R8G8B8A8 => Format::R8G8B8A8,
-        gltf::image::Format::B8G8R8 => Format::B8G8R8,
-        gltf::image::Format::B8G8R8A8 => Format::B8G8R8A8,
-        gltf::image::Format::R16 => Format::R16,
-        gltf::image::Format::R16G16 => Format::R16G16,
-        gltf::image::Format::R16G16B16 => Format::R16G16B16,
-        gltf::image::Format::R16G16B16A16 => Format::R16G16B16A16,
+        gltf::image::Format::R8 => TextureFormat::R8,
+        gltf::image::Format::R8G8 => TextureFormat::R8G8,
+        gltf::image::Format::R8G8B8 => TextureFormat::R8G8B8,
+        gltf::image::Format::R8G8B8A8 => TextureFormat::R8G8B8A8,
+        gltf::image::Format::B8G8R8 => TextureFormat::B8G8R8,
+        gltf::image::Format::B8G8R8A8 => TextureFormat::B8G8R8A8,
+        gltf::image::Format::R16 => TextureFormat::R16,
+        gltf::image::Format::R16G16 => TextureFormat::R16G16,
+        gltf::image::Format::R16G16B16 => TextureFormat::R16G16B16,
+        gltf::image::Format::R16G16B16A16 => TextureFormat::R16G16B16A16,
     }
 }
 

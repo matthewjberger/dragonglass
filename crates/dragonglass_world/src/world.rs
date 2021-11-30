@@ -1,7 +1,10 @@
 use crate::{Name, RigidBody, WorldPhysics};
 use anyhow::{bail, Context, Result};
 use bmfont::{BMFont, OrdinateOrientation};
-use image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView};
+use image::{
+    hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView, ImageBuffer, Pixel,
+    RgbImage,
+};
 use lazy_static::lazy_static;
 use legion::{
     serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
@@ -969,38 +972,88 @@ impl Default for AlphaMode {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Texture {
     pub pixels: Vec<u8>,
-    pub format: Format,
+    pub format: TextureFormat,
     pub width: u32,
     pub height: u32,
     pub sampler: Sampler,
+    pub mip_levels: u32,
 }
 
 impl Texture {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let image = ImageReader::open(path)?.decode()?;
-        let pixels = image.to_bytes();
-        let (width, height) = image.dimensions();
-        let format = Self::map_format(&image)?;
-
-        Ok(Self {
-            pixels,
+    pub fn empty(width: u32, height: u32, format: TextureFormat) -> Self {
+        Self {
             format,
             width,
             height,
+            pixels: Vec::new(),
             sampler: Sampler::default(),
+            mip_levels: Self::calculate_mip_levels(width, height),
+        }
+    }
+
+    pub fn calculate_mip_levels(width: u32, height: u32) -> u32 {
+        ((width.min(height) as f32).log2().floor() + 1.0) as u32
+    }
+
+    pub fn from_bytes(image_bytes: &[u8]) -> Result<Self> {
+        let image = image::load_from_memory(image_bytes)?;
+        let (width, height) = image.dimensions();
+        let format = Self::map_format(&image)?;
+        let mut texture = Self {
+            pixels: image_bytes.to_vec(),
+            format,
+            width,
+            height,
+            mip_levels: Self::calculate_mip_levels(width, height),
+            sampler: Sampler::default(),
+        };
+        texture.convert_24bit_formats()?;
+        Ok(texture)
+    }
+
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let image = ImageReader::open(path)?.decode()?;
+        Self::from_bytes(&image.to_bytes())
+    }
+
+    pub fn map_format(image: &DynamicImage) -> Result<TextureFormat> {
+        Ok(match image {
+            DynamicImage::ImageRgb8(_) => TextureFormat::R8G8B8,
+            DynamicImage::ImageRgba8(_) => TextureFormat::R8G8B8A8,
+            DynamicImage::ImageBgr8(_) => TextureFormat::B8G8R8,
+            DynamicImage::ImageBgra8(_) => TextureFormat::B8G8R8A8,
+            DynamicImage::ImageRgb16(_) => TextureFormat::R16G16B16,
+            DynamicImage::ImageRgba16(_) => TextureFormat::R16G16B16A16,
+            _ => bail!(
+                "Failed to match the provided image format to a supported image format! {:#?}",
+                image
+            ),
         })
     }
 
-    pub fn map_format(image: &DynamicImage) -> Result<Format> {
-        Ok(match image {
-            DynamicImage::ImageRgb8(_) => Format::R8G8B8,
-            DynamicImage::ImageRgba8(_) => Format::R8G8B8A8,
-            DynamicImage::ImageBgr8(_) => Format::B8G8R8,
-            DynamicImage::ImageBgra8(_) => Format::B8G8R8A8,
-            DynamicImage::ImageRgb16(_) => Format::R16G16B16,
-            DynamicImage::ImageRgba16(_) => Format::R16G16B16A16,
-            _ => bail!("Failed to match the provided image format to a vulkan format!"),
-        })
+    fn convert_24bit_formats(&mut self) -> Result<()> {
+        // 24-bit formats are unsupported, so they
+        // need to have an alpha channel added to make them 32-bit
+        let format = match self.format {
+            TextureFormat::R8G8B8 => TextureFormat::R8G8B8A8,
+            TextureFormat::B8G8R8 => TextureFormat::B8G8R8A8,
+            _ => return Ok(()),
+        };
+        self.format = format;
+        self.attach_alpha_channel()
+    }
+
+    fn attach_alpha_channel(&mut self) -> Result<()> {
+        let image_buffer: RgbImage =
+            ImageBuffer::from_raw(self.width, self.height, self.pixels.to_vec())
+                .context("Failed to load image from raw pixels!")?;
+
+        self.pixels = image_buffer
+            .pixels()
+            .flat_map(|pixel| pixel.to_rgba().channels().to_vec())
+            .collect::<Vec<_>>();
+
+        Ok(())
     }
 
     pub fn from_hdr(path: impl AsRef<Path>) -> Result<Self> {
@@ -1019,16 +1072,17 @@ impl Texture {
                 .to_vec();
         Ok(Self {
             pixels,
-            format: Format::R32G32B32A32F,
+            format: TextureFormat::R32G32B32A32F,
             width,
             height,
+            mip_levels: Self::calculate_mip_levels(width, height),
             sampler: Sampler::default(),
         })
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub enum Format {
+pub enum TextureFormat {
     R8,
     R8G8,
     R8G8B8,
