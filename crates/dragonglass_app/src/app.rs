@@ -190,6 +190,7 @@ pub trait ApplicationRunner {
         Ok(())
     }
 
+    // TODO: This should be passed the frame and the application struct (or whatever else will provide system/input/etc access)
     fn update_gui(&mut self, context: CtxRef) -> Result<()> {
         Ok(())
     }
@@ -281,12 +282,21 @@ fn run_loop(
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
+    application.renderer.gui.handle_event(&event);
+
     application.system.handle_event(&event);
+
+    application.input.allowed = {
+        let context = application.renderer.gui.context();
+        let using_gui = context.wants_pointer_input()
+            || context.wants_keyboard_input()
+            || context.is_using_pointer();
+        !using_gui
+    };
+
     application
         .input
         .handle_event(&event, application.system.window_center());
-
-    application.renderer.gui.handle_event(&event);
 
     match event {
         Event::NewEvents(_cause) => {
