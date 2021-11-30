@@ -8,12 +8,14 @@ edition = "2018"
 anyhow = "1.0.44"
 bytemuck = { version = "1.7.2", features = ["derive"] }
 derive_builder = "0.10.2"
+dragonglass_gui = { path = "../dragonglass_gui" }
 dragonglass_world = { path = "../dragonglass_world" }
+getrandom = { version = "0.2", features = ["js"] }
 image = "0.23.14"
 log = "0.4.14"
 nalgebra-glm = "0.15.0"
 petgraph = "0.6.0"
 rapier3d = { version = "0.11.1", features = ["serde-serialize", "wasm-bindgen"] }
 raw-window-handle = "0.3.3"
+winit = { version = "0.25.0", features=["web-sys"] }
 wgpu = { version = "0.11.0", features=["webgl"] }
-getrandom = { version = "0.2", features = ["js"] }

@@ -4,7 +4,6 @@ use crate::world::{
 };
 use anyhow::{Context, Result};
 use dragonglass_world::{AlphaMode, EntityStore, MeshRender, RigidBody, Transform, World};
-use nalgebra_glm as glm;
 use wgpu::Queue;
 
 pub(crate) struct WorldRender {

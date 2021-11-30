@@ -176,7 +176,7 @@ impl Application {
 
     pub fn render(&mut self) -> Result<()> {
         self.renderer
-            .render(&self.system.window_dimensions, &self.world)?;
+            .render(&self.window, &self.system.window_dimensions, &self.world)?;
         Ok(())
     }
 }
@@ -235,9 +235,14 @@ pub fn run_application(
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let renderer = pollster::block_on(Renderer::new(&window, &window_dimensions))?;
+    let renderer = pollster::block_on(Renderer::new(
+        &window,
+        &window_dimensions,
+        window.scale_factor() as _,
+    ))?;
 
     let mut world = World::new()?;
+
     world.fonts.insert(
         "default".to_string(),
         SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
@@ -272,6 +277,8 @@ fn run_loop(
     application
         .input
         .handle_event(&event, application.system.window_center());
+
+    application.renderer.gui.handle_event(&event);
 
     match event {
         Event::NewEvents(_cause) => {

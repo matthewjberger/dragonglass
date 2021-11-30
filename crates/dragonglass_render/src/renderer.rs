@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use dragonglass_gui::{Gui, RenderPass as GuiRenderPass, ScreenDescriptor};
 use dragonglass_world::World;
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
@@ -23,6 +24,7 @@ pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    pub gui: Gui,
     world_render: WorldRender,
     dimensions: [u32; 2],
     depth_texture: Texture,
@@ -32,6 +34,7 @@ impl Renderer {
     pub async fn new(
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
+        scale_factor: f32,
     ) -> Result<Self> {
         let instance = wgpu::Instance::new(BACKEND);
 
@@ -60,11 +63,22 @@ impl Renderer {
 
         let world_render = WorldRender::new(&device, config.format)?;
 
+        let gui_renderpass = GuiRenderPass::new(&device, config.format, 1);
+        let gui = Gui::new(
+            ScreenDescriptor {
+                physical_width: dimensions[0],
+                physical_height: dimensions[1],
+                scale_factor,
+            },
+            gui_renderpass,
+        );
+
         Ok(Self {
             surface,
             device,
             queue,
             config,
+            gui,
             world_render,
             dimensions: *dimensions,
             depth_texture,
@@ -120,8 +134,15 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self, dimensions: &[u32; 2], world: &World) -> Result<()> {
-        match self.render_frame(dimensions, world) {
+    pub fn render(
+        &mut self,
+        // The gui requires winit, but if the gui backend is
+        // changed out for a different windowing system this parameter can be removed
+        window: &winit::window::Window,
+        dimensions: &[u32; 2],
+        world: &World,
+    ) -> Result<()> {
+        match self.render_frame(window, dimensions, world) {
             Ok(_) => {}
             // Recreate the swapchain if lost
             Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
@@ -135,6 +156,7 @@ impl Renderer {
 
     fn render_frame(
         &mut self,
+        window: &winit::window::Window,
         dimensions: &[u32; 2],
         world: &World,
     ) -> Result<(), wgpu::SurfaceError> {
@@ -190,6 +212,19 @@ impl Renderer {
                 .render(&mut render_pass, world)
                 .expect("Failed to render world!");
         }
+
+        self.gui.render(
+            &self.device,
+            &self.queue,
+            &ScreenDescriptor {
+                physical_width: dimensions[0],
+                physical_height: dimensions[1],
+                scale_factor: window.scale_factor() as _,
+            },
+            &window,
+            &mut encoder,
+            &view,
+        );
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
