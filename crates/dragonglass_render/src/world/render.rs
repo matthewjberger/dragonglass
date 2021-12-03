@@ -6,6 +6,18 @@ use anyhow::{Context, Result};
 use dragonglass_world::{AlphaMode, EntityStore, MeshRender, RigidBody, Transform, World};
 use wgpu::Queue;
 
+// TODO:
+// Add texture bind group layout, bind group, and make large texture array in shader
+// When uploading textures, refresh the texture array in the shader
+// Add push constants and use the push constant to offset into the texture array
+// Update shader to use uv coordinates
+// Check bytes_per_row calculation again, doesn't seem to work for some models
+//
+// Add joints back in
+//
+// Write blog post about world
+// Write blog post about rendering the world (ubo, dynamic ubo, texture array, push constants for materials, etc)
+
 pub(crate) struct WorldRender {
     render: Render,
 }
