@@ -19,6 +19,9 @@ impl WorldRender {
     }
 
     pub fn load(&self, queue: &Queue, world: &World) -> Result<()> {
+        // let textures =
+        // world.textures.iter().map(|texture| { })
+
         self.render
             .geometry
             .upload_vertices(queue, 0, &world.geometry.vertices);
