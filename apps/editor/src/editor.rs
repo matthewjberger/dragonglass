@@ -171,9 +171,6 @@ impl ApplicationRunner for Editor {
     }
 
     fn update_gui(&mut self, context: dragonglass::gui::egui::CtxRef) -> Result<()> {
-        let mut label = "";
-        let mut value: f32 = 0.0;
-
         let ctx = &context;
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {

@@ -105,74 +105,8 @@ impl Application {
         self.renderer.load_world(&self.world)
     }
 
-    pub fn mouse_ray(&mut self) -> Result<Ray> {
-        let (width, height) = (
-            self.system.window_dimensions[0] as f32,
-            self.system.window_dimensions[1] as f32,
-        );
-        let aspect_ratio = self.system.aspect_ratio();
-
-        let (projection, view) = self.world.active_camera_matrices(aspect_ratio)?;
-
-        let mut position = self.input.mouse.position;
-        position.y = height - position.y;
-        let near_point = glm::vec2_to_vec3(&position);
-        let mut far_point = near_point;
-        far_point.z = 1.0;
-        let p_near = glm::unproject_zo(
-            &near_point,
-            &view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let p_far = glm::unproject_zo(
-            &far_point,
-            &view,
-            &projection,
-            glm::vec4(0.0, 0.0, width, height),
-        );
-        let direction = (p_far - p_near).normalize();
-        let ray = Ray::new(Point3::from(p_near), direction);
-        Ok(ray)
-    }
-
-    // FIXME: Move picking stuff to world struct
-    pub fn pick_object(
-        &mut self,
-        interact_distance: f32,
-        groups: InteractionGroups,
-    ) -> Result<Option<Entity>> {
-        let ray = self.mouse_ray()?;
-
-        let hit = self.world.physics.query_pipeline.cast_ray(
-            &self.world.physics.colliders,
-            &ray,
-            interact_distance,
-            true,
-            groups,
-            None,
-        );
-
-        let mut picked_entity = None;
-        if let Some((handle, _)) = hit {
-            let collider = &self.world.physics.colliders[handle];
-            let rigid_body_handle = collider.parent().unwrap();
-            let mut query = <(Entity, &RigidBody)>::query();
-            for (entity, rigid_body) in query.iter(&self.world.ecs) {
-                if rigid_body.handle == rigid_body_handle {
-                    picked_entity = Some(*entity);
-                    break;
-                }
-            }
-        }
-
-        Ok(picked_entity)
-    }
-
-    // FIXME: Give world an update method
     pub fn update(&mut self) -> Result<()> {
-        self.world.physics.update(self.system.delta_time as f32);
-        Ok(())
+        self.world.tick(self.system.delta_time as f32)
     }
 
     pub fn render(&mut self, action: impl FnMut(CtxRef) -> Result<()>) -> Result<()> {
@@ -191,7 +125,7 @@ pub trait ApplicationRunner {
     }
 
     // TODO: This should be passed the frame and the application struct (or whatever else will provide system/input/etc access)
-    fn update_gui(&mut self, context: CtxRef) -> Result<()> {
+    fn update_gui(&mut self, _context: CtxRef) -> Result<()> {
         Ok(())
     }
 
