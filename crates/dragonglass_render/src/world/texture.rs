@@ -1,5 +1,4 @@
 use anyhow::*;
-use image::GenericImageView;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -8,37 +7,27 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn from_bytes(
+    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float; // 1.
+
+    pub fn from_world_texture(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        bytes: &[u8],
+        world_texture: &dragonglass_world::Texture,
         label: &str,
     ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
-    }
-
-    pub fn from_image(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        img: &image::DynamicImage,
-        label: Option<&str>,
-    ) -> Result<Self> {
-        let rgba = img.as_rgba8().unwrap();
-        let dimensions = img.dimensions();
-
         let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width: world_texture.width,
+            height: world_texture.height,
             depth_or_array_layers: 1,
         };
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label,
+            label: Some(label),
             size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: Self::map_texture_format(world_texture.format),
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         });
 
@@ -49,25 +38,18 @@ impl Texture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            rgba,
+            &world_texture.pixels,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-                rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+                bytes_per_row: std::num::NonZeroU32::new(world_texture.bytes_per_row()),
+                rows_per_image: std::num::NonZeroU32::new(world_texture.height),
             },
             size,
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
+
+        let sampler = device.create_sampler(&Self::map_sampler(&world_texture.sampler));
 
         Ok(Self {
             texture,
@@ -76,7 +58,23 @@ impl Texture {
         })
     }
 
-    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float; // 1.
+    fn map_texture_format(texture_format: dragonglass_world::TextureFormat) -> wgpu::TextureFormat {
+        // FIXME: Map texture formats
+        wgpu::TextureFormat::Rgba8UnormSrgb
+    }
+
+    fn map_sampler(sampler: &dragonglass_world::Sampler) -> wgpu::SamplerDescriptor<'static> {
+        // FIXME: Map sampler descriptor
+        wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        }
+    }
 
     pub fn create_depth_texture(
         device: &wgpu::Device,

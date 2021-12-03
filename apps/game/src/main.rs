@@ -197,7 +197,6 @@ fn add_cylinder_collider(
     let _collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
         .build();
-    // FIXME NOW
     // let collider_handle = application.world.physics.colliders.insert(
     //     collider,
     //     rigid_body.handle,

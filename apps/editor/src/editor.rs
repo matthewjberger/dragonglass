@@ -2,10 +2,7 @@ use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     gui::egui,
-    world::{
-        legion::Entity, load_gltf, rapier3d::dynamics::RigidBodyType,
-        rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
-    },
+    world::{load_gltf, World},
 };
 use log::{info, warn};
 use std::path::{Path, PathBuf};
@@ -153,8 +150,8 @@ impl ApplicationRunner for Editor {
     fn on_mouse(
         &mut self,
         application: &mut Application,
-        button: MouseButton,
-        state: ElementState,
+        _button: MouseButton,
+        _state: ElementState,
     ) -> Result<()> {
         if !application.input.allowed {
             return Ok(());

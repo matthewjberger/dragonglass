@@ -379,12 +379,6 @@ impl World {
         let transform = self.entity_global_transform(entity)?;
         let mesh = &self.geometry.meshes[&mesh.name];
 
-        let rigid_body_handle = self
-            .ecs
-            .entry_ref(entity)?
-            .get_component::<RigidBody>()?
-            .handle;
-
         for primitive in mesh.primitives.iter() {
             let vertices = self.geometry.vertices
                 [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
@@ -407,10 +401,7 @@ impl World {
             let collider = ColliderBuilder::trimesh(vertices, indices)
                 .collision_groups(collision_groups)
                 .build();
-            // FIXME NOW
-            // self.physics
-            //     .colliders
-            //     .insert(collider, rigid_body_handle, &mut self.physics.bodies);
+            self.physics.colliders.insert(collider);
         }
         Ok(())
     }
@@ -1169,6 +1160,35 @@ impl Texture {
             sampler: Sampler::default(),
             mip_levels: Self::calculate_mip_levels(width, height),
         })
+    }
+
+    pub fn padded_bytes_per_row(&self, alignment: u32) -> u32 {
+        let bytes_per_row = self.bytes_per_row();
+        let padding = (alignment - bytes_per_row % alignment) % alignment;
+        bytes_per_row + padding
+    }
+
+    pub fn bytes_per_row(&self) -> u32 {
+        self.bytes_per_pixel() * self.width
+    }
+
+    pub fn bytes_per_pixel(&self) -> u32 {
+        match self.format {
+            TextureFormat::R8 => 1,
+            TextureFormat::R8G8 => 2,
+            TextureFormat::R8G8B8 | TextureFormat::B8G8R8 => 3,
+            TextureFormat::R8G8B8A8 | TextureFormat::B8G8R8A8 => 4,
+
+            TextureFormat::R16 | TextureFormat::R16F => 2,
+            TextureFormat::R16G16 | TextureFormat::R16G16F => 4,
+            TextureFormat::R16G16B16 | TextureFormat::R16G16B16F => 6,
+            TextureFormat::R16G16B16A16 | TextureFormat::R16G16B16A16F => 8,
+
+            TextureFormat::R32 | TextureFormat::R32F => 4,
+            TextureFormat::R32G32 | TextureFormat::R32G32F => 8,
+            TextureFormat::R32G32B32 | TextureFormat::R32G32B32F => 12,
+            TextureFormat::R32G32B32A32 | TextureFormat::R32G32B32A32F => 16,
+        }
     }
 }
 

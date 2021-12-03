@@ -11,17 +11,21 @@ pub(crate) struct WorldRender {
 }
 
 impl WorldRender {
-    // TODO: Make this just take a render
     pub fn new(device: &wgpu::Device, texture_format: wgpu::TextureFormat) -> Result<Self> {
         Ok(Self {
             render: Render::new(device, texture_format),
         })
     }
 
-    pub fn load(&self, queue: &Queue, world: &World) -> Result<()> {
-        // let textures =
-        // world.textures.iter().map(|texture| { })
-
+    pub fn load(&mut self, device: &wgpu::Device, queue: &Queue, world: &World) -> Result<()> {
+        let textures = world
+            .textures
+            .iter()
+            .map(|world_texture| {
+                Texture::from_world_texture(device, queue, world_texture, "World Texture")
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.render.upload_textures(textures, 0);
         self.render
             .geometry
             .upload_vertices(queue, 0, &world.geometry.vertices);
@@ -138,6 +142,7 @@ impl WorldRender {
 }
 
 struct Render {
+    textures: Vec<Texture>,
     pipeline: wgpu::RenderPipeline,
     geometry: Geometry,
     uniform_binding: UniformBinding,
@@ -193,6 +198,7 @@ impl Render {
         });
 
         Self {
+            textures: Vec::new(),
             pipeline,
             geometry,
             uniform_binding,
@@ -218,5 +224,17 @@ impl Render {
         let offset = (offset as wgpu::DynamicOffset)
             * (self.dynamic_uniform_binding.alignment as wgpu::DynamicOffset);
         render_pass.set_bind_group(1, &self.dynamic_uniform_binding.bind_group, &[offset]);
+    }
+
+    #[allow(dead_code)]
+    pub fn clear_textures(&mut self) {
+        self.textures.clear();
+    }
+
+    pub fn upload_textures(&mut self, textures: Vec<Texture>, offset: usize) {
+        textures
+            .into_iter()
+            .skip(offset)
+            .for_each(|t| self.textures.push(t))
     }
 }

@@ -5,12 +5,7 @@ use crate::{
 use anyhow::Result;
 use dragonglass_gui::egui::CtxRef;
 use dragonglass_render::Renderer;
-use dragonglass_world::{
-    legion::IntoQuery,
-    load_gltf,
-    rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
-    Entity, RigidBody, SdfFont, World,
-};
+use dragonglass_world::{load_gltf, SdfFont, World};
 use image::io::Reader;
 use log::error;
 use nalgebra_glm as glm;
