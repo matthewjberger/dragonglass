@@ -4,7 +4,7 @@ use bmfont::{BMFont, OrdinateOrientation};
 use image::{
     hdr::{HdrDecoder, HdrMetadata},
     io::Reader as ImageReader,
-    DynamicImage, GenericImageView, ImageBuffer, Pixel, RgbImage,
+    DynamicImage, GenericImageView, ImageBuffer, ImageFormat, Pixel, RgbImage,
 };
 use lazy_static::lazy_static;
 use legion::{
@@ -1088,6 +1088,13 @@ impl Texture {
         Self::from_image(image)
     }
 
+    pub fn from_bytes_and_format(image_bytes: &[u8], format: ImageFormat) -> Result<Self> {
+        let mut decoder = ImageReader::new(Cursor::new(image_bytes));
+        decoder.set_format(format);
+        let image = decoder.decode()?;
+        Self::from_image(image)
+    }
+
     pub fn from_image(image: DynamicImage) -> Result<Self> {
         let (width, height) = image.dimensions();
         let format = Self::map_format(&image)?;
@@ -1115,7 +1122,7 @@ impl Texture {
         })
     }
 
-    fn convert_24bit_formats(&mut self) -> Result<()> {
+    pub fn convert_24bit_formats(&mut self) -> Result<()> {
         // 24-bit formats are unsupported, so they
         // need to have an alpha channel added to make them 32-bit
         let format = match self.format {

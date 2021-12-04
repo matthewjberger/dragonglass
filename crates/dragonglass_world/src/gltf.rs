@@ -174,7 +174,7 @@ fn load_textures(gltf: &gltf::Document, images: &[gltf::image::Data]) -> Result<
         let image_index = texture.source().index();
         let image = images.get(image_index).context(image_error_message)?;
 
-        let texture = Texture {
+        let mut texture = Texture {
             pixels: image.pixels.to_vec(),
             format: map_gltf_format(image.format),
             width: image.width,
@@ -182,6 +182,7 @@ fn load_textures(gltf: &gltf::Document, images: &[gltf::image::Data]) -> Result<
             sampler,
             mip_levels: 1,
         };
+        texture.convert_24bit_formats()?;
         textures.push(texture);
     }
     Ok(textures)
