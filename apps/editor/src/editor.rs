@@ -97,6 +97,7 @@ impl ApplicationRunner for Editor {
                 log::info!("Saved world!");
             }
             (VirtualKeyCode::C, ElementState::Pressed) => {
+                application.renderer.clear();
                 application.world.clear()?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
                     warn!("Failed to load gltf world: {}", error);

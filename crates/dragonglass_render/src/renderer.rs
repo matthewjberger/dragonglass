@@ -122,6 +122,10 @@ impl Renderer {
             .context("Failed to request a device!")
     }
 
+    pub fn clear(&mut self) {
+        self.world_render.clear_textures();
+    }
+
     pub fn load_world(&mut self, world: &World) -> Result<()> {
         self.world_render.load(&self.device, &self.queue, world)
     }

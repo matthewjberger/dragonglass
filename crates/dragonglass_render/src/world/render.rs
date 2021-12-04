@@ -8,7 +8,9 @@ use anyhow::{anyhow, Context, Result};
 use dragonglass_world::{
     AlphaMode, EntityStore, Material, MeshRender, RigidBody, Transform, World,
 };
-use wgpu::Queue;
+use wgpu::{
+    BlendComponent, BlendFactor, BlendOperation, BlendState, ColorTargetState, ColorWrites, Queue,
+};
 
 // TODO:
 // Add texture bind group layout, bind group, and make large texture array in shader
@@ -113,8 +115,6 @@ impl WorldRender {
         self.render.bind_ubo(render_pass);
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
-            render_pass.set_pipeline(&self.render.pipeline);
-
             let mut ubo_offset = 0;
             for graph in world.scene.graphs.iter() {
                 graph.walk(|node_index| {
@@ -140,8 +140,12 @@ impl WorldRender {
                     self.render.bind_dynamic_ubo(render_pass, ubo_offset);
 
                     match alpha_mode {
-                        AlphaMode::Opaque | AlphaMode::Mask => {} /* Disable blending*/
-                        AlphaMode::Blend => {}                    /* Enable blending */
+                        /* Disable blending*/
+                        AlphaMode::Opaque | AlphaMode::Mask => {
+                            render_pass.set_pipeline(&self.render.pipeline)
+                        }
+                        /* Enable blending */
+                        AlphaMode::Blend => render_pass.set_pipeline(&self.render.blend_pipeline),
                     }
 
                     for primitive in mesh.primitives.iter() {
@@ -175,11 +179,16 @@ impl WorldRender {
 
         Ok(())
     }
+
+    pub fn clear_textures(&mut self) {
+        self.render.clear_textures();
+    }
 }
 
 struct Render {
     textures: Vec<Texture>,
     pipeline: wgpu::RenderPipeline,
+    blend_pipeline: wgpu::RenderPipeline,
     geometry: Geometry,
     diffuse_texture_binding: TextureBinding,
     uniform_binding: UniformBinding,
@@ -224,7 +233,53 @@ impl Render {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[texture_format.into()],
+                targets: &[ColorTargetState {
+                    format: texture_format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                }],
+            }),
+            primitive: wgpu::PrimitiveState {
+                front_face: wgpu::FrontFace::Ccw,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+        });
+
+        let blend_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[geometry.vertex_buffer_layout.clone()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[ColorTargetState {
+                    format: texture_format,
+                    blend: Some(BlendState {
+                        color: BlendComponent {
+                            src_factor: BlendFactor::SrcAlpha,
+                            dst_factor: BlendFactor::OneMinusSrcAlpha,
+                            operation: BlendOperation::Add,
+                        },
+                        alpha: BlendComponent {
+                            src_factor: BlendFactor::OneMinusSrcAlpha,
+                            dst_factor: BlendFactor::Zero,
+                            operation: BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: ColorWrites::ALL,
+                }],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
@@ -243,6 +298,7 @@ impl Render {
         Self {
             textures: Vec::new(),
             pipeline,
+            blend_pipeline,
             geometry,
             diffuse_texture_binding,
             uniform_binding,
@@ -297,9 +353,9 @@ impl Render {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn clear_textures(&mut self) {
         self.textures.clear();
+        self.diffuse_texture_binding.clear_textures();
     }
 
     pub fn upload_textures(

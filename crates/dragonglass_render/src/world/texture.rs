@@ -1,4 +1,5 @@
 use anyhow::*;
+use dragonglass_world::{Filter, WrappingMode};
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -91,14 +92,42 @@ impl Texture {
     }
 
     fn map_sampler(sampler: &dragonglass_world::Sampler) -> wgpu::SamplerDescriptor<'static> {
-        // FIXME: Map sampler descriptor
+        let min_filter = match sampler.min_filter {
+            Filter::Linear => wgpu::FilterMode::Linear,
+            Filter::Nearest => wgpu::FilterMode::Nearest,
+        };
+
+        let mipmap_filter = match sampler.min_filter {
+            Filter::Linear => wgpu::FilterMode::Linear,
+            Filter::Nearest => wgpu::FilterMode::Nearest,
+        };
+
+        let mag_filter = match sampler.mag_filter {
+            Filter::Nearest => wgpu::FilterMode::Nearest,
+            Filter::Linear => wgpu::FilterMode::Linear,
+        };
+
+        let address_mode_u = match sampler.wrap_s {
+            WrappingMode::ClampToEdge => wgpu::AddressMode::ClampToEdge,
+            WrappingMode::MirroredRepeat => wgpu::AddressMode::MirrorRepeat,
+            WrappingMode::Repeat => wgpu::AddressMode::Repeat,
+        };
+
+        let address_mode_v = match sampler.wrap_t {
+            WrappingMode::ClampToEdge => wgpu::AddressMode::ClampToEdge,
+            WrappingMode::MirroredRepeat => wgpu::AddressMode::MirrorRepeat,
+            WrappingMode::Repeat => wgpu::AddressMode::Repeat,
+        };
+
+        let address_mode_w = wgpu::AddressMode::Repeat;
+
         wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            address_mode_u,
+            address_mode_v,
+            address_mode_w,
+            mag_filter,
+            min_filter,
+            mipmap_filter,
             ..Default::default()
         }
     }
