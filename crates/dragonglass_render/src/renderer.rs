@@ -6,18 +6,6 @@ use raw_window_handle::HasRawWindowHandle;
 
 use crate::world::{render::WorldRender, texture::Texture};
 
-#[cfg(target_family = "wasm")]
-const BACKEND: wgpu::Backends = wgpu::Backends::BROWSER_WEBGPU;
-
-#[cfg(target_os = "windows")]
-const BACKEND: wgpu::Backends = wgpu::Backends::DX12;
-
-#[cfg(target_os = "macos")]
-const BACKEND: wgpu::Backends = wgpu::Backends::METAL;
-
-#[cfg(target_os = "linux")]
-const BACKEND: wgpu::Backends = wgpu::Backends::VULKAN;
-
 #[allow(dead_code)]
 pub struct Renderer {
     surface: wgpu::Surface,
@@ -31,12 +19,16 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    pub fn backends() -> wgpu::Backends {
+        wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all)
+    }
+
     pub async fn new(
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
         scale_factor: f32,
     ) -> Result<Self> {
-        let instance = wgpu::Instance::new(BACKEND);
+        let instance = wgpu::Instance::new(Self::backends());
 
         let surface = unsafe { instance.create_surface(window_handle) };
 
@@ -85,33 +77,49 @@ impl Renderer {
         })
     }
 
+    fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
+        wgpu::Limits::default()
+            // Use the texture resolution limits from the adapter
+            // to support images the size of the surface
+            .using_resolution(adapter.limits())
+    }
+
+    fn required_features() -> wgpu::Features {
+        wgpu::Features::empty()
+    }
+
+    fn optional_features() -> wgpu::Features {
+        wgpu::Features::empty()
+    }
+
     async fn create_adapter(
         instance: &wgpu::Instance,
         surface: &wgpu::Surface,
     ) -> Result<wgpu::Adapter> {
-        instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .context("Failed to request a GPU adapter!")
+        wgpu::util::initialize_adapter_from_env_or_default(
+            instance,
+            Self::backends(),
+            Some(surface),
+        )
+        .await
+        .context("No suitable GPU adapters found on the system!")
     }
 
     async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue)> {
-        let (device, queue) = adapter
+        log::trace!("WGPU Adapter Features: {:#?}", adapter.features());
+
+        adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
-                    label: None,
+                    features: (Self::optional_features() & adapter.features())
+                        | Self::required_features(),
+                    limits: Self::required_limits(adapter),
+                    label: Some("Render Device"),
                 },
                 None,
             )
             .await
-            .context("Failed to request a device!")?;
-        Ok((device, queue))
+            .context("Failed to request a device!")
     }
 
     pub fn load_world(&mut self, world: &World) -> Result<()> {

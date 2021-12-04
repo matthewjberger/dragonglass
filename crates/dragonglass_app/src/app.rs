@@ -239,6 +239,7 @@ fn run_loop(
             application.render(|context| runner.update_gui(context))?;
         }
         // FIXME window events can be grouped
+        // FIXME Add wasm window support based on wgpu example framework
         Event::WindowEvent {
             event: WindowEvent::Resized(physical_size),
             window_id,

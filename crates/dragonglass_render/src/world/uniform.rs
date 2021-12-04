@@ -1,7 +1,9 @@
 use dragonglass_world::Vertex;
 use nalgebra_glm as glm;
-use std::mem::size_of;
-use wgpu::{util::DeviceExt, BufferAddress, Queue};
+use std::{mem::size_of, num::NonZeroU32};
+use wgpu::{util::DeviceExt, BufferAddress, Queue, TextureView};
+
+use super::texture::Texture;
 
 pub(crate) struct Geometry {
     pub vertex_buffer: wgpu::Buffer,
@@ -240,4 +242,67 @@ impl DynamicUniformBinding {
 #[derive(Default, Copy, Clone, Debug, bytemuck::Zeroable)]
 pub(crate) struct DynamicUniform {
     pub model: glm::Mat4,
+}
+
+pub(crate) struct TextureBinding {
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub bind_groups: Vec<wgpu::BindGroup>,
+}
+
+impl TextureBinding {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler {
+                        comparison: false,
+                        filtering: true,
+                    },
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        });
+
+        Self {
+            bind_group_layout,
+            bind_groups: Vec::new(),
+        }
+    }
+
+    pub fn clear_textures(&mut self) {
+        self.bind_groups.clear()
+    }
+
+    pub fn upload_textures(&mut self, device: &wgpu::Device, textures: &[Texture], offset: usize) {
+        textures.iter().skip(offset).for_each(|texture| {
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                    },
+                ],
+                label: Some("texture_bind_group"),
+            });
+            self.bind_groups.push(bind_group)
+        })
+    }
 }
