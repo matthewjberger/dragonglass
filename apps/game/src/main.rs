@@ -132,7 +132,9 @@ impl ApplicationRunner for Game {
                 .context("")?
                 .add_component(RigidBody::new(handle));
 
-            add_cylinder_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
+            application
+                .world
+                .add_cylinder_collider(*entity, 1.0, 0.5, PLAYER_COLLISION_GROUP)?;
         }
 
         Ok(())
@@ -175,26 +177,6 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     )
-}
-
-fn add_cylinder_collider(
-    application: &mut Application,
-    entity: Entity,
-    collision_groups: InteractionGroups,
-) -> Result<()> {
-    let mut entry = application
-        .world
-        .ecs
-        .entry_mut(entity)
-        .context("entity not found")?;
-    let rigid_body = entry.get_component_mut::<RigidBody>()?;
-    let (half_height, radius) = (1.0, 0.5);
-    let collider = ColliderBuilder::cylinder(half_height, radius)
-        .collision_groups(collision_groups)
-        .build();
-    let collider_handle = application.world.physics.colliders.insert(collider);
-    rigid_body.colliders.push(collider_handle);
-    Ok(())
 }
 
 fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -> Result<()> {

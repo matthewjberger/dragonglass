@@ -370,6 +370,32 @@ impl World {
         Ok(joint_matrices)
     }
 
+    pub fn add_cylinder_collider(
+        &mut self,
+        entity: Entity,
+        half_height: f32,
+        radius: f32,
+        collision_groups: InteractionGroups,
+    ) -> Result<()> {
+        let collider = ColliderBuilder::cylinder(half_height, radius)
+            .collision_groups(collision_groups)
+            .build();
+
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+
+        self.physics.colliders.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut self.physics.bodies,
+        );
+
+        Ok(())
+    }
+
     pub fn add_trimesh_collider(
         &mut self,
         entity: Entity,
