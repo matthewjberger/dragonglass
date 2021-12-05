@@ -200,6 +200,7 @@ impl World {
     }
 
     pub fn clear(&mut self) -> Result<()> {
+        self.physics = WorldPhysics::new();
         self.ecs.clear();
         self.scene.graphs.clear();
         self.textures.clear();
@@ -379,6 +380,14 @@ impl World {
         let transform = self.entity_global_transform(entity)?;
         let mesh = &self.geometry.meshes[&mesh.name];
 
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+
+        let rigid_body = self.physics.bodies.get_mut(rigid_body_handle).context("Failed to get rigid body handle from physics world. The rigid body handle on the entity may no longer exist in the physics world.")?;
+
         for primitive in mesh.primitives.iter() {
             let vertices = self.geometry.vertices
                 [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
@@ -401,7 +410,11 @@ impl World {
             let collider = ColliderBuilder::trimesh(vertices, indices)
                 .collision_groups(collision_groups)
                 .build();
-            self.physics.colliders.insert(collider);
+            self.physics.colliders.insert_with_parent(
+                collider,
+                rigid_body_handle,
+                &mut self.physics.bodies,
+            );
         }
         Ok(())
     }
@@ -503,7 +516,9 @@ impl World {
         let mut picked_entity = None;
         if let Some((handle, _)) = hit {
             let collider = &self.physics.colliders[handle];
-            let rigid_body_handle = collider.parent().unwrap();
+            let rigid_body_handle = collider
+                .parent()
+                .context("Failed to get a collider's parent!")?;
             let mut query = <(Entity, &RigidBody)>::query();
             for (entity, rigid_body) in query.iter(&self.ecs) {
                 if rigid_body.handle == rigid_body_handle {

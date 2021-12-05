@@ -5,7 +5,9 @@ use crate::{
 use anyhow::Result;
 use dragonglass_gui::egui::CtxRef;
 use dragonglass_render::Renderer;
-use dragonglass_world::{load_gltf, SdfFont, World};
+use dragonglass_world::{
+    load_gltf, rapier3d::prelude::InteractionGroups, Entity, MouseRayConfiguration, SdfFont, World,
+};
 use image::io::Reader;
 use log::error;
 use nalgebra_glm as glm;
@@ -111,6 +113,28 @@ impl Application {
             &self.world,
             action,
         )
+    }
+
+    pub fn pick_object(
+        &mut self,
+        interact_distance: f32,
+        groups: InteractionGroups,
+    ) -> Result<Option<Entity>> {
+        let aspect_ratio = self.system.aspect_ratio();
+
+        let (projection, view) = self.world.active_camera_matrices(aspect_ratio)?;
+
+        let mouse_ray_configuration = MouseRayConfiguration {
+            viewport_width: self.system.window_dimensions[0] as _,
+            viewport_height: self.system.window_dimensions[1] as _,
+            projection_matrix: projection,
+            view_matrix: view,
+            mouse_position: self.input.mouse.position,
+            invert_y: false,
+        };
+
+        self.world
+            .pick_object(&mouse_ray_configuration, interact_distance, groups)
     }
 }
 

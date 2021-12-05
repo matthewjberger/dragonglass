@@ -2,7 +2,12 @@ use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     gui::egui,
-    world::{load_gltf, World},
+    world::{
+        legion::IntoQuery,
+        load_gltf,
+        rapier3d::prelude::{InteractionGroups, RigidBodyType},
+        Entity, MeshRender, World,
+    },
 };
 use log::{info, warn};
 use std::path::{Path, PathBuf};
@@ -130,20 +135,19 @@ impl ApplicationRunner for Editor {
             }
         }
 
-        // TODO: Add trimesh colliders for 3D picking
-        // let mut query = <(Entity, &MeshRender)>::query();
-        // let entities = query
-        //     .iter(&mut application.world.ecs)
-        //     .map(|(e, _)| *e)
-        //     .collect::<Vec<_>>();
-        // for entity in entities.into_iter() {
-        //     application
-        //         .world
-        //         .add_rigid_body(entity, RigidBodyType::Static)?;
-        //     application
-        //         .world
-        //         .add_trimesh_collider(entity, InteractionGroups::all())?;
-        // }
+        let mut query = <(Entity, &MeshRender)>::query();
+        let entities = query
+            .iter(&mut application.world.ecs)
+            .map(|(e, _)| *e)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            application
+                .world
+                .add_rigid_body(entity, RigidBodyType::Static)?;
+            application
+                .world
+                .add_trimesh_collider(entity, InteractionGroups::all())?;
+        }
 
         Ok(())
     }
@@ -151,19 +155,21 @@ impl ApplicationRunner for Editor {
     fn on_mouse(
         &mut self,
         application: &mut Application,
-        _button: MouseButton,
-        _state: ElementState,
+        button: MouseButton,
+        state: ElementState,
     ) -> Result<()> {
         if !application.input.allowed {
             return Ok(());
         }
 
-        // TODO: Allow mouse picking
-        // if (MouseButton::Left, ElementState::Pressed) == (button, state) {
-        //     if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
-        //         log::info!("Picked entity: {:?}", entity);
-        //     }
-        // }
+        if (MouseButton::Left, ElementState::Pressed) == (button, state) {
+            let interact_distance = f32::MAX;
+            if let Some(entity) =
+                application.pick_object(interact_distance, InteractionGroups::all())?
+            {
+                log::info!("Picked entity: {:?}", entity);
+            }
+        }
 
         Ok(())
     }
