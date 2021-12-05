@@ -121,12 +121,7 @@ impl ApplicationRunner for Game {
         if let Some(entity) = self.player.as_ref() {
             activate_first_person(application, *entity)?;
             let rigid_body = RigidBodyBuilder::new(RigidBodyType::Dynamic)
-                // FIXME NOW
-                // .translation(
-                //     transform.translation.x,
-                //     transform.translation.y,
-                //     transform.translation.z,
-                // )
+                .translation(transform.translation)
                 .lock_rotations()
                 .build();
             let handle = application.world.physics.bodies.insert(rigid_body);
@@ -192,17 +187,13 @@ fn add_cylinder_collider(
         .ecs
         .entry_mut(entity)
         .context("entity not found")?;
-    let _rigid_body = entry.get_component_mut::<RigidBody>()?;
+    let rigid_body = entry.get_component_mut::<RigidBody>()?;
     let (half_height, radius) = (1.0, 0.5);
-    let _collider = ColliderBuilder::cylinder(half_height, radius)
+    let collider = ColliderBuilder::cylinder(half_height, radius)
         .collision_groups(collision_groups)
         .build();
-    // let collider_handle = application.world.physics.colliders.insert(
-    //     collider,
-    //     rigid_body.handle,
-    //     &mut application.world.physics.bodies,
-    // );
-    // rigid_body.colliders.push(collider_handle);
+    let collider_handle = application.world.physics.colliders.insert(collider);
+    rigid_body.colliders.push(collider_handle);
     Ok(())
 }
 
