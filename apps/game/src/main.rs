@@ -9,7 +9,7 @@ use dragonglass::{
 use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::{RigidBodyBuilder, RigidBodyType},
-    geometry::{ColliderBuilder, InteractionGroups},
+    geometry::InteractionGroups,
 };
 use winit::event::{ElementState, VirtualKeyCode};
 
@@ -140,12 +140,14 @@ impl ApplicationRunner for Game {
         Ok(())
     }
 
-    fn update(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
+    fn update_before_app(&mut self, application: &mut dragonglass::app::Application) -> Result<()> {
         if application.input.is_key_pressed(VirtualKeyCode::Escape) {
             application.system.exit_requested = true;
         }
+        Ok(())
+    }
 
-        sync_all_rigid_bodies(application);
+    fn update_after_app(&mut self, application: &mut Application) -> Result<()> {
         if let Some(player) = self.player.as_ref() {
             self.camera.update(application, *player)?;
             update_player(application, *player)?;
@@ -179,50 +181,6 @@ fn main() -> Result<()> {
     )
 }
 
-fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -> Result<()> {
-    let entry = application.world.ecs.entry_ref(entity)?;
-    let rigid_body = entry.get_component::<RigidBody>()?;
-    let transform = entry.get_component::<Transform>()?;
-    if let Some(body) = application.world.physics.bodies.get_mut(rigid_body.handle) {
-        let mut position = body.position().clone();
-        position.translation.vector = transform.translation;
-        body.set_position(position, true);
-    }
-    Ok(())
-}
-
-fn sync_transform_to_rigid_body(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application
-        .world
-        .ecs
-        .entry_ref(entity)?
-        .get_component::<RigidBody>()?
-        .handle;
-    let mut entry = application.world.ecs.entry(entity).context("")?;
-    let transform = entry.get_component_mut::<Transform>()?;
-    if let Some(body) = application.world.physics.bodies.get(rigid_body_handle) {
-        let position = body.position();
-        transform.translation = position.translation.vector;
-        transform.rotation = *position.rotation.quaternion();
-    }
-    if let Some(body) = application.world.physics.bodies.get_mut(rigid_body_handle) {
-        body.wake_up(true);
-    }
-    Ok(())
-}
-
-fn sync_all_rigid_bodies(application: &mut Application) {
-    // Sync the render transforms with the physics rigid bodies
-    let mut query = <(&RigidBody, &mut Transform)>::query();
-    for (rigid_body, transform) in query.iter_mut(&mut application.world.ecs) {
-        if let Some(body) = application.world.physics.bodies.get(rigid_body.handle) {
-            let position = body.position();
-            transform.translation = position.translation.vector;
-            transform.rotation = *position.rotation.quaternion();
-        }
-    }
-}
-
 fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
     let speed = 6.0 * application.system.delta_time as f32;
     {
@@ -248,7 +206,7 @@ fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
 
         transform.translation += translation;
     }
-    sync_rigid_body_to_transform(application, entity)?;
+    application.world.sync_rigid_body_to_transform(entity)?;
     Ok(())
 }
 
@@ -264,7 +222,7 @@ fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
         let impulse = jump_strength * glm::Vec3::y();
         rigid_body.apply_impulse(impulse, true);
     }
-    sync_transform_to_rigid_body(application, entity)?;
+    application.world.sync_transform_to_rigid_body(entity)?;
     Ok(())
 }
 

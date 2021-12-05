@@ -559,6 +559,7 @@ impl World {
 
     pub fn tick(&mut self, delta_time: f32) -> Result<()> {
         self.physics.update(delta_time);
+        self.sync_all_rigid_bodies();
         Ok(())
     }
 
@@ -585,6 +586,51 @@ impl World {
     pub fn load_hdr(&mut self, path: impl AsRef<Path>) -> Result<()> {
         self.hdr_textures.push(Texture::from_hdr(path)?);
         Ok(())
+    }
+
+    /// Sync the entity's physics rigid body with its transform
+    pub fn sync_rigid_body_to_transform(&mut self, entity: Entity) -> Result<()> {
+        let entry = self.ecs.entry_ref(entity)?;
+        let rigid_body = entry.get_component::<RigidBody>()?;
+        let transform = entry.get_component::<Transform>()?;
+        if let Some(body) = self.physics.bodies.get_mut(rigid_body.handle) {
+            let mut position = body.position().clone();
+            position.translation.vector = transform.translation;
+            body.set_position(position, true);
+        }
+        Ok(())
+    }
+
+    /// Sync the entity's transform with its physics rigid body
+    pub fn sync_transform_to_rigid_body(&mut self, entity: Entity) -> Result<()> {
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+        let mut entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+        let transform = entry.get_component_mut::<Transform>()?;
+        if let Some(body) = self.physics.bodies.get(rigid_body_handle) {
+            let position = body.position();
+            transform.translation = position.translation.vector;
+            transform.rotation = *position.rotation.quaternion();
+        }
+        if let Some(body) = self.physics.bodies.get_mut(rigid_body_handle) {
+            body.wake_up(true);
+        }
+        Ok(())
+    }
+
+    /// Sync the render transforms with the physics rigid bodies
+    pub fn sync_all_rigid_bodies(&mut self) {
+        let mut query = <(&RigidBody, &mut Transform)>::query();
+        for (rigid_body, transform) in query.iter_mut(&mut self.ecs) {
+            if let Some(body) = self.physics.bodies.get(rigid_body.handle) {
+                let position = body.position();
+                transform.translation = position.translation.vector;
+                transform.rotation = *position.rotation.quaternion();
+            }
+        }
     }
 }
 

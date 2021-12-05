@@ -148,7 +148,11 @@ pub trait ApplicationRunner {
         Ok(())
     }
 
-    fn update(&mut self, _application: &mut Application) -> Result<()> {
+    fn update_before_app(&mut self, _application: &mut Application) -> Result<()> {
+        Ok(())
+    }
+
+    fn update_after_app(&mut self, _application: &mut Application) -> Result<()> {
         Ok(())
     }
 
@@ -258,8 +262,9 @@ fn run_loop(
             }
         }
         Event::MainEventsCleared => {
-            runner.update(application)?;
+            runner.update_before_app(application)?;
             application.update()?;
+            runner.update_after_app(application)?;
             application.render(|context| runner.update_gui(context))?;
         }
         // FIXME window events can be grouped

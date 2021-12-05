@@ -67,7 +67,7 @@ impl ApplicationRunner for Editor {
         Ok(())
     }
 
-    fn update(&mut self, application: &mut Application) -> Result<()> {
+    fn update_before_app(&mut self, application: &mut Application) -> Result<()> {
         if application.input.is_key_pressed(VirtualKeyCode::Escape) {
             application.system.exit_requested = true;
         }
