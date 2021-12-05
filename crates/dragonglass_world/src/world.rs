@@ -412,8 +412,6 @@ impl World {
             .get_component::<RigidBody>()?
             .handle;
 
-        let rigid_body = self.physics.bodies.get_mut(rigid_body_handle).context("Failed to get rigid body handle from physics world. The rigid body handle on the entity may no longer exist in the physics world.")?;
-
         for primitive in mesh.primitives.iter() {
             let vertices = self.geometry.vertices
                 [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
