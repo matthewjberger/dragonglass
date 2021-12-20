@@ -12,4 +12,4 @@ nalgebra = "0.29.0"
 nalgebra-glm = "0.15.0"
 pollster = "0.2.4"
 rapier3d = { version = "0.11.1", features = ["serde-serialize", "wasm-bindgen"] }
-winit = { version = "0.25.0", features=["web-sys"] }
+winit = "0.26.0"
