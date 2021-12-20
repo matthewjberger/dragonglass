@@ -1,6 +1,5 @@
 // Vertex shader
 
-[[block]]
 struct Uniform {
     view: mat4x4<f32>;
     projection: mat4x4<f32>;
@@ -8,7 +7,6 @@ struct Uniform {
 [[group(1), binding(0)]]
 var<uniform> ubo: Uniform;
 
-[[block]]
 struct DynamicUniform {
     model: mat4x4<f32>;
 };
