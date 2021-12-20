@@ -223,6 +223,7 @@ impl Render {
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            multiview: None,
             label: None,
             layout: Some(&layout),
             vertex: wgpu::VertexState {
@@ -254,6 +255,7 @@ impl Render {
         });
 
         let blend_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            multiview: None,
             label: None,
             layout: Some(&layout),
             vertex: wgpu::VertexState {

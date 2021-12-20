@@ -16,6 +16,6 @@ log = "0.4.14"
 nalgebra-glm = "0.15.0"
 petgraph = "0.6.0"
 rapier3d = { version = "0.11.1", features = ["serde-serialize", "wasm-bindgen"] }
-raw-window-handle = "0.3.3"
-winit = { version = "0.25.0", features=["web-sys"] }
-wgpu = { version = "0.11.0", features=["webgl"] }
+raw-window-handle = "0.4.2"
+winit = "0.26.0"
+wgpu = { version = "0.12.0", features=["webgl"] }

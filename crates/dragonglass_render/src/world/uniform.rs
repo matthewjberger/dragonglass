@@ -1,7 +1,7 @@
 use dragonglass_world::Vertex;
 use nalgebra_glm as glm;
-use std::{mem::size_of, num::NonZeroU32};
-use wgpu::{util::DeviceExt, BufferAddress, Queue, TextureView};
+use std::mem::size_of;
+use wgpu::{util::DeviceExt, BufferAddress, Queue};
 
 use super::texture::Texture;
 
@@ -266,10 +266,7 @@ impl TextureBinding {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler {
-                        comparison: false,
-                        filtering: true,
-                    },
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
             ],

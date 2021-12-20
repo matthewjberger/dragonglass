@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.51"
 egui = "0.15.0"
-egui_wgpu_backend = "0.14.0"
-egui_winit_platform = "0.11.0"
+egui_wgpu_backend = "0.15.0"
+egui_winit_platform = "0.12.0"
 epi = "0.15.0"
-wgpu = { version = "0.11.0", features=["webgl"] }
-winit = {version = "0.25.0", features=["web-sys"]}
+wgpu = { version = "0.12.0", features=["webgl"] }
+winit = "0.26.0"
