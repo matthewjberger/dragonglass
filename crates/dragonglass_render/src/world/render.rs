@@ -115,6 +115,15 @@ impl WorldRender {
         self.render.bind_ubo(render_pass);
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
+            match alpha_mode {
+                /* Disable blending*/
+                AlphaMode::Opaque | AlphaMode::Mask => {
+                    render_pass.set_pipeline(&self.render.pipeline)
+                }
+                /* Enable blending */
+                AlphaMode::Blend => render_pass.set_pipeline(&self.render.blend_pipeline),
+            }
+
             let mut ubo_offset = 0;
             for graph in world.scene.graphs.iter() {
                 graph.walk(|node_index| {
@@ -138,15 +147,6 @@ impl WorldRender {
                     };
 
                     self.render.bind_dynamic_ubo(render_pass, ubo_offset);
-
-                    match alpha_mode {
-                        /* Disable blending*/
-                        AlphaMode::Opaque | AlphaMode::Mask => {
-                            render_pass.set_pipeline(&self.render.pipeline)
-                        }
-                        /* Enable blending */
-                        AlphaMode::Blend => render_pass.set_pipeline(&self.render.blend_pipeline),
-                    }
 
                     for primitive in mesh.primitives.iter() {
                         let mut material = &Material::default();
