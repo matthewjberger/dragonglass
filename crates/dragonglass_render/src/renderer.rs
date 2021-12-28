@@ -193,6 +193,9 @@ impl Renderer {
                 label: Some("Render Encoder"),
             });
 
+        encoder.push_debug_group("Main Passes");
+
+        encoder.insert_debug_marker("Render Entities");
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -227,6 +230,7 @@ impl Renderer {
                 .expect("Failed to render world!");
         }
 
+        encoder.insert_debug_marker("Render GUI");
         self.gui
             .render(
                 &self.device,
