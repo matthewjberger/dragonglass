@@ -49,13 +49,15 @@ impl Texture {
             depth_or_array_layers: 1,
         };
 
+        let format = Self::map_texture_format(world_texture.format);
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: Self::map_texture_format(world_texture.format),
+            format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         });
 
@@ -75,7 +77,16 @@ impl Texture {
             size,
         );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("WorldTextureView"),
+            format: Some(format),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            aspect: wgpu::TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
 
         let sampler = device.create_sampler(&Self::map_sampler(&world_texture.sampler));
 
