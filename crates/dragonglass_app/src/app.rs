@@ -3,7 +3,6 @@ use crate::{
     state::{Input, System},
 };
 use anyhow::Result;
-use dragonglass_gui::egui::CtxRef;
 use dragonglass_render::Renderer;
 use dragonglass_world::{
     load_gltf, rapier3d::prelude::InteractionGroups, Entity, MouseRayConfiguration, SdfFont, World,
@@ -106,13 +105,9 @@ impl Application {
         self.world.tick(self.system.delta_time as f32)
     }
 
-    pub fn render(&mut self, action: impl FnMut(CtxRef) -> Result<()>) -> Result<()> {
-        self.renderer.render(
-            &self.window,
-            &self.system.window_dimensions,
-            &self.world,
-            action,
-        )
+    pub fn render(&mut self) -> Result<()> {
+        self.renderer
+            .render(&self.system.window_dimensions, &self.world)
     }
 
     pub fn pick_object(
@@ -140,11 +135,6 @@ impl Application {
 
 pub trait ApplicationRunner {
     fn initialize(&mut self, _application: &mut Application) -> Result<()> {
-        Ok(())
-    }
-
-    // TODO: This should be passed the frame and the application struct (or whatever else will provide system/input/etc access)
-    fn update_gui(&mut self, _context: CtxRef) -> Result<()> {
         Ok(())
     }
 
@@ -239,17 +229,7 @@ fn run_loop(
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
-    application.renderer.gui.handle_event(&event);
-
     application.system.handle_event(&event);
-
-    application.input.allowed = {
-        let context = application.renderer.gui.context();
-        let using_gui = context.wants_pointer_input()
-            || context.wants_keyboard_input()
-            || context.is_using_pointer();
-        !using_gui
-    };
 
     application
         .input
@@ -265,7 +245,7 @@ fn run_loop(
             runner.update_before_app(application)?;
             application.update()?;
             runner.update_after_app(application)?;
-            application.render(|context| runner.update_gui(context))?;
+            application.render()?;
         }
         // FIXME window events can be grouped
         // FIXME Add wasm window support based on wgpu example framework
