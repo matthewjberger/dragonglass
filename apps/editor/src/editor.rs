@@ -177,16 +177,34 @@ impl ApplicationRunner for Editor {
     fn update_gui(&mut self, context: dragonglass::gui::egui::CtxRef) -> Result<()> {
         let ctx = &context;
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                egui::menu::menu(ui, "File", |ui| if ui.button("Open").clicked() {});
+        egui::TopBottomPanel::top("top_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    egui::menu::menu(ui, "File", |ui| if ui.button("Open").clicked() {});
+                });
             });
-        });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
-        });
+        egui::SidePanel::left("left_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Left Panel");
+                ui.allocate_space(ui.available_size());
+            });
+
+        egui::SidePanel::right("right_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Right Panel");
+                ui.allocate_space(ui.available_size());
+            });
+
+        egui::TopBottomPanel::bottom("bottom_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Bottom Panel");
+                ui.allocate_space(ui.available_size());
+            });
 
         Ok(())
     }
