@@ -10,7 +10,7 @@ use dragonglass::{
         Entity, MeshRender, World,
     },
 };
-use log::{info, warn};
+use log::{error, info, warn};
 use std::path::{Path, PathBuf};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
@@ -38,6 +38,45 @@ impl Editor {
             Err(error) => {
                 warn!("Failed to load gltf world: {}", error);
             }
+        }
+
+        Ok(())
+    }
+
+    fn load_world_from_file(&self, application: &mut Application, path: &PathBuf) -> Result<()> {
+        let raw_path = match path.to_str() {
+            Some(raw_path) => raw_path,
+            None => return Ok(()),
+        };
+
+        if let Some(extension) = path.extension() {
+            match extension.to_str() {
+                Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
+                Some("hdr") => Self::load_hdr(raw_path, application)?,
+                Some("dga") => {
+                    application.world = World::load(raw_path)?;
+                    application.renderer.load_world(&application.world)?;
+                    log::info!("Loaded world!");
+                }
+                _ => warn!(
+                    "File extension {:#?} is not a valid '.dga', '.glb', '.gltf', or '.hdr' extension",
+                    extension
+                ),
+            }
+        }
+
+        let mut query = <(Entity, &MeshRender)>::query();
+        let entities = query
+            .iter(&mut application.world.ecs)
+            .map(|(e, _)| *e)
+            .collect::<Vec<_>>();
+        for entity in entities.into_iter() {
+            application
+                .world
+                .add_rigid_body(entity, RigidBodyType::Static)?;
+            application
+                .world
+                .add_trimesh_collider(entity, InteractionGroups::all())?;
         }
 
         Ok(())
@@ -75,7 +114,31 @@ impl ApplicationRunner for Editor {
             .resizable(true)
             .show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
-                    egui::menu::menu(ui, "File", |ui| if ui.button("Open").clicked() {});
+                    egui::menu::menu(ui, "File", |ui| {
+                        if ui.button("Open").clicked() {
+                            let result = nfd::open_file_dialog(None, None).unwrap_or_else(|e| {
+                                log::error!("Failed to open file!");
+                                nfd::Response::Cancel
+                            });
+
+                            match result {
+                                nfd::Response::Okay(file_path) => {
+                                    self.load_world_from_file(
+                                        application,
+                                        &PathBuf::from(file_path),
+                                    )
+                                    .expect("Failed to load file!");
+                                }
+                                nfd::Response::OkayMultiple(files) => {
+                                    info!("Files {:?}", files)
+                                }
+                                nfd::Response::Cancel => println!("User canceled"),
+                            }
+                        }
+                        if ui.button("Quit").clicked() {
+                            application.system.exit_requested = true;
+                        }
+                    });
                 });
             });
 
@@ -189,42 +252,7 @@ impl ApplicationRunner for Editor {
     }
 
     fn on_file_dropped(&mut self, application: &mut Application, path: &PathBuf) -> Result<()> {
-        let raw_path = match path.to_str() {
-            Some(raw_path) => raw_path,
-            None => return Ok(()),
-        };
-
-        if let Some(extension) = path.extension() {
-            match extension.to_str() {
-                Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
-                Some("hdr") => Self::load_hdr(raw_path, application)?,
-                Some("dga") => {
-                    application.world = World::load(raw_path)?;
-                    application.renderer.load_world(&application.world)?;
-                    log::info!("Loaded world!");
-                }
-                _ => warn!(
-                    "File extension {:#?} is not a valid '.dga', '.glb', '.gltf', or '.hdr' extension",
-                    extension
-                ),
-            }
-        }
-
-        let mut query = <(Entity, &MeshRender)>::query();
-        let entities = query
-            .iter(&mut application.world.ecs)
-            .map(|(e, _)| *e)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            application
-                .world
-                .add_rigid_body(entity, RigidBodyType::Static)?;
-            application
-                .world
-                .add_trimesh_collider(entity, InteractionGroups::all())?;
-        }
-
-        Ok(())
+        self.load_world_from_file(application, path)
     }
 
     fn on_mouse(
