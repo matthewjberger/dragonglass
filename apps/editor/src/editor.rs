@@ -10,7 +10,7 @@ use dragonglass::{
         Entity, MeshRender, World,
     },
 };
-use log::{error, info, warn};
+use log::{info, warn};
 use std::path::{Path, PathBuf};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
@@ -115,28 +115,11 @@ impl ApplicationRunner for Editor {
             .show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
                     egui::menu::menu(ui, "File", |ui| {
-                        // TODO: Replace use of NFD here with rusty file dialog
-                        //       https://github.com/PolyMeilex/rfd
                         if ui.button("Open").clicked() {
-                            let result = nfd::open_file_dialog(None, None).unwrap_or_else(|e| {
-                                log::error!("Failed to open file!");
-                                nfd::Response::Cancel
-                            });
-
-                            match result {
-                                nfd::Response::Okay(file_path) => {
-                                    self.load_world_from_file(
-                                        application,
-                                        &PathBuf::from(file_path),
-                                    )
-                                    .expect("Failed to load file!");
-                                }
-                                nfd::Response::OkayMultiple(files) => {
-                                    info!("Files {:?}", files)
-                                }
-                                nfd::Response::Cancel => println!("User canceled"),
-                            }
+                            // TODO: use rusty file dialog
+                            //       https://github.com/PolyMeilex/rfd
                         }
+
                         if ui.button("Quit").clicked() {
                             application.system.exit_requested = true;
                         }
@@ -151,7 +134,7 @@ impl ApplicationRunner for Editor {
 
                 // TODO: We need a recursive function to fill this out
                 let mut offset = 0;
-                for graph in application.world.scene.graphs.iter() {
+                for _graph in application.world.scene.graphs.iter() {
                     let collapsing = CollapsingHeader::new(format!("Scene Graph {}", offset))
                         .selectable(true)
                         .selected(false);
