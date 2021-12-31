@@ -32,10 +32,6 @@ impl Input {
     }
 
     pub fn handle_event<T>(&mut self, event: &Event<T>, window_center: glm::Vec2) {
-        if !self.allowed {
-            return;
-        }
-
         if let Event::WindowEvent { event, .. } = event {
             if let WindowEvent::KeyboardInput {
                 input:

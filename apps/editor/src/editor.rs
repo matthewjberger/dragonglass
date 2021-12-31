@@ -2,6 +2,7 @@ use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     gui::egui::{self, CollapsingHeader, CtxRef, Id, LayerId, Ui},
+    render::Viewport,
     world::{
         legion::IntoQuery,
         load_gltf,
@@ -120,14 +121,23 @@ impl ApplicationRunner for Editor {
             });
 
         // Calculate the rect needed for rendering
-        let panel_ui = Ui::new(
+        let viewport = Ui::new(
             ctx.clone(),
             LayerId::background(),
             Id::new("central_panel"),
             ctx.available_rect(),
             ctx.input().screen_rect(),
-        );
-        log::info!("{:#?}", panel_ui.max_rect());
+        )
+        .max_rect();
+
+        application.renderer.set_viewport(Viewport {
+            x: viewport.min.x,
+            y: viewport.min.y,
+            width: viewport.max.x - viewport.min.x,
+            height: viewport.max.y - viewport.min.y,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        });
 
         Ok(())
     }

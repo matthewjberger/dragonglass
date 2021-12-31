@@ -9,7 +9,23 @@ use raw_window_handle::HasRawWindowHandle;
 
 use crate::world::{render::WorldRender, texture::Texture};
 
-#[allow(dead_code)]
+#[derive(Default)]
+pub struct Viewport {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub min_depth: f32,
+    pub max_depth: f32,
+}
+
+impl Viewport {
+    pub fn aspect_ratio(&self) -> f32 {
+        let height = if self.height > 0.0 { self.height } else { 1.0 };
+        self.width / height
+    }
+}
+
 pub struct Renderer {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -19,6 +35,7 @@ pub struct Renderer {
     dimensions: [u32; 2],
     depth_texture: Texture,
     gui_render: GuiRenderWgpu,
+    viewport: Viewport,
 }
 
 impl Renderer {
@@ -59,6 +76,15 @@ impl Renderer {
 
         let gui_render = GuiRenderWgpu::new(&device, config.format, 1);
 
+        let viewport = Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: dimensions[0] as _,
+            height: dimensions[1] as _,
+            min_depth: 0.0,
+            max_depth: 0.0,
+        };
+
         Ok(Self {
             surface,
             device,
@@ -68,7 +94,12 @@ impl Renderer {
             dimensions: *dimensions,
             depth_texture,
             gui_render,
+            viewport,
         })
+    }
+
+    pub fn set_viewport(&mut self, viewport: Viewport) {
+        self.viewport = viewport;
     }
 
     fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
@@ -142,13 +173,12 @@ impl Renderer {
 
     pub fn render(
         &mut self,
-        dimensions: &[u32; 2],
         world: &World,
         context: CtxRef,
         ui_meshes: &[ClippedMesh],
         screen_descriptor: ScreenDescriptor,
     ) -> Result<()> {
-        match self.render_frame(dimensions, world, context, ui_meshes, screen_descriptor) {
+        match self.render_frame(world, context, ui_meshes, screen_descriptor) {
             Ok(_) => {}
             // Recreate the swapchain if lost
             Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
@@ -162,19 +192,11 @@ impl Renderer {
 
     fn render_frame(
         &mut self,
-        dimensions: &[u32; 2],
         world: &World,
         context: CtxRef,
         ui_meshes: &[ClippedMesh],
         screen_descriptor: ScreenDescriptor,
     ) -> Result<(), wgpu::SurfaceError> {
-        let height = if dimensions[1] > 0 {
-            dimensions[1] as f32
-        } else {
-            1.0
-        };
-        let aspect_ratio = dimensions[0] as f32 / height as f32;
-
         let frame = self.surface.get_current_texture()?;
 
         let view = frame
@@ -216,8 +238,17 @@ impl Renderer {
                 }),
             });
 
+            render_pass.set_viewport(
+                self.viewport.x,
+                self.viewport.y,
+                self.viewport.width,
+                self.viewport.height,
+                self.viewport.min_depth,
+                self.viewport.max_depth,
+            );
+
             self.world_render
-                .update(&self.queue, world, aspect_ratio)
+                .update(&self.queue, world, self.viewport.aspect_ratio())
                 .expect("Failed to update world render!");
             self.world_render
                 .render(&mut render_pass, world)

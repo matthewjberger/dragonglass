@@ -116,13 +116,8 @@ impl Application {
             height: size.height,
             scale_factor: self.window.scale_factor() as _,
         };
-        self.renderer.render(
-            &self.system.window_dimensions,
-            &self.world,
-            context,
-            ui_meshes,
-            screen_descriptor,
-        )
+        self.renderer
+            .render(&self.world, context, ui_meshes, screen_descriptor)
     }
 
     pub fn pick_object(
@@ -253,20 +248,18 @@ fn run_loop(
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
-    gui.handle_event(&event);
     application.system.handle_event(&event);
 
-    application.input.allowed = {
-        let context = gui.context();
-        let using_gui = context.wants_pointer_input()
-            || context.wants_keyboard_input()
-            || context.is_using_pointer();
-        !using_gui
-    };
+    gui.handle_event(&event);
 
+    let context = gui.context();
+    let using_gui = context.wants_pointer_input()
+        || context.wants_keyboard_input()
+        || context.is_using_pointer();
     application
         .input
         .handle_event(&event, application.system.window_center());
+    application.input.allowed = !using_gui;
 
     match event {
         Event::NewEvents(_cause) => {
