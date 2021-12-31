@@ -115,6 +115,8 @@ impl ApplicationRunner for Editor {
             .show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
                     egui::menu::menu(ui, "File", |ui| {
+                        // TODO: Replace use of NFD here with rusty file dialog
+                        //       https://github.com/PolyMeilex/rfd
                         if ui.button("Open").clicked() {
                             let result = nfd::open_file_dialog(None, None).unwrap_or_else(|e| {
                                 log::error!("Failed to open file!");
