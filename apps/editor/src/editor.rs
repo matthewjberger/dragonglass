@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
+    gui::egui::{self, CtxRef},
     world::{
         legion::IntoQuery,
         load_gltf,
@@ -63,6 +64,41 @@ impl Editor {
 impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
         application.world.add_default_light()?;
+        Ok(())
+    }
+
+    fn update_gui(&mut self, ctx: CtxRef, _application: &mut Application) -> Result<()> {
+        let ctx = &ctx;
+
+        egui::TopBottomPanel::top("top_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    egui::menu::menu(ui, "File", |ui| if ui.button("Open").clicked() {});
+                });
+            });
+
+        egui::SidePanel::left("left_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Left Panel");
+                ui.allocate_space(ui.available_size());
+            });
+
+        egui::SidePanel::right("right_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Right Panel");
+                ui.allocate_space(ui.available_size());
+            });
+
+        egui::TopBottomPanel::bottom("bottom_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Bottom Panel");
+                ui.allocate_space(ui.available_size());
+            });
+
         Ok(())
     }
 

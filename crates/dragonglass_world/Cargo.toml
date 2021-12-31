@@ -5,10 +5,10 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.44"
+anyhow = "1.0.52"
 bincode = "1.3.3"
 bmfont = { version = "0.3.3", features = ["serde"] }
-bytemuck = { version = "1.7.2", features = ["derive"] }
+bytemuck = { version = "1.7.3", features = ["derive"] }
 gltf = { version = "0.16.0", features = ["names", "KHR_lights_punctual", "KHR_materials_unlit"] }
 image = "0.23.14"
 lazy_static = "1.4.0"
@@ -18,4 +18,4 @@ nalgebra = { version = "0.29.0", features = ["bytemuck"] }
 nalgebra-glm = { version = "0.15.0", features = ["serde-serialize"] }
 petgraph = { version = "0.6.0", features = ["serde-1"] }
 rapier3d = { version = "0.11.1", features = ["serde-serialize", "wasm-bindgen"] }
-serde = "1.0.130"
+serde = "1.0.132"

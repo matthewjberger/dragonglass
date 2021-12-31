@@ -1,4 +1,8 @@
 use anyhow::{Context, Result};
+use dragonglass_gui::{
+    egui::{ClippedMesh, CtxRef},
+    GuiRenderWgpu, ScreenDescriptor,
+};
 use dragonglass_world::World;
 use log::error;
 use raw_window_handle::HasRawWindowHandle;
@@ -14,6 +18,7 @@ pub struct Renderer {
     world_render: WorldRender,
     dimensions: [u32; 2],
     depth_texture: Texture,
+    gui_render: GuiRenderWgpu,
 }
 
 impl Renderer {
@@ -24,7 +29,7 @@ impl Renderer {
     pub async fn new(
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
-        scale_factor: f32,
+        gui_context: CtxRef,
     ) -> Result<Self> {
         let instance = wgpu::Instance::new(Self::backends());
 
@@ -53,6 +58,8 @@ impl Renderer {
 
         let world_render = WorldRender::new(&device, config.format)?;
 
+        let gui_render = GuiRenderWgpu::new(&device, config.format, 1, gui_context);
+
         Ok(Self {
             surface,
             device,
@@ -61,6 +68,7 @@ impl Renderer {
             world_render,
             dimensions: *dimensions,
             depth_texture,
+            gui_render,
         })
     }
 
@@ -133,8 +141,14 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self, dimensions: &[u32; 2], world: &World) -> Result<()> {
-        match self.render_frame(dimensions, world) {
+    pub fn render(
+        &mut self,
+        dimensions: &[u32; 2],
+        world: &World,
+        ui_meshes: &[ClippedMesh],
+        screen_descriptor: ScreenDescriptor,
+    ) -> Result<()> {
+        match self.render_frame(dimensions, world, ui_meshes, screen_descriptor) {
             Ok(_) => {}
             // Recreate the swapchain if lost
             Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
@@ -150,6 +164,8 @@ impl Renderer {
         &mut self,
         dimensions: &[u32; 2],
         world: &World,
+        ui_meshes: &[ClippedMesh],
+        screen_descriptor: ScreenDescriptor,
     ) -> Result<(), wgpu::SurfaceError> {
         let height = if dimensions[1] > 0 {
             dimensions[1] as f32
@@ -206,6 +222,18 @@ impl Renderer {
                 .render(&mut render_pass, world)
                 .expect("Failed to render world!");
         }
+
+        encoder.insert_debug_marker("Render GUI");
+        self.gui_render
+            .render(
+                &self.device,
+                &self.queue,
+                &screen_descriptor,
+                &mut encoder,
+                &view,
+                &ui_meshes,
+            )
+            .expect("Failed to execute gui render pass!");
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();

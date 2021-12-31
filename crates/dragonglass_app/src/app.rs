@@ -3,6 +3,10 @@ use crate::{
     state::{Input, System},
 };
 use anyhow::Result;
+use dragonglass_gui::{
+    egui::{ClippedMesh, CtxRef},
+    Gui, ScreenDescriptor,
+};
 use dragonglass_render::Renderer;
 use dragonglass_world::{
     load_gltf, rapier3d::prelude::InteractionGroups, Entity, MouseRayConfiguration, SdfFont, World,
@@ -29,8 +33,8 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            width: 800,
-            height: 600,
+            width: 1920,
+            height: 1080,
             is_fullscreen: false,
             title: "Dragonglass Application".to_string(),
             icon: None,
@@ -105,9 +109,19 @@ impl Application {
         self.world.tick(self.system.delta_time as f32)
     }
 
-    pub fn render(&mut self) -> Result<()> {
-        self.renderer
-            .render(&self.system.window_dimensions, &self.world)
+    pub fn render(&mut self, ui_meshes: &[ClippedMesh]) -> Result<()> {
+        let physical_size = self.window.outer_size();
+        let screen_descriptor = ScreenDescriptor {
+            physical_width: physical_size.width,
+            physical_height: physical_size.height,
+            scale_factor: self.window.scale_factor() as _,
+        };
+        self.renderer.render(
+            &self.system.window_dimensions,
+            &self.world,
+            ui_meshes,
+            screen_descriptor,
+        )
     }
 
     pub fn pick_object(
@@ -135,6 +149,10 @@ impl Application {
 
 pub trait ApplicationRunner {
     fn initialize(&mut self, _application: &mut Application) -> Result<()> {
+        Ok(())
+    }
+
+    fn update_gui(&mut self, _context: CtxRef, _application: &mut Application) -> Result<()> {
         Ok(())
     }
 
@@ -191,11 +209,15 @@ pub fn run_application(
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let renderer = pollster::block_on(Renderer::new(
-        &window,
-        &window_dimensions,
-        window.scale_factor() as _,
-    ))?;
+
+    let screen_descriptor = ScreenDescriptor {
+        physical_width: window_dimensions[0],
+        physical_height: window_dimensions[1],
+        scale_factor: window.scale_factor() as _,
+    };
+    let mut gui = Gui::new(screen_descriptor);
+
+    let renderer = pollster::block_on(Renderer::new(&window, &window_dimensions, gui.context()))?;
 
     let mut world = World::new()?;
 
@@ -204,7 +226,7 @@ pub fn run_application(
         SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
     );
 
-    let mut state = Application {
+    let mut application = Application {
         world,
         input: Input::default(),
         system: System::new(window_dimensions),
@@ -212,10 +234,10 @@ pub fn run_application(
         window,
     };
 
-    runner.initialize(&mut state)?;
+    runner.initialize(&mut application)?;
 
     event_loop.run(move |event, _, control_flow| {
-        if let Err(error) = run_loop(&mut runner, &mut state, event, control_flow) {
+        if let Err(error) = run_loop(&mut runner, &mut application, &mut gui, event, control_flow) {
             error!("Application Error: {}", error);
         }
     });
@@ -224,12 +246,22 @@ pub fn run_application(
 fn run_loop(
     runner: &mut impl ApplicationRunner,
     application: &mut Application,
+    gui: &mut Gui,
     event: Event<()>,
     control_flow: &mut ControlFlow,
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
+    gui.handle_event(&event);
     application.system.handle_event(&event);
+
+    application.input.allowed = {
+        let context = gui.context();
+        let using_gui = context.wants_pointer_input()
+            || context.wants_keyboard_input()
+            || context.is_using_pointer();
+        !using_gui
+    };
 
     application
         .input
@@ -245,10 +277,14 @@ fn run_loop(
             runner.update_before_app(application)?;
             application.update()?;
             runner.update_after_app(application)?;
-            application.render()?;
+
+            let _frame_data = gui.start_frame(application.window.scale_factor() as _);
+            runner.update_gui(gui.context(), application)?;
+            let ui_meshes = gui.end_frame(&application.window);
+
+            application.render(&ui_meshes)?;
         }
         // FIXME window events can be grouped
-        // FIXME Add wasm window support based on wgpu example framework
         Event::WindowEvent {
             event: WindowEvent::Resized(physical_size),
             window_id,

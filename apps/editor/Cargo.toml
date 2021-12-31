@@ -6,10 +6,10 @@ edition = "2018"
 default-run = "editor"
 
 [dependencies]
-anyhow = "1.0.44"
+anyhow = "1.0.52"
 dragonglass = { path = "../.." }
 log = "0.4.14"
 nalgebra = "0.29.0"
 nalgebra-glm = "0.15.0"
 winit = "0.26.0"
-structopt = "0.3.23"
+structopt = "0.3.25"
