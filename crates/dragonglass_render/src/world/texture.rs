@@ -10,33 +10,6 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float; // 1.
 
-    pub fn empty(device: &wgpu::Device) -> Self {
-        let size = wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        };
-
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Empty Texture"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-        });
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-
-        Self {
-            texture,
-            view,
-            sampler,
-        }
-    }
-
     pub fn from_world_texture(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -97,7 +70,9 @@ impl Texture {
         })
     }
 
-    fn map_texture_format(texture_format: dragonglass_world::TextureFormat) -> wgpu::TextureFormat {
+    fn map_texture_format(
+        _texture_format: dragonglass_world::TextureFormat,
+    ) -> wgpu::TextureFormat {
         // FIXME: Map texture formats
         wgpu::TextureFormat::Rgba8UnormSrgb
     }
