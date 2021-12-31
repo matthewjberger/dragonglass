@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    gui::egui::{self, CollapsingHeader, CtxRef},
+    gui::egui::{self, CollapsingHeader, CtxRef, Id, LayerId, Ui},
     world::{
         legion::IntoQuery,
         load_gltf,
@@ -118,6 +118,16 @@ impl ApplicationRunner for Editor {
                 ui.heading("Bottom Panel");
                 ui.allocate_space(ui.available_size());
             });
+
+        // Calculate the rect needed for rendering
+        let panel_ui = Ui::new(
+            ctx.clone(),
+            LayerId::background(),
+            Id::new("central_panel"),
+            ctx.available_rect(),
+            ctx.input().screen_rect(),
+        );
+        log::info!("{:#?}", panel_ui.max_rect());
 
         Ok(())
     }
