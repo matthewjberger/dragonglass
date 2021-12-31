@@ -29,7 +29,6 @@ impl Renderer {
     pub async fn new(
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
-        gui_context: CtxRef,
     ) -> Result<Self> {
         let instance = wgpu::Instance::new(Self::backends());
 
@@ -58,7 +57,7 @@ impl Renderer {
 
         let world_render = WorldRender::new(&device, config.format)?;
 
-        let gui_render = GuiRenderWgpu::new(&device, config.format, 1, gui_context);
+        let gui_render = GuiRenderWgpu::new(&device, config.format, 1);
 
         Ok(Self {
             surface,
@@ -145,10 +144,11 @@ impl Renderer {
         &mut self,
         dimensions: &[u32; 2],
         world: &World,
+        context: CtxRef,
         ui_meshes: &[ClippedMesh],
         screen_descriptor: ScreenDescriptor,
     ) -> Result<()> {
-        match self.render_frame(dimensions, world, ui_meshes, screen_descriptor) {
+        match self.render_frame(dimensions, world, context, ui_meshes, screen_descriptor) {
             Ok(_) => {}
             // Recreate the swapchain if lost
             Err(wgpu::SurfaceError::Lost) => self.resize(self.dimensions),
@@ -164,6 +164,7 @@ impl Renderer {
         &mut self,
         dimensions: &[u32; 2],
         world: &World,
+        context: CtxRef,
         ui_meshes: &[ClippedMesh],
         screen_descriptor: ScreenDescriptor,
     ) -> Result<(), wgpu::SurfaceError> {
@@ -226,6 +227,7 @@ impl Renderer {
         encoder.insert_debug_marker("Render GUI");
         self.gui_render
             .render(
+                context,
                 &self.device,
                 &self.queue,
                 &screen_descriptor,

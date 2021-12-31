@@ -9,16 +9,16 @@ use wgpu::CommandEncoder;
 use winit::{event::Event, window::Window};
 
 pub struct ScreenDescriptor {
-    pub physical_width: u32,
-    pub physical_height: u32,
+    pub width: u32,
+    pub height: u32,
     pub scale_factor: f32,
 }
 
 impl Into<egui_wgpu_backend::ScreenDescriptor> for &ScreenDescriptor {
     fn into(self) -> egui_wgpu_backend::ScreenDescriptor {
         egui_wgpu_backend::ScreenDescriptor {
-            physical_width: self.physical_width,
-            physical_height: self.physical_height,
+            physical_width: self.width,
+            physical_height: self.height,
             scale_factor: self.scale_factor,
         }
     }
@@ -41,8 +41,8 @@ pub struct Gui {
 impl Gui {
     pub fn new(screen_descriptor: ScreenDescriptor) -> Self {
         let platform = Platform::new(PlatformDescriptor {
-            physical_width: screen_descriptor.physical_width,
-            physical_height: screen_descriptor.physical_height,
+            physical_width: screen_descriptor.width,
+            physical_height: screen_descriptor.height,
             scale_factor: screen_descriptor.scale_factor as _,
             font_definitions: egui_wgpu_backend::egui::FontDefinitions::default(),
             style: Default::default(),
@@ -97,7 +97,6 @@ impl Gui {
 
 pub struct GuiRenderWgpu {
     pub renderpass: egui_wgpu_backend::RenderPass,
-    context: CtxRef,
 }
 
 impl GuiRenderWgpu {
@@ -105,16 +104,15 @@ impl GuiRenderWgpu {
         device: &wgpu::Device,
         output_format: wgpu::TextureFormat,
         msaa_samples: u32,
-        context: CtxRef,
     ) -> Self {
         Self {
             renderpass: RenderPass::new(device, output_format, msaa_samples),
-            context,
         }
     }
 
     pub fn render(
         &mut self,
+        context: CtxRef,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         screen_descriptor: &ScreenDescriptor,
@@ -123,7 +121,7 @@ impl GuiRenderWgpu {
         paint_jobs: &[ClippedMesh],
     ) -> Result<()> {
         self.renderpass
-            .update_texture(&device, &queue, &self.context.texture());
+            .update_texture(&device, &queue, &context.texture());
 
         self.renderpass.update_user_textures(&device, &queue);
 

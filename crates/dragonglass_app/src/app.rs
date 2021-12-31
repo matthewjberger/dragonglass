@@ -109,16 +109,17 @@ impl Application {
         self.world.tick(self.system.delta_time as f32)
     }
 
-    pub fn render(&mut self, ui_meshes: &[ClippedMesh]) -> Result<()> {
-        let physical_size = self.window.outer_size();
+    pub fn render(&mut self, context: CtxRef, ui_meshes: &[ClippedMesh]) -> Result<()> {
+        let size = self.window.inner_size();
         let screen_descriptor = ScreenDescriptor {
-            physical_width: physical_size.width,
-            physical_height: physical_size.height,
+            width: size.width,
+            height: size.height,
             scale_factor: self.window.scale_factor() as _,
         };
         self.renderer.render(
             &self.system.window_dimensions,
             &self.world,
+            context,
             ui_meshes,
             screen_descriptor,
         )
@@ -211,13 +212,13 @@ pub fn run_application(
     let window_dimensions = [logical_size.width, logical_size.height];
 
     let screen_descriptor = ScreenDescriptor {
-        physical_width: window_dimensions[0],
-        physical_height: window_dimensions[1],
+        width: window_dimensions[0],
+        height: window_dimensions[1],
         scale_factor: window.scale_factor() as _,
     };
     let mut gui = Gui::new(screen_descriptor);
 
-    let renderer = pollster::block_on(Renderer::new(&window, &window_dimensions, gui.context()))?;
+    let renderer = pollster::block_on(Renderer::new(&window, &window_dimensions))?;
 
     let mut world = World::new()?;
 
@@ -282,7 +283,7 @@ fn run_loop(
             runner.update_gui(gui.context(), application)?;
             let ui_meshes = gui.end_frame(&application.window);
 
-            application.render(&ui_meshes)?;
+            application.render(gui.context(), &ui_meshes)?;
         }
         // FIXME window events can be grouped
         Event::WindowEvent {
