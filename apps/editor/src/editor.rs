@@ -1,7 +1,7 @@
 use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    gui::egui::{self, CtxRef},
+    gui::egui::{self, CollapsingHeader, CtxRef},
     world::{
         legion::IntoQuery,
         load_gltf,
@@ -67,7 +67,7 @@ impl ApplicationRunner for Editor {
         Ok(())
     }
 
-    fn update_gui(&mut self, ctx: CtxRef, _application: &mut Application) -> Result<()> {
+    fn update_gui(&mut self, ctx: CtxRef, application: &mut Application) -> Result<()> {
         let ctx = &ctx;
 
         egui::TopBottomPanel::top("top_panel")
@@ -82,6 +82,26 @@ impl ApplicationRunner for Editor {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.heading("Left Panel");
+
+                // TODO: We need a recursive function to fill this out
+                let mut offset = 0;
+                for graph in application.world.scene.graphs.iter() {
+                    let collapsing = CollapsingHeader::new(format!("Scene Graph {}", offset))
+                        .selectable(true)
+                        .selected(false);
+                    let header_response = collapsing
+                        .show(ui, |ui| {
+                            ui.selectable_label(false, format!("Item {}", offset))
+                                .clicked()
+                        })
+                        .header_response;
+                    if header_response.clicked() {
+                        log::info!("Clicked '{}'!", format!("Item {}", offset))
+                    }
+
+                    offset += 1;
+                }
+
                 ui.allocate_space(ui.available_size());
             });
 
