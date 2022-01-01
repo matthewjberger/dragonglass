@@ -164,6 +164,12 @@ impl WorldRender {
                                 render_pass,
                                 material.color_texture_index as _,
                             )?;
+                        } else {
+                            render_pass.set_bind_group(
+                                Render::DIFFUSE_TEXTURE_BIND_GROUP_INDEX,
+                                &self.render.empty_texture_bind_group,
+                                &[],
+                            );
                         }
 
                         let start = primitive.first_index as u32;
@@ -187,6 +193,9 @@ impl WorldRender {
 
 struct Render {
     textures: Vec<Texture>,
+    empty_texture: Texture,
+    empty_texture_bind_group: wgpu::BindGroup,
+    empty_texture_bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
     blend_pipeline: wgpu::RenderPipeline,
     geometry: Geometry,
@@ -299,8 +308,51 @@ impl Render {
             multisample: wgpu::MultisampleState::default(),
         });
 
+        let empty_texture = Texture::empty(device);
+
+        let empty_texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("empty_texture_bind_group_layout"),
+            });
+
+        let empty_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &empty_texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&empty_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&empty_texture.sampler),
+                },
+            ],
+            label: Some("texture_bind_group"),
+        });
+
         Self {
             textures: Vec::new(),
+            empty_texture,
+            empty_texture_bind_group,
+            empty_texture_bind_group_layout,
             pipeline,
             blend_pipeline,
             geometry,
