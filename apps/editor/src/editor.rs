@@ -7,7 +7,6 @@ use dragonglass::{
     },
 };
 use hotwatch::{Event, Hotwatch};
-use imgui::{im_str, Condition, Ui, Window};
 use log::{info, warn};
 use std::{
     ffi::OsStr,
@@ -97,15 +96,6 @@ impl ApplicationRunner for Editor {
         Ok(())
     }
 
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Scene Info"))
-            .collapsed(true, Condition::FirstUseEver)
-            .build(ui, || {
-                ui.text(im_str!(" ",));
-            });
-        Ok(())
-    }
-
     fn update(&mut self, application: &mut Application) -> Result<()> {
         if self.reload_shaders.load(Ordering::Acquire) {
             application.renderer.reload_asset_shaders()?;
@@ -116,11 +106,11 @@ impl ApplicationRunner for Editor {
             application.system.exit_requested = true;
         }
 
-        // if !application.world.animations.is_empty() {
-        //     application
-        //         .world
-        //         .animate(0, 0.75 * application.system.delta_time as f32)?;
-        // }
+        if !application.world.animations.is_empty() {
+            application
+                .world
+                .animate(0, 0.75 * application.system.delta_time as f32)?;
+        }
 
         if !application.input.allowed {
             return Ok(());
@@ -179,19 +169,19 @@ impl ApplicationRunner for Editor {
             }
         }
 
-        let mut query = <(Entity, &MeshRender)>::query();
-        let entities = query
-            .iter(&mut application.world.ecs)
-            .map(|(e, _)| *e)
-            .collect::<Vec<_>>();
-        for entity in entities.into_iter() {
-            application
-                .world
-                .add_rigid_body(entity, BodyStatus::Static)?;
-            application
-                .world
-                .add_trimesh_collider(entity, InteractionGroups::all())?;
-        }
+        // let mut query = <(Entity, &MeshRender)>::query();
+        // let entities = query
+        //     .iter(&mut application.world.ecs)
+        //     .map(|(e, _)| *e)
+        //     .collect::<Vec<_>>();
+        // for entity in entities.into_iter() {
+        //     application
+        //         .world
+        //         .add_rigid_body(entity, BodyStatus::Static)?;
+        //     application
+        //         .world
+        //         .add_trimesh_collider(entity, InteractionGroups::all())?;
+        // }
 
         Ok(())
     }

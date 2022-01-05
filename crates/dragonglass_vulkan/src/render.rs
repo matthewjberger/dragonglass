@@ -1,6 +1,5 @@
-pub use self::{cube::*, fullscreen::*, gui::*, skybox::*};
+pub use self::{cube::*, fullscreen::*, skybox::*};
 
 mod cube;
 mod fullscreen;
-mod gui;
 mod skybox;

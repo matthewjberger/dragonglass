@@ -1,5 +1,4 @@
 use crate::{
-    gui::Gui,
     logger::create_logger,
     state::{Input, System},
 };
@@ -12,7 +11,6 @@ use dragonglass_world::{
     Entity, RigidBody, SdfFont, World,
 };
 use image::io::Reader;
-use imgui::{im_str, DrawData, Ui};
 use log::error;
 use nalgebra_glm as glm;
 use std::path::PathBuf;
@@ -178,20 +176,15 @@ impl Application {
         Ok(())
     }
 
-    pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
+    pub fn render(&mut self) -> Result<()> {
         self.renderer
-            .render(&self.system.window_dimensions, &self.world, draw_data)?;
+            .render(&self.system.window_dimensions, &self.world)?;
         Ok(())
     }
 }
 
 pub trait ApplicationRunner {
     fn initialize(&mut self, _application: &mut Application) -> Result<()> {
-        Ok(())
-    }
-
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        ui.text(im_str!("Hello!"));
         Ok(())
     }
 
@@ -241,16 +234,10 @@ pub fn run_application(
     create_logger()?;
 
     let (event_loop, window) = configuration.create_window()?;
-    let mut gui = Gui::new(&window);
 
     let logical_size = window.inner_size();
     let window_dimensions = [logical_size.width, logical_size.height];
-    let renderer = create_render_backend(
-        &configuration.backend,
-        &window,
-        &window_dimensions,
-        gui.context_mut(),
-    )?;
+    let renderer = create_render_backend(&configuration.backend, &window, &window_dimensions)?;
 
     let mut world = World::new()?;
     world.fonts.insert(
@@ -269,7 +256,7 @@ pub fn run_application(
     runner.initialize(&mut state)?;
 
     event_loop.run(move |event, _, control_flow| {
-        if let Err(error) = run_loop(&mut runner, &mut state, &mut gui, event, control_flow) {
+        if let Err(error) = run_loop(&mut runner, &mut state, event, control_flow) {
             error!("Application Error: {}", error);
         }
     });
@@ -278,18 +265,15 @@ pub fn run_application(
 fn run_loop(
     runner: &mut impl ApplicationRunner,
     application: &mut Application,
-    gui: &mut Gui,
     event: Event<()>,
     control_flow: &mut ControlFlow,
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
     application.system.handle_event(&event);
-    gui.handle_event(&event, &application.window);
     application
         .input
         .handle_event(&event, application.system.window_center());
-    application.input.allowed = !gui.capturing_input();
 
     match event {
         Event::NewEvents(_cause) => {
@@ -298,15 +282,9 @@ fn run_loop(
             }
         }
         Event::MainEventsCleared => {
-            gui.prepare_frame(&application.window)?;
-            let ui = gui.context.frame();
-            runner.create_ui(application, &ui)?;
-            gui.platform.prepare_render(&ui, &application.window);
-            let draw_data = ui.render();
-
             runner.update(application)?;
             application.update()?;
-            application.render(draw_data)?;
+            application.render()?;
         }
         Event::WindowEvent {
             event: WindowEvent::DroppedFile(ref path),

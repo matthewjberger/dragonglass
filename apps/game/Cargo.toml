@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.40"
 dragonglass = { path = "../.." }
-imgui = "0.7.0"
 log = "0.4.14"
 nalgebra = "0.26.1"
 nalgebra-glm = "0.12.0"

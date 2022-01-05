@@ -11,7 +11,6 @@ use dragonglass_vulkan::{
     core::{Context, Frame},
 };
 use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
-use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
@@ -27,19 +26,10 @@ pub struct VulkanRenderBackend {
 impl VulkanRenderBackend {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new(
-        window_handle: &impl HasRawWindowHandle,
-        dimensions: &[u32; 2],
-        imgui: &mut ImguiContext,
-    ) -> Result<Self> {
+    pub fn new(window_handle: &impl HasRawWindowHandle, dimensions: &[u32; 2]) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
         let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
-        let scene = Scene::new(
-            &context,
-            imgui,
-            frame.swapchain()?,
-            &frame.swapchain_properties,
-        )?;
+        let scene = Scene::new(&context, frame.swapchain()?, &frame.swapchain_properties)?;
         let renderer = Self {
             frame,
             scene,
@@ -74,17 +64,11 @@ impl Render for VulkanRenderBackend {
         Ok(())
     }
 
-    fn render(&mut self, dimensions: &[u32; 2], world: &World, draw_data: &DrawData) -> Result<()> {
+    fn render(&mut self, dimensions: &[u32; 2], world: &World) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let device = self.context.device.clone();
-
-        scene.gui_render.resize_geometry_buffer(
-            &self.context,
-            &scene.transient_command_pool,
-            draw_data,
-        )?;
 
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
         let camera_entity = world.active_camera()?;
@@ -161,7 +145,6 @@ impl Render for VulkanRenderBackend {
                     if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
                         fullscreen_pipeline.issue_commands(command_buffer)?;
                     }
-                    scene.gui_render.issue_commands(command_buffer, draw_data)?;
                     Ok(())
                 },
             )?;

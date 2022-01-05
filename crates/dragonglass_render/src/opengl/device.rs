@@ -6,7 +6,6 @@ use dragonglass_opengl::{
     load_context, GeometryBuffer, ShaderProgram,
 };
 use dragonglass_world::World;
-use imgui::{Context as ImguiContext, DrawData};
 use raw_window_handle::HasRawWindowHandle;
 use std::str;
 use nalgebra_glm as glm;
@@ -24,7 +23,6 @@ impl OpenGLRenderBackend {
     pub fn new(
         window_handle: &impl HasRawWindowHandle,
         dimensions: &[u32; 2],
-        _imgui: &mut ImguiContext,
     ) -> Result<Self> {
         let context = unsafe { load_context(window_handle)? };
         Ok(Self {
@@ -52,7 +50,6 @@ impl Render for OpenGLRenderBackend {
         &mut self,
         dimensions: &[u32; 2],
         world: &World,
-        _draw_data: &DrawData,
     ) -> Result<()> {
         // TODO: clean this up...
         let dimensions = glm::vec2(dimensions[0] as _, dimensions[1] as _);
