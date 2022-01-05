@@ -1,0 +1,10 @@
+[package]
+name = "dragonglass_gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+egui = "0.16.0"
+egui_winit_platform = "0.13.0"
+epi = "0.16.0"
+winit = "0.26.0"
