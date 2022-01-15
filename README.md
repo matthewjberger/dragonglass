@@ -1,20 +1,24 @@
 # Dragonglass
 
-Dragonglass is a 3D game engine written in Rust, using [wgpu](https://github.com/gfx-rs/wgpu) for rendering! 
+Dragonglass is a 3D game engine written in Rust!
 
-> This project was developed using Vulkan and OpenGL for a while, but wgpu matured a lot in that time and is now a more sensible choice. Some of the screenshots may be from an older version of this engine that had a distinct Vulkan backend.
+## Development Prerequisites
+
+* [Rust](https://www.rust-lang.org/)
+* [glslang](https://github.com/KhronosGroup/glslang/releases/tag/master-tot) for shader compilation (glsl -> SPIR-V)
+* gcc
+* cmake
 
 ## Instructions
 
 To run the visual editor for Dragonglass, run this command in the root directory:
 
 ```bash
-# To choose the backend in Unix
-# WGPU_BACKEND=vulkan
-#
-# To choose the backend in powershell
-# $env:WGPU_BACKEND="vulkan"
-cargo run --release --bin editor
+# OpenGL backend (default)
+cargo run --release --bin editor -- --backend opengl
+
+# Vulkan backend
+cargo run --release --bin editor -- --backend vulkan
 ```
 
 ## Gallery

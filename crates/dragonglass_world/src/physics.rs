@@ -5,7 +5,6 @@ use rapier3d::{
     geometry::{BroadPhase, ColliderSet, NarrowPhase},
     na::Vector3,
     pipeline::{PhysicsPipeline, QueryPipeline},
-    prelude::IslandManager,
 };
 use serde::{Deserialize, Serialize};
 
@@ -33,7 +32,6 @@ pub struct WorldPhysics {
     pub integration_parameters: IntegrationParameters,
     pub broad_phase: BroadPhase,
     pub narrow_phase: NarrowPhase,
-    pub islands: IslandManager,
     pub bodies: RigidBodySet,
     pub colliders: ColliderSet,
     pub joints: JointSet,
@@ -56,7 +54,6 @@ impl WorldPhysics {
             integration_parameters: IntegrationParameters::default(),
             broad_phase: BroadPhase::new(),
             narrow_phase: NarrowPhase::new(),
-            islands: IslandManager::new(),
             bodies: RigidBodySet::new(),
             colliders: ColliderSet::new(),
             joints: JointSet::new(),
@@ -75,7 +72,6 @@ impl WorldPhysics {
         self.pipeline.step(
             &self.gravity,
             &self.integration_parameters,
-            &mut self.islands,
             &mut self.broad_phase,
             &mut self.narrow_phase,
             &mut self.bodies,
@@ -86,7 +82,6 @@ impl WorldPhysics {
             &event_handler,
         );
 
-        self.query_pipeline
-            .update(&self.islands, &self.bodies, &self.colliders);
+        self.query_pipeline.update(&self.bodies, &self.colliders);
     }
 }

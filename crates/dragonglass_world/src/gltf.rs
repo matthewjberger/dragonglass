@@ -1,8 +1,8 @@
 use crate::{
-    AlphaMode, Animation, BoundingBox, Camera, Channel, Ecs, Entity, Filter, Geometry,
+    AlphaMode, Animation, BoundingBox, Camera, Channel, Ecs, Entity, Filter, Format, Geometry,
     Interpolation, Joint, Light, LightKind, Material, Mesh, MeshRender, MorphTarget, Name,
     OrthographicCamera, PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin,
-    Texture, TextureFormat, Transform, TransformationSet, Vertex, World, WrappingMode,
+    Texture, Transform, TransformationSet, Vertex, World, WrappingMode,
 };
 use anyhow::{Context, Result};
 use gltf::animation::util::ReadOutputs;
@@ -174,32 +174,30 @@ fn load_textures(gltf: &gltf::Document, images: &[gltf::image::Data]) -> Result<
         let image_index = texture.source().index();
         let image = images.get(image_index).context(image_error_message)?;
 
-        let mut texture = Texture {
+        let texture = Texture {
             pixels: image.pixels.to_vec(),
             format: map_gltf_format(image.format),
             width: image.width,
             height: image.height,
             sampler,
-            mip_levels: 1,
         };
-        texture.convert_24bit_formats()?;
         textures.push(texture);
     }
     Ok(textures)
 }
 
-fn map_gltf_format(format: gltf::image::Format) -> TextureFormat {
+fn map_gltf_format(format: gltf::image::Format) -> Format {
     match format {
-        gltf::image::Format::R8 => TextureFormat::R8,
-        gltf::image::Format::R8G8 => TextureFormat::R8G8,
-        gltf::image::Format::R8G8B8 => TextureFormat::R8G8B8,
-        gltf::image::Format::R8G8B8A8 => TextureFormat::R8G8B8A8,
-        gltf::image::Format::B8G8R8 => TextureFormat::B8G8R8,
-        gltf::image::Format::B8G8R8A8 => TextureFormat::B8G8R8A8,
-        gltf::image::Format::R16 => TextureFormat::R16,
-        gltf::image::Format::R16G16 => TextureFormat::R16G16,
-        gltf::image::Format::R16G16B16 => TextureFormat::R16G16B16,
-        gltf::image::Format::R16G16B16A16 => TextureFormat::R16G16B16A16,
+        gltf::image::Format::R8 => Format::R8,
+        gltf::image::Format::R8G8 => Format::R8G8,
+        gltf::image::Format::R8G8B8 => Format::R8G8B8,
+        gltf::image::Format::R8G8B8A8 => Format::R8G8B8A8,
+        gltf::image::Format::B8G8R8 => Format::B8G8R8,
+        gltf::image::Format::B8G8R8A8 => Format::B8G8R8A8,
+        gltf::image::Format::R16 => Format::R16,
+        gltf::image::Format::R16G16 => Format::R16G16,
+        gltf::image::Format::R16G16B16 => Format::R16G16B16,
+        gltf::image::Format::R16G16B16A16 => Format::R16G16B16A16,
     }
 }
 
@@ -217,7 +215,7 @@ fn load_material(primitive_material: &gltf::Material) -> Result<Material> {
     material.roughness_factor = pbr.roughness_factor();
     material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
     material.alpha_mode = map_gltf_alpha_mode(&primitive_material.alpha_mode());
-    material.alpha_cutoff = primitive_material.alpha_cutoff().unwrap_or(0.5);
+    material.alpha_cutoff = primitive_material.alpha_cutoff();
     material.is_unlit = primitive_material.unlit();
     if let Some(base_color_texture) = pbr.base_color_texture() {
         material.color_texture_index = base_color_texture.texture().index() as i32;

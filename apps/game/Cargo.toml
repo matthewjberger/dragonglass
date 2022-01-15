@@ -5,11 +5,11 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.52"
+anyhow = "1.0.40"
 dragonglass = { path = "../.." }
+imgui = "0.7.0"
 log = "0.4.14"
-nalgebra = "0.29.0"
-nalgebra-glm = "0.15.0"
-pollster = "0.2.4"
-rapier3d = { version = "0.11.1", features = ["serde-serialize", "wasm-bindgen"] }
-winit = "0.26.0"
+nalgebra = "0.26.1"
+nalgebra-glm = "0.12.0"
+rapier3d = "0.8.0"
+winit = "0.24.0"

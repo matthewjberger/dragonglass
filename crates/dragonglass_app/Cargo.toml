@@ -5,14 +5,14 @@ authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.52"
-dragonglass_gui = { path = "../dragonglass_gui" }
+anyhow = "1.0.40"
 dragonglass_render = { path = "../dragonglass_render" }
 dragonglass_world = { path = "../dragonglass_world" }
 image = "0.23.14"
+imgui = "0.7.0"
+imgui-winit-support = "0.7.0"
 log = "0.4.14"
-nalgebra-glm = "0.15.0"
-pollster = "0.2.4"
-serde = { version = "1.0.132", features = ["derive"] }
-simplelog = { version = "0.11.1", features = ["termcolor"] }
-winit = "0.26.0"
+nalgebra-glm = "0.12.0"
+serde = { version = "1.0.125", features = ["derive"] }
+simplelog = { version = "0.10.0", features = ["termcolor"] }
+winit = "0.24.0"
