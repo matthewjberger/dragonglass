@@ -188,7 +188,7 @@ fn main() -> Result<()> {
         AppConfig {
             icon: Some("assets/icon/icon.png".to_string()),
             title: "Physics Test with Rapier3D".to_string(),
-            backend: Backend::OpenGL,
+            backend: Backend::Vulkan,
             ..Default::default()
         },
     )
