@@ -1,20 +1,23 @@
 use crate::{Name, RigidBody, WorldPhysics};
-use anyhow::{bail, Context, Result};
-use bmfont::{BMFont, OrdinateOrientation};
-use image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView};
-use lazy_static::lazy_static;
-use legion::{
-    serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
+use dragonglass_deps::{
+    anyhow::{bail, Context, Result},
+    bincode,
+    bmfont::{BMFont, OrdinateOrientation},
+    image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView},
+    lazy_static::lazy_static,
+    legion::{
+        self, serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
+    },
+    log,
+    nalgebra::{linalg::QR, Isometry3, Point, Translation3, UnitQuaternion},
+    nalgebra_glm as glm,
+    petgraph::{graph::WalkNeighbors, prelude::*},
+    rapier3d::{
+        dynamics::{BodyStatus, RigidBodyBuilder},
+        geometry::{ColliderBuilder, InteractionGroups},
+    },
+    serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer},
 };
-use na::{linalg::QR, Isometry3, Point, Translation3, UnitQuaternion};
-use nalgebra as na;
-use nalgebra_glm as glm;
-use petgraph::{graph::WalkNeighbors, prelude::*};
-use rapier3d::{
-    dynamics::{BodyStatus, RigidBodyBuilder},
-    geometry::{ColliderBuilder, InteractionGroups},
-};
-use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::HashMap,
     io::BufReader,
@@ -42,6 +45,7 @@ pub type Ecs = legion::World;
 pub type Entity = legion::Entity;
 
 #[derive(Default, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct World {
     #[serde(serialize_with = "serialize_ecs", deserialize_with = "deserialize_ecs")]
     pub ecs: Ecs,
@@ -475,6 +479,7 @@ where
         .deserialize(deserializer)
 }
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Scene {
     pub name: String,
     pub graphs: Vec<SceneGraph>,
@@ -501,6 +506,7 @@ impl Scene {
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Transform {
     pub translation: glm::Vec3,
     pub rotation: glm::Quat,
@@ -599,6 +605,7 @@ impl From<glm::Mat4> for Transform {
 
 // The 'name' field is purposefully omitted to keep the struct 'Copy'able
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Light {
     pub color: glm::Vec3,
     pub intensity: f32,
@@ -607,6 +614,7 @@ pub struct Light {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum LightKind {
     Directional,
     Point,
@@ -623,6 +631,7 @@ impl Default for LightKind {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Camera {
     pub name: String,
     pub projection: Projection,
@@ -646,12 +655,14 @@ impl Camera {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum Projection {
     Perspective(PerspectiveCamera),
     Orthographic(OrthographicCamera),
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct PerspectiveCamera {
     pub aspect_ratio: Option<f32>,
     pub y_fov_rad: f32,
@@ -676,6 +687,7 @@ impl PerspectiveCamera {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct OrthographicCamera {
     pub x_mag: f32,
     pub y_mag: f32,
@@ -709,23 +721,27 @@ impl OrthographicCamera {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Skin {
     pub name: String,
     pub joints: Vec<Joint>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Joint {
     pub target: Entity,
     pub inverse_bind_matrix: glm::Mat4,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct MeshRender {
     pub name: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Mesh {
     pub name: String,
     pub primitives: Vec<Primitive>,
@@ -744,6 +760,7 @@ impl Mesh {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct BoundingBox {
     pub min: glm::Vec3,
     pub max: glm::Vec3,
@@ -790,6 +807,7 @@ impl BoundingBox {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Primitive {
     pub first_vertex: usize,
     pub first_index: usize,
@@ -801,6 +819,7 @@ pub struct Primitive {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct MorphTarget {
     pub positions: Vec<glm::Vec4>,
     pub normals: Vec<glm::Vec4>,
@@ -814,6 +833,7 @@ impl MorphTarget {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Geometry {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
@@ -828,6 +848,7 @@ impl Geometry {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Vertex {
     pub position: glm::Vec3,
     pub normal: glm::Vec3,
@@ -853,6 +874,7 @@ impl Default for Vertex {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Animation {
     pub name: String,
     pub time: f32,
@@ -861,6 +883,7 @@ pub struct Animation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Channel {
     pub target: Entity,
     pub inputs: Vec<f32>,
@@ -869,6 +892,7 @@ pub struct Channel {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum Interpolation {
     Linear,
     Step,
@@ -876,6 +900,7 @@ pub enum Interpolation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum TransformationSet {
     Translations(Vec<glm::Vec3>),
     Rotations(Vec<glm::Vec4>),
@@ -884,6 +909,7 @@ pub enum TransformationSet {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Material {
     pub name: String,
     pub base_color_factor: glm::Vec4,
@@ -935,6 +961,7 @@ impl Default for Material {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum AlphaMode {
     Opaque = 1,
     Mask,
@@ -949,6 +976,7 @@ impl Default for AlphaMode {
 
 // FIXME: Add mip levels
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Texture {
     pub pixels: Vec<u8>,
     pub format: Format,
@@ -1010,6 +1038,7 @@ impl Texture {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum Format {
     R8,
     R8G8,
@@ -1036,6 +1065,7 @@ pub enum Format {
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct Sampler {
     pub name: String,
     pub min_filter: Filter,
@@ -1045,6 +1075,7 @@ pub struct Sampler {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum WrappingMode {
     ClampToEdge,
     MirroredRepeat,
@@ -1058,6 +1089,7 @@ impl Default for WrappingMode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub enum Filter {
     Nearest,
     Linear,
@@ -1070,6 +1102,7 @@ impl Default for Filter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct SceneGraph(pub Graph<Entity, ()>);
 
 impl Default for SceneGraph {
@@ -1149,6 +1182,7 @@ impl IndexMut<NodeIndex> for SceneGraph {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct SdfFont {
     texture: Texture,
     font: BMFont,

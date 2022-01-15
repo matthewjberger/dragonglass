@@ -1,8 +1,10 @@
 use crate::vulkan::VulkanRenderBackend;
-use anyhow::Result;
+use dragonglass_deps::{
+    anyhow::Result,
+    imgui::{Context as ImguiContext, DrawData},
+    raw_window_handle::HasRawWindowHandle,
+};
 use dragonglass_world::World;
-use imgui::{Context as ImguiContext, DrawData};
-use raw_window_handle::HasRawWindowHandle;
 
 pub enum Backend {
     Vulkan,

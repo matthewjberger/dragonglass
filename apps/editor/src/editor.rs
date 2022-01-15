@@ -1,27 +1,25 @@
-use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
-    world::{
-        legion::Entity, load_gltf, rapier3d::dynamics::BodyStatus,
-        rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
+    deps::{
+        anyhow::Result,
+        imgui::{im_str, Condition, Ui, Window},
+        legion::{Entity, IntoQuery},
+        log::{self, info, warn},
+        rapier3d::{dynamics::BodyStatus, geometry::InteractionGroups},
+        winit::event::{ElementState, MouseButton, VirtualKeyCode},
     },
+    world::{load_gltf, MeshRender, World},
 };
-use hotwatch::{Event, Hotwatch};
-use imgui::{im_str, Condition, Ui, Window};
-use log::{info, warn};
 use std::{
-    ffi::OsStr,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
 };
-use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 pub struct Editor {
     camera: MouseOrbit,
-    _hotwatch: Option<Hotwatch>,
     reload_shaders: Arc<AtomicBool>,
 }
 
@@ -29,7 +27,6 @@ impl Default for Editor {
     fn default() -> Self {
         Self {
             camera: MouseOrbit::default(),
-            _hotwatch: None,
             reload_shaders: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -37,21 +34,6 @@ impl Default for Editor {
 
 impl Editor {
     fn setup_file_reloading(&mut self) -> Result<()> {
-        let reload_shaders = self.reload_shaders.clone();
-        let mut hotwatch = Hotwatch::new()?;
-        hotwatch.watch("assets/shaders/model", move |event: Event| {
-            if let Event::Write(path) = event {
-                if let Some(extension) = path.extension() {
-                    // Don't need to reload shaders again
-                    // after a .spv file is generated
-                    if extension == OsStr::new("spv") {
-                        return;
-                    }
-                    reload_shaders.store(true, Ordering::Release);
-                }
-            }
-        })?;
-        self._hotwatch = Some(hotwatch);
         Ok(())
     }
 

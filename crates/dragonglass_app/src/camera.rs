@@ -1,6 +1,6 @@
 use crate::app::Application;
-use dragonglass_deps::{anyhow::Result, nalgebra_glm as glm};
-use dragonglass_world::{Entity, EntityStore, Transform};
+use dragonglass_deps::{anyhow::Result, legion::EntityStore, nalgebra_glm as glm};
+use dragonglass_world::{Entity, Transform};
 
 #[derive(Default)]
 pub struct MouseOrbit {

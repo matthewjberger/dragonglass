@@ -7,8 +7,11 @@ use dragonglass_deps::{
     anyhow::Result,
     image::io::Reader,
     imgui::{im_str, DrawData, Ui},
+    legion::IntoQuery,
     log::error,
+    nalgebra::Point3,
     nalgebra_glm as glm,
+    rapier3d::geometry::{InteractionGroups, Ray},
     winit::{
         self,
         dpi::{PhysicalPosition, PhysicalSize},
@@ -18,12 +21,7 @@ use dragonglass_deps::{
     },
 };
 use dragonglass_render::{create_render_backend, Backend, Render};
-use dragonglass_world::{
-    legion::IntoQuery,
-    load_gltf,
-    rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
-    Entity, RigidBody, SdfFont, World,
-};
+use dragonglass_world::{load_gltf, Entity, RigidBody, SdfFont, World};
 
 use std::path::PathBuf;
 

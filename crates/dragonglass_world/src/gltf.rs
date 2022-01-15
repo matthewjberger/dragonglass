@@ -4,11 +4,13 @@ use crate::{
     OrthographicCamera, PerspectiveCamera, Primitive, Projection, Sampler, Scene, SceneGraph, Skin,
     Texture, Transform, TransformationSet, Vertex, World, WrappingMode,
 };
-use anyhow::{Context, Result};
-use gltf::animation::util::ReadOutputs;
-use legion::EntityStore;
-use nalgebra_glm as glm;
-use petgraph::prelude::*;
+use dragonglass_deps::{
+    anyhow::{Context, Result},
+    gltf::{self, animation::util::ReadOutputs},
+    legion::EntityStore,
+    nalgebra_glm as glm,
+    petgraph::prelude::*,
+};
 use std::path::Path;
 
 pub fn create_scene_graph(node: &gltf::Node, ecs: &mut Ecs, entities: &[Entity]) -> SceneGraph {

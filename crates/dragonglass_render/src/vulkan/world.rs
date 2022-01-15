@@ -1,5 +1,9 @@
 use crate::byte_slice_from;
-use anyhow::{ensure, Context as AnyhowContext, Result};
+use dragonglass_deps::{
+    anyhow::{ensure, Context as AnyhowContext, Result},
+    legion::EntityStore,
+    nalgebra_glm as glm,
+};
 use dragonglass_vulkan::{
     ash::{version::DeviceV1_0, vk},
     core::{
@@ -13,10 +17,9 @@ use dragonglass_vulkan::{
     render::CubeRender,
 };
 use dragonglass_world::{
-    legion::EntityStore, AlphaMode, Filter, Geometry, Hidden, LightKind, Material, Mesh,
-    MeshRender, RigidBody, Skin, Transform, Vertex, World, WrappingMode,
+    AlphaMode, Filter, Geometry, Hidden, LightKind, Material, Mesh, MeshRender, RigidBody, Skin,
+    Transform, Vertex, World, WrappingMode,
 };
-use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
 
 pub struct PushConstantMaterial {

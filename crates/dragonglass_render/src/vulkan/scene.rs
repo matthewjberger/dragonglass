@@ -1,5 +1,5 @@
 use crate::vulkan::world::WorldRender;
-use anyhow::Result;
+use dragonglass_deps::{anyhow::Result, imgui::Context as ImguiContext};
 use dragonglass_vulkan::{
     ash::vk,
     core::{
@@ -10,7 +10,6 @@ use dragonglass_vulkan::{
     render::{FullscreenRender, GuiRender, SkyboxRender},
 };
 use dragonglass_world::World;
-use imgui::Context as ImguiContext;
 use std::sync::Arc;
 
 pub struct Scene {

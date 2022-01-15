@@ -1,17 +1,19 @@
-pub use rapier3d;
-
-use rapier3d::{
-    dynamics::{CCDSolver, IntegrationParameters, JointSet, RigidBodySet},
-    geometry::{BroadPhase, ColliderSet, NarrowPhase},
-    na::Vector3,
-    pipeline::{PhysicsPipeline, QueryPipeline},
+use dragonglass_deps::{
+    rapier3d::{
+        self,
+        dynamics::{CCDSolver, IntegrationParameters, JointSet, RigidBodySet},
+        geometry::{BroadPhase, ColliderSet, NarrowPhase},
+        na::Vector3,
+        pipeline::{PhysicsPipeline, QueryPipeline},
+    },
+    serde::{Deserialize, Serialize},
 };
-use serde::{Deserialize, Serialize};
 
 pub type Handle = rapier3d::dynamics::RigidBodyHandle;
 pub type ColliderHandle = rapier3d::geometry::ColliderHandle;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct RigidBody {
     pub handle: Handle,
     pub colliders: Vec<ColliderHandle>,
@@ -27,6 +29,7 @@ impl RigidBody {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(crate = "dragonglass_deps::serde")]
 pub struct WorldPhysics {
     pub gravity: Vector3<f32>,
     pub integration_parameters: IntegrationParameters,
