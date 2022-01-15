@@ -5,5 +5,4 @@ name = "dragonglass_shader"
 version = "0.1.0"
 
 [dependencies]
-glob = "0.3.0"
-log = "0.4.14"
+dragonglass_deps = {path = "../dragonglass_deps"}

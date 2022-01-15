@@ -1,5 +1,7 @@
-use glob::glob;
-use log::{error, info};
+use dragonglass_deps::{
+    glob::glob,
+    log::{error, info},
+};
 use std::{error::Error, io, path::Path, process::Command};
 
 type Result<T, E = Box<dyn Error>> = std::result::Result<T, E>;

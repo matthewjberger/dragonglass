@@ -630,6 +630,7 @@ name = "dragonglass_deps"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glob",
  "image",
  "imgui",
  "imgui-winit-support",
@@ -663,8 +664,7 @@ dependencies = [
 name = "dragonglass_shader"
 version = "0.1.0"
 dependencies = [
- "glob",
- "log",
+ "dragonglass_deps",
 ]
 
 [[package]]

@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.40"
+glob = "0.3.0"
 image = "0.23.14"
 imgui = "0.7.0"
 imgui-winit-support = "0.7.0"
