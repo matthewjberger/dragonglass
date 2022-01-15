@@ -639,6 +639,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "derive_builder",
+ "dragonglass_shader",
  "dragonglass_vulkan",
  "dragonglass_world",
  "image",
@@ -648,8 +649,15 @@ dependencies = [
  "petgraph",
  "rapier3d",
  "raw-window-handle",
- "shader-compilation",
  "simplelog",
+]
+
+[[package]]
+name = "dragonglass_shader"
+version = "0.1.0"
+dependencies = [
+ "glob",
+ "log",
 ]
 
 [[package]]
@@ -660,6 +668,7 @@ dependencies = [
  "ash",
  "ash-window",
  "derive_builder",
+ "dragonglass_shader",
  "dragonglass_world",
  "image",
  "imgui",
@@ -667,7 +676,6 @@ dependencies = [
  "nalgebra-glm 0.12.0",
  "petgraph",
  "raw-window-handle",
- "shader-compilation",
  "simplelog",
  "vk-mem",
 ]
@@ -1896,14 +1904,6 @@ name = "sha1"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2579985fda508104f7587689507983eadd6a6e84dd35d6d115361f530916fa0d"
-
-[[package]]
-name = "shader-compilation"
-version = "0.1.0"
-dependencies = [
- "glob",
- "log",
-]
 
 [[package]]
 name = "simba"

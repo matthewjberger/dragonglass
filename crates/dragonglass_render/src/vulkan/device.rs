@@ -6,6 +6,7 @@ use crate::{
     Render,
 };
 use anyhow::Result;
+use dragonglass_shader::compile_shaders;
 use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
@@ -15,7 +16,6 @@ use imgui::{Context as ImguiContext, DrawData};
 use log::{error, info};
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
-use shader_compilation::compile_shaders;
 use std::sync::Arc;
 
 pub struct VulkanRenderBackend {

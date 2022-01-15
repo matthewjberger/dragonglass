@@ -1,5 +1,5 @@
+use dragonglass_shader::compile_shaders;
 use log::error;
-use shader_compilation::compile_shaders;
 use simplelog::*;
 use std::{boxed::Box, error::Error, fs::File};
 
