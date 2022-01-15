@@ -3,7 +3,20 @@ use crate::{
     logger::create_logger,
     state::{Input, System},
 };
-use anyhow::Result;
+use dragonglass_deps::{
+    anyhow::Result,
+    image::io::Reader,
+    imgui::{im_str, DrawData, Ui},
+    log::error,
+    nalgebra_glm as glm,
+    winit::{
+        self,
+        dpi::{PhysicalPosition, PhysicalSize},
+        event::{ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
+        event_loop::{ControlFlow, EventLoop},
+        window::{Icon, Window, WindowBuilder},
+    },
+};
 use dragonglass_render::{create_render_backend, Backend, Render};
 use dragonglass_world::{
     legion::IntoQuery,
@@ -11,17 +24,8 @@ use dragonglass_world::{
     rapier3d::{geometry::InteractionGroups, geometry::Ray, na::Point3},
     Entity, RigidBody, SdfFont, World,
 };
-use image::io::Reader;
-use imgui::{im_str, DrawData, Ui};
-use log::error;
-use nalgebra_glm as glm;
+
 use std::path::PathBuf;
-use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
-    event::{ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Icon, Window, WindowBuilder},
-};
 
 pub struct AppConfig {
     pub width: u32,

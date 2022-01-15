@@ -1,7 +1,9 @@
-use anyhow::Result;
-use imgui::{Context, FontConfig, FontSource};
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use winit::{event::Event, window::Window};
+use dragonglass_deps::{
+    anyhow::Result,
+    imgui::{Context, FontConfig, FontSource},
+    imgui_winit_support::{HiDpiMode, WinitPlatform},
+    winit::{event::Event, window::Window},
+};
 
 pub struct Gui {
     pub context: Context,

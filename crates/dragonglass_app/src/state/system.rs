@@ -1,9 +1,11 @@
-use nalgebra_glm as glm;
-use std::{cmp, time::Instant};
-use winit::{
-    dpi::PhysicalSize,
-    event::{Event, WindowEvent},
+use dragonglass_deps::{
+    nalgebra_glm as glm,
+    winit::{
+        dpi::PhysicalSize,
+        event::{Event, WindowEvent},
+    },
 };
+use std::{cmp, time::Instant};
 
 pub struct System {
     pub window_dimensions: [u32; 2], // TODO: Change this to a glm::Vec2

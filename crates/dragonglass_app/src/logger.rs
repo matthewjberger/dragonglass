@@ -1,6 +1,8 @@
-use anyhow::{Context, Result};
-use simplelog::{
-    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+use dragonglass_deps::{
+    anyhow::{Context, Result},
+    simplelog::{
+        ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+    },
 };
 use std::fs::File;
 

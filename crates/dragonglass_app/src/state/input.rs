@@ -1,12 +1,14 @@
-use nalgebra_glm as glm;
-use std::collections::HashMap;
-use winit::{
-    dpi::PhysicalPosition,
-    event::{
-        ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode,
-        WindowEvent,
+use dragonglass_deps::{
+    nalgebra_glm as glm,
+    winit::{
+        dpi::PhysicalPosition,
+        event::{
+            ElementState, Event, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode,
+            WindowEvent,
+        },
     },
 };
+use std::collections::HashMap;
 
 pub type KeyMap = HashMap<VirtualKeyCode, ElementState>;
 
