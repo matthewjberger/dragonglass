@@ -2,58 +2,29 @@ use anyhow::Result;
 use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     world::{
-        legion::Entity, load_gltf, rapier3d::dynamics::BodyStatus,
-        rapier3d::geometry::InteractionGroups, IntoQuery, MeshRender, World,
+        legion::Entity,
+        load_gltf,
+        rapier3d::{geometry::InteractionGroups, prelude::RigidBodyType},
+        IntoQuery, MeshRender, World,
     },
 };
-use hotwatch::{Event, Hotwatch};
 use log::{info, warn};
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
-use winit::event::{ElementState, MouseButton, VirtualKeyCode};
+use std::path::{Path, PathBuf};
+use winit::event::{ElementState, VirtualKeyCode};
 
 pub struct Editor {
     camera: MouseOrbit,
-    _hotwatch: Option<Hotwatch>,
-    reload_shaders: Arc<AtomicBool>,
 }
 
 impl Default for Editor {
     fn default() -> Self {
         Self {
             camera: MouseOrbit::default(),
-            _hotwatch: None,
-            reload_shaders: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 impl Editor {
-    fn setup_file_reloading(&mut self) -> Result<()> {
-        let reload_shaders = self.reload_shaders.clone();
-        let mut hotwatch = Hotwatch::new()?;
-        hotwatch.watch("assets/shaders/model", move |event: Event| {
-            if let Event::Write(path) = event {
-                if let Some(extension) = path.extension() {
-                    // Don't need to reload shaders again
-                    // after a .spv file is generated
-                    if extension == OsStr::new("spv") {
-                        return;
-                    }
-                    reload_shaders.store(true, Ordering::Release);
-                }
-            }
-        })?;
-        self._hotwatch = Some(hotwatch);
-        Ok(())
-    }
-
     fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
         load_gltf(path, &mut application.world)?;
 
@@ -91,17 +62,11 @@ impl Editor {
 
 impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
-        self.setup_file_reloading()?;
         application.world.add_default_light()?;
         Ok(())
     }
 
     fn update(&mut self, application: &mut Application) -> Result<()> {
-        if self.reload_shaders.load(Ordering::Acquire) {
-            application.renderer.reload_asset_shaders()?;
-        }
-        self.reload_shaders.store(false, Ordering::Release);
-
         if application.input.is_key_pressed(VirtualKeyCode::Escape) {
             application.system.exit_requested = true;
         }
@@ -135,7 +100,6 @@ impl ApplicationRunner for Editor {
                 application.world.save("saved_map.dga")?;
                 log::info!("Saved world!");
             }
-            (VirtualKeyCode::T, ElementState::Pressed) => application.renderer.toggle_wireframe(),
             (VirtualKeyCode::C, ElementState::Pressed) => {
                 application.world.clear()?;
                 if let Err(error) = application.renderer.load_world(&application.world) {
@@ -177,30 +141,12 @@ impl ApplicationRunner for Editor {
         for entity in entities.into_iter() {
             application
                 .world
-                .add_rigid_body(entity, BodyStatus::Static)?;
+                .add_rigid_body(entity, RigidBodyType::Static)?;
             application
                 .world
                 .add_trimesh_collider(entity, InteractionGroups::all())?;
         }
 
-        Ok(())
-    }
-
-    fn on_mouse(
-        &mut self,
-        application: &mut Application,
-        button: MouseButton,
-        state: ElementState,
-    ) -> Result<()> {
-        if !application.input.allowed {
-            return Ok(());
-        }
-
-        if (MouseButton::Left, ElementState::Pressed) == (button, state) {
-            if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
-                log::info!("Picked entity: {:?}", entity);
-            }
-        }
         Ok(())
     }
 }

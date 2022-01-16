@@ -8,7 +8,7 @@ version = "0.1.0"
 anyhow = "1.0.40"
 dragonglass = {path = "../.."}
 log = "0.4.14"
-nalgebra = "0.26.1"
-nalgebra-glm = "0.12.0"
-rapier3d = "0.8.0"
+nalgebra = "0.30.1"
+nalgebra-glm = {version = "0.16.0", features = ["serde-serialize"]}
+rapier3d = {version = "0.12.0-alpha.0", features = ["serde-serialize", "wasm-bindgen"]}
 winit = "0.24.0"

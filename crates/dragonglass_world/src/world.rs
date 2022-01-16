@@ -4,15 +4,17 @@ use bmfont::{BMFont, OrdinateOrientation};
 use image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView};
 use lazy_static::lazy_static;
 use legion::{
-    serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
+    serialize::set_entity_serializer, serialize::Canon, storage::Component, EntityStore, IntoQuery,
+    Registry,
 };
-use na::{linalg::QR, Isometry3, Point, Translation3, UnitQuaternion};
+use na::{linalg::QR, Isometry3, Point, Point3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
 use rapier3d::{
     dynamics::{BodyStatus, RigidBodyBuilder},
-    geometry::{ColliderBuilder, InteractionGroups},
+    geometry::{ColliderBuilder, InteractionGroups, Ray},
+    prelude::RigidBodyType,
 };
 use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
@@ -36,6 +38,16 @@ lazy_static! {
         Arc::new(RwLock::new(registry))
     };
     pub static ref ENTITY_SERIALIZER: Canon = Canon::default();
+}
+
+pub fn register_component<T: Component + Serialize + for<'de> Deserialize<'de>>(
+    key: &str,
+) -> Result<()> {
+    let mut registry = COMPONENT_REGISTRY
+        .write()
+        .expect("Failed to access component registry!");
+    registry.register::<T>(key.to_string());
+    Ok(())
 }
 
 pub type Ecs = legion::World;
@@ -364,6 +376,32 @@ impl World {
         Ok(joint_matrices)
     }
 
+    pub fn add_cylinder_collider(
+        &mut self,
+        entity: Entity,
+        half_height: f32,
+        radius: f32,
+        collision_groups: InteractionGroups,
+    ) -> Result<()> {
+        let collider = ColliderBuilder::cylinder(half_height, radius)
+            .collision_groups(collision_groups)
+            .build();
+
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+
+        self.physics.colliders.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut self.physics.bodies,
+        );
+
+        Ok(())
+    }
+
     pub fn add_trimesh_collider(
         &mut self,
         entity: Entity,
@@ -374,6 +412,7 @@ impl World {
         let transform = self.entity_global_transform(entity)?;
         let mesh = &self.geometry.meshes[&mesh.name];
 
+        // TODO: Add collider handles to component
         let rigid_body_handle = self
             .ecs
             .entry_ref(entity)?
@@ -402,20 +441,22 @@ impl World {
             let collider = ColliderBuilder::trimesh(vertices, indices)
                 .collision_groups(collision_groups)
                 .build();
-            self.physics
-                .colliders
-                .insert(collider, rigid_body_handle, &mut self.physics.bodies);
+            self.physics.colliders.insert_with_parent(
+                collider,
+                rigid_body_handle,
+                &mut self.physics.bodies,
+            );
         }
         Ok(())
     }
 
-    pub fn add_rigid_body(&mut self, entity: Entity, body_status: BodyStatus) -> Result<()> {
+    pub fn add_rigid_body(&mut self, entity: Entity, rigid_body_type: RigidBodyType) -> Result<()> {
         let handle = {
             let isometry =
                 Transform::from(self.entity_global_transform_matrix(entity)?).as_isometry();
 
             // Insert a corresponding rigid body
-            let rigid_body = RigidBodyBuilder::new(body_status)
+            let rigid_body = RigidBodyBuilder::new(rigid_body_type)
                 .position(isometry)
                 .build();
             self.physics.bodies.insert(rigid_body)
@@ -424,6 +465,97 @@ impl World {
             .entry(entity)
             .context("")?
             .add_component(RigidBody::new(handle));
+        Ok(())
+    }
+
+    pub fn remove_rigid_body(&mut self, entity: Entity) -> Result<()> {
+        let mut entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+        let rigid_body_handle = entry.get_component::<RigidBody>()?.handle;
+        entry.remove_component::<RigidBody>();
+        self.physics.remove_rigid_body(rigid_body_handle);
+        Ok(())
+    }
+
+    pub fn flatten_scenegraphs(&self) -> Vec<SceneGraphNode> {
+        let mut offset = 0;
+        self.scene
+            .graphs
+            .iter()
+            .flat_map(|graph| {
+                let mut graph_nodes = graph.collect_nodes().expect("Failed to collect nodes");
+                graph_nodes
+                    .iter_mut()
+                    .for_each(|node| node.offset += offset);
+                offset += graph_nodes.len() as u32;
+                graph_nodes
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn mouse_ray(&mut self, configuration: &MouseRayConfiguration) -> Result<Ray> {
+        let MouseRayConfiguration {
+            viewport,
+            projection_matrix,
+            view_matrix,
+            mouse_position,
+        } = *configuration;
+
+        let mut position = mouse_position;
+        position.y = viewport.height - position.y;
+
+        let near_point = glm::vec2_to_vec3(&position);
+
+        let mut far_point = near_point;
+        far_point.z = 1.0;
+
+        let viewport = viewport.as_glm_vec();
+        let p_near = glm::unproject_zo(&near_point, &view_matrix, &projection_matrix, viewport);
+        let p_far = glm::unproject_zo(&far_point, &view_matrix, &projection_matrix, viewport);
+
+        let direction = (p_far - p_near).normalize();
+        let ray = Ray::new(Point3::from(p_near), direction);
+
+        Ok(ray)
+    }
+
+    pub fn pick_object(
+        &mut self,
+        mouse_ray_configuration: &MouseRayConfiguration,
+        interact_distance: f32,
+        groups: InteractionGroups,
+    ) -> Result<Option<Entity>> {
+        let ray = self.mouse_ray(mouse_ray_configuration)?;
+
+        let hit = self.physics.query_pipeline.cast_ray(
+            &self.physics.colliders,
+            &ray,
+            interact_distance,
+            true,
+            groups,
+            None,
+        );
+
+        let mut picked_entity = None;
+        if let Some((handle, _)) = hit {
+            let collider = &self.physics.colliders[handle];
+            let rigid_body_handle = collider
+                .parent()
+                .context("Failed to get a collider's parent!")?;
+            let mut query = <(Entity, &RigidBody)>::query();
+            for (entity, rigid_body) in query.iter(&self.ecs) {
+                if rigid_body.handle == rigid_body_handle {
+                    picked_entity = Some(*entity);
+                    break;
+                }
+            }
+        }
+
+        Ok(picked_entity)
+    }
+
+    pub fn tick(&mut self, delta_time: f32) -> Result<()> {
+        self.physics.update(delta_time);
+        self.sync_all_rigid_bodies();
         Ok(())
     }
 
@@ -451,6 +583,101 @@ impl World {
         self.hdr_textures.push(Texture::from_hdr(path)?);
         Ok(())
     }
+
+    /// Sync the entity's physics rigid body with its transform
+    pub fn sync_rigid_body_to_transform(&mut self, entity: Entity) -> Result<()> {
+        let entry = self.ecs.entry_ref(entity)?;
+        let rigid_body = entry.get_component::<RigidBody>()?;
+        let transform = entry.get_component::<Transform>()?;
+        if let Some(body) = self.physics.bodies.get_mut(rigid_body.handle) {
+            let mut position = body.position().clone();
+            position.translation.vector = transform.translation;
+            body.set_position(position, true);
+        }
+        Ok(())
+    }
+
+    /// Sync the entity's transform with its physics rigid body
+    pub fn sync_transform_to_rigid_body(&mut self, entity: Entity) -> Result<()> {
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+        let mut entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+        let transform = entry.get_component_mut::<Transform>()?;
+        if let Some(body) = self.physics.bodies.get(rigid_body_handle) {
+            let position = body.position();
+            transform.translation = position.translation.vector;
+            transform.rotation = *position.rotation.quaternion();
+        }
+        if let Some(body) = self.physics.bodies.get_mut(rigid_body_handle) {
+            body.wake_up(true);
+        }
+        Ok(())
+    }
+
+    /// Sync the render transforms with the physics rigid bodies
+    pub fn sync_all_rigid_bodies(&mut self) {
+        let mut query = <(&RigidBody, &mut Transform)>::query();
+        for (rigid_body, transform) in query.iter_mut(&mut self.ecs) {
+            if let Some(body) = self.physics.bodies.get(rigid_body.handle) {
+                let position = body.position();
+                transform.translation = position.translation.vector;
+                transform.rotation = *position.rotation.quaternion();
+            }
+        }
+    }
+
+    pub fn entity_model_matrix(
+        &self,
+        entity: Entity,
+        global_transform: glm::Mat4,
+    ) -> Result<glm::Mat4> {
+        let entry = self.ecs.entry_ref(entity)?;
+        let model = match entry.get_component::<RigidBody>() {
+            Ok(rigid_body) => {
+                let body = self
+                    .physics
+                    .bodies
+                    .get(rigid_body.handle)
+                    .context("Failed to acquire physics body to render!")?;
+                let position = body.position();
+                let translation = position.translation.vector;
+                let rotation = *position.rotation.quaternion();
+                let scale = Transform::from(global_transform).scale;
+                Transform::new(translation, rotation, scale).matrix()
+            }
+            Err(_) => global_transform,
+        };
+        Ok(model)
+    }
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct Viewport {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Viewport {
+    pub fn aspect_ratio(&self) -> f32 {
+        let height = if self.height > 0.0 { self.height } else { 1.0 };
+        self.width / height
+    }
+
+    pub fn as_glm_vec(&self) -> glm::Vec4 {
+        glm::vec4(self.x, self.y, self.width, self.height)
+    }
+}
+
+pub struct MouseRayConfiguration {
+    pub viewport: Viewport,
+    pub projection_matrix: glm::Mat4,
+    pub view_matrix: glm::Mat4,
+    pub mouse_position: glm::Vec2,
 }
 
 fn serialize_ecs<S>(ecs: &Ecs, serializer: S) -> Result<S::Ok, S::Error>
@@ -1095,6 +1322,17 @@ impl SceneGraph {
         let _edge_index = self.0.add_edge(parent_node, node, ());
     }
 
+    pub fn collect_nodes(&self) -> Result<Vec<SceneGraphNode>> {
+        let mut nodes = Vec::new();
+        let mut linear_offset = 0;
+        self.walk(|node_index| {
+            nodes.push(SceneGraphNode::new(self[node_index], linear_offset));
+            linear_offset += 1;
+            Ok(())
+        })?;
+        return Ok(nodes);
+    }
+
     pub fn parent_of(&self, index: NodeIndex) -> Option<NodeIndex> {
         let mut incoming_walker = self.0.neighbors_directed(index, Incoming).detach();
         incoming_walker.next_node(&self.0)
@@ -1145,6 +1383,17 @@ impl Index<NodeIndex> for SceneGraph {
 impl IndexMut<NodeIndex> for SceneGraph {
     fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
         &mut self.0[index]
+    }
+}
+
+pub struct SceneGraphNode {
+    pub entity: Entity,
+    pub offset: u32,
+}
+
+impl SceneGraphNode {
+    pub fn new(entity: Entity, offset: u32) -> Self {
+        Self { entity, offset }
     }
 }
 

@@ -3,7 +3,7 @@ use crate::{
         scene::Scene,
         world::{Light, WorldPipelineData, WorldUniformBuffer},
     },
-    Render,
+    Renderer,
 };
 use anyhow::Result;
 use dragonglass_shader::compile_shaders;
@@ -39,28 +39,9 @@ impl VulkanRenderBackend {
     }
 }
 
-impl Render for VulkanRenderBackend {
+impl Renderer for VulkanRenderBackend {
     fn load_world(&mut self, world: &World) -> Result<()> {
         self.scene.load_world(&self.context, world)?;
-        Ok(())
-    }
-
-    fn reload_asset_shaders(&mut self) -> Result<()> {
-        self.scene
-            .shader_cache
-            .shaders
-            .remove("assets/shaders/model/model.vert.spv");
-        self.scene
-            .shader_cache
-            .shaders
-            .remove("assets/shaders/model/model.frag.spv");
-        if compile_shaders("assets/shaders/model/*.glsl").is_err() {
-            error!("Failed to recompile asset shaders!");
-            return Ok(());
-        }
-        unsafe { self.context.device.handle.device_wait_idle() }?;
-        self.scene.create_pipelines(&self.context)?;
-        info!("Reloaded shaders!");
         Ok(())
     }
 
@@ -166,10 +147,12 @@ impl Render for VulkanRenderBackend {
         Ok(())
     }
 
-    fn toggle_wireframe(&mut self) {
-        if let Some(world_render) = self.scene.world_render.as_mut() {
-            world_render.wireframe_enabled = !world_render.wireframe_enabled;
-        }
+    fn viewport(&self) -> dragonglass_world::Viewport {
+        todo!()
+    }
+
+    fn set_viewport(&mut self, _viewport: dragonglass_world::Viewport) {
+        todo!()
     }
 }
 
