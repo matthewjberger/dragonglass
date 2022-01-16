@@ -1,11 +1,11 @@
 use anyhow::Result;
 use dragonglass::{
-    app::{Application, ApplicationRunner, MouseOrbit},
+    app::{App, AppState, MouseOrbit},
     world::{
         legion::Entity,
         load_gltf,
         rapier3d::{geometry::InteractionGroups, prelude::RigidBodyType},
-        IntoQuery, MeshRender, World,
+        IntoQuery, MeshRender,
     },
 };
 use log::{info, warn};
@@ -25,11 +25,11 @@ impl Default for Editor {
 }
 
 impl Editor {
-    fn load_gltf(path: &str, application: &mut Application) -> Result<()> {
-        load_gltf(path, &mut application.world)?;
+    fn load_gltf(path: &str, app_state: &mut AppState) -> Result<()> {
+        load_gltf(path, &mut app_state.world)?;
 
         // FIXME: Don't reload entire scene whenever something is added
-        match application.renderer.load_world(&application.world) {
+        match app_state.renderer.load_world(&app_state.world) {
             Ok(_) => {
                 info!("Loaded gltf world: '{}'", path);
             }
@@ -41,13 +41,13 @@ impl Editor {
         Ok(())
     }
 
-    fn load_hdr(path: impl AsRef<Path>, application: &mut Application) -> Result<()> {
+    fn load_hdr(path: impl AsRef<Path>, app_state: &mut AppState) -> Result<()> {
         // FIXME: We are loading the hdr even if it's already loaded here
-        application.world.load_hdr(path)?;
-        application.world.scene.skybox = Some(application.world.hdr_textures.len() - 1);
+        app_state.world.load_hdr(path)?;
+        app_state.world.scene.skybox = Some(app_state.world.hdr_textures.len() - 1);
 
         // FIXME: Don't reload entire scene whenever something is added
-        match application.renderer.load_world(&application.world) {
+        match app_state.renderer.load_world(&app_state.world) {
             Ok(_) => {
                 info!("Reloaded gltf world");
             }
@@ -60,15 +60,15 @@ impl Editor {
     }
 }
 
-impl ApplicationRunner for Editor {
-    fn initialize(&mut self, application: &mut Application) -> Result<()> {
-        application.world.add_default_light()?;
+impl App for Editor {
+    fn initialize(&mut self, app_state: &mut dragonglass::app::AppState) -> Result<()> {
+        app_state.world.add_default_light()?;
         Ok(())
     }
 
-    fn update(&mut self, application: &mut Application) -> Result<()> {
-        if application.input.is_key_pressed(VirtualKeyCode::Escape) {
-            application.system.exit_requested = true;
+    fn update(&mut self, app_state: &mut dragonglass::app::AppState) -> Result<()> {
+        if app_state.input.is_key_pressed(VirtualKeyCode::Escape) {
+            app_state.system.exit_requested = true;
         }
 
         // if !application.world.animations.is_empty() {
@@ -77,13 +77,13 @@ impl ApplicationRunner for Editor {
         //         .animate(0, 0.75 * application.system.delta_time as f32)?;
         // }
 
-        if !application.input.allowed {
+        if !app_state.input.allowed {
             return Ok(());
         }
 
-        if application.world.active_camera_is_main()? {
-            let camera_entity = application.world.active_camera()?;
-            self.camera.update(application, camera_entity)?;
+        if app_state.world.active_camera_is_main()? {
+            let camera_entity = app_state.world.active_camera()?;
+            self.camera.update(app_state, camera_entity)?;
         }
 
         Ok(())
@@ -91,18 +91,17 @@ impl ApplicationRunner for Editor {
 
     fn on_key(
         &mut self,
-        application: &mut Application,
-        keystate: ElementState,
-        keycode: VirtualKeyCode,
+        input: winit::event::KeyboardInput,
+        app_state: &mut dragonglass::app::AppState,
     ) -> Result<()> {
-        match (keycode, keystate) {
-            (VirtualKeyCode::S, ElementState::Pressed) => {
-                application.world.save("saved_map.dga")?;
+        match (input.virtual_keycode, input.state) {
+            (Some(VirtualKeyCode::S), ElementState::Pressed) => {
+                app_state.world.save("saved_map.dga")?;
                 log::info!("Saved world!");
             }
-            (VirtualKeyCode::C, ElementState::Pressed) => {
-                application.world.clear()?;
-                if let Err(error) = application.renderer.load_world(&application.world) {
+            (Some(VirtualKeyCode::C), ElementState::Pressed) => {
+                app_state.world.clear()?;
+                if let Err(error) = app_state.renderer.load_world(&app_state.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
             }
@@ -111,7 +110,11 @@ impl ApplicationRunner for Editor {
         Ok(())
     }
 
-    fn on_file_dropped(&mut self, application: &mut Application, path: &PathBuf) -> Result<()> {
+    fn on_file_dropped(
+        &mut self,
+        path: &PathBuf,
+        app_state: &mut dragonglass::app::AppState,
+    ) -> Result<()> {
         let raw_path = match path.to_str() {
             Some(raw_path) => raw_path,
             None => return Ok(()),
@@ -119,11 +122,11 @@ impl ApplicationRunner for Editor {
 
         if let Some(extension) = path.extension() {
             match extension.to_str() {
-                Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
-                Some("hdr") => Self::load_hdr(raw_path, application)?,
+                Some("glb") | Some("gltf") => Self::load_gltf(raw_path, app_state)?,
+                Some("hdr") => Self::load_hdr(raw_path, app_state)?,
                 Some("dga") => {
-                    application.world = World::load(raw_path)?;
-                    application.renderer.load_world(&application.world)?;
+                    app_state.world.reload(raw_path)?;
+                    app_state.renderer.load_world(&app_state.world)?;
                     log::info!("Loaded world!");
                 }
                 _ => warn!(
@@ -135,14 +138,14 @@ impl ApplicationRunner for Editor {
 
         let mut query = <(Entity, &MeshRender)>::query();
         let entities = query
-            .iter(&mut application.world.ecs)
+            .iter(&mut app_state.world.ecs)
             .map(|(e, _)| *e)
             .collect::<Vec<_>>();
         for entity in entities.into_iter() {
-            application
+            app_state
                 .world
                 .add_rigid_body(entity, RigidBodyType::Static)?;
-            application
+            app_state
                 .world
                 .add_trimesh_collider(entity, InteractionGroups::all())?;
         }

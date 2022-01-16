@@ -1,4 +1,4 @@
-use crate::app::Application;
+use crate::AppState;
 use anyhow::Result;
 use dragonglass_world::{Entity, EntityStore, Transform};
 use nalgebra_glm as glm;
@@ -9,31 +9,30 @@ pub struct MouseOrbit {
 }
 
 impl MouseOrbit {
-    pub fn update(&mut self, application: &mut Application, entity: Entity) -> Result<()> {
+    pub fn update(&mut self, app_state: &mut AppState, entity: Entity) -> Result<()> {
         self.orientation
-            .zoom(application.input.mouse.wheel_delta.y * 0.3);
+            .zoom(app_state.input.mouse.wheel_delta.y * 0.3);
 
-        let mouse_delta =
-            application.input.mouse.position_delta * application.system.delta_time as f32;
+        let mouse_delta = app_state.input.mouse.position_delta * app_state.system.delta_time as f32;
 
-        if application.input.mouse.is_left_clicked {
+        if app_state.input.mouse.is_left_clicked {
             let mut delta = mouse_delta;
             delta.x = -1.0 * mouse_delta.x;
             self.orientation.rotate(&delta);
         }
 
         {
-            let mut entry = application.world.ecs.entry_mut(entity)?;
+            let mut entry = app_state.world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
-            if application.input.mouse.is_right_clicked {
+            if app_state.input.mouse.is_right_clicked {
                 self.orientation.pan(&mouse_delta)
             }
             transform.translation = self.orientation.position();
             transform.rotation = self.orientation.look_at_offset();
         }
 
-        application.set_cursor_grab(false)?;
-        application.set_cursor_visible(true);
+        app_state.set_cursor_grab(false)?;
+        app_state.set_cursor_visible(true);
 
         Ok(())
     }
@@ -45,21 +44,21 @@ pub struct MouseLook {
 }
 
 impl MouseLook {
-    pub fn update(&mut self, application: &mut Application, entity: Entity) -> Result<()> {
+    pub fn update(&mut self, app_state: &mut AppState, entity: Entity) -> Result<()> {
         let mouse_delta =
-            application.input.mouse.offset_from_center * application.system.delta_time as f32;
+            app_state.input.mouse.offset_from_center * app_state.system.delta_time as f32;
 
         self.orientation.rotate(&mouse_delta);
 
         {
-            let mut entry = application.world.ecs.entry_mut(entity)?;
+            let mut entry = app_state.world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
             transform.rotation = self.orientation.look_forward();
         }
 
-        application.set_cursor_grab(true)?;
-        application.set_cursor_visible(false);
-        application.center_cursor()?;
+        app_state.set_cursor_grab(true)?;
+        app_state.set_cursor_visible(false);
+        app_state.center_cursor()?;
 
         Ok(())
     }

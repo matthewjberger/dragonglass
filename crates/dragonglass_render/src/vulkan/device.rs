@@ -6,13 +6,12 @@ use crate::{
     Renderer,
 };
 use anyhow::Result;
-use dragonglass_shader::compile_shaders;
 use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
 };
 use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
-use log::{error, info};
+use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;

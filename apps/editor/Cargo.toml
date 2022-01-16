@@ -7,9 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.40"
-clap = "2.33.3"
 dragonglass = {path = "../.."}
-hotwatch = "0.4.5"
 log = "0.4.14"
 nalgebra = "0.30.1"
 nalgebra-glm = {version = "0.16.0", features = ["serde-serialize"]}

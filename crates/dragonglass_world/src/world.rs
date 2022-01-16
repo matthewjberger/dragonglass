@@ -12,7 +12,7 @@ use nalgebra as na;
 use nalgebra_glm as glm;
 use petgraph::{graph::WalkNeighbors, prelude::*};
 use rapier3d::{
-    dynamics::{BodyStatus, RigidBodyBuilder},
+    dynamics::RigidBodyBuilder,
     geometry::{ColliderBuilder, InteractionGroups, Ray},
     prelude::RigidBodyType,
 };
@@ -20,6 +20,7 @@ use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serialize
 use std::{
     collections::HashMap,
     io::BufReader,
+    mem::replace,
     ops::{Index, IndexMut},
     path::Path,
     sync::{Arc, RwLock},
@@ -577,6 +578,11 @@ impl World {
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         Self::from_bytes(&std::fs::read(path)?)
+    }
+
+    pub fn reload(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        let _ = replace(self, Self::load(path)?);
+        Ok(())
     }
 
     pub fn load_hdr(&mut self, path: impl AsRef<Path>) -> Result<()> {
