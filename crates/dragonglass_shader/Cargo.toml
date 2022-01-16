@@ -1,8 +1,8 @@
 [package]
-name = "shader-compilation"
-version = "0.1.0"
 authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
+name = "dragonglass_shader"
+version = "0.1.0"
 
 [dependencies]
 glob = "0.3.0"

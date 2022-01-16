@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.40"
 derive_builder = "0.10.0"
+dragonglass_shader = {path = "../dragonglass_shader"}
 dragonglass_vulkan = {path = "../dragonglass_vulkan"}
 dragonglass_world = {path = "../dragonglass_world"}
 image = "0.23.14"
@@ -15,9 +16,8 @@ nalgebra-glm = "0.12.0"
 petgraph = "0.5.1"
 rapier3d = "0.8.0"
 raw-window-handle = "0.3.3"
-shader-compilation = {path = "../shader-compilation"}
 
 [build-dependencies]
+dragonglass_shader = {path = "../dragonglass_shader"}
 log = "0.4.14"
-shader-compilation = {path = "../shader-compilation"}
 simplelog = {version = "0.10.0", features = ["termcolor"]}
