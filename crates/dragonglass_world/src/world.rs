@@ -3,24 +3,31 @@ use dragonglass_deps::{
     anyhow::{bail, Context, Result},
     bincode,
     bmfont::{BMFont, OrdinateOrientation},
-    image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView},
+    image::{
+        hdr::{HdrDecoder, HdrMetadata},
+        io::Reader as ImageReader,
+        DynamicImage, GenericImageView, ImageBuffer, ImageFormat, Pixel, RgbImage,
+    },
     lazy_static::lazy_static,
     legion::{
-        self, serialize::set_entity_serializer, serialize::Canon, EntityStore, IntoQuery, Registry,
+        self, serialize::set_entity_serializer, serialize::Canon, storage::Component, EntityStore,
+        IntoQuery, Registry,
     },
     log,
-    nalgebra::{linalg::QR, Isometry3, Point, Translation3, UnitQuaternion},
+    nalgebra::{linalg::QR, Isometry3, Point, Point3, Translation3, UnitQuaternion},
     nalgebra_glm as glm,
     petgraph::{graph::WalkNeighbors, prelude::*},
     rapier3d::{
-        dynamics::{BodyStatus, RigidBodyBuilder},
+        dynamics::{RigidBodyBuilder, RigidBodyType},
         geometry::{ColliderBuilder, InteractionGroups},
+        prelude::Ray,
     },
     serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer},
 };
 use std::{
     collections::HashMap,
-    io::BufReader,
+    io::{BufReader, Cursor},
+    mem::replace,
     ops::{Index, IndexMut},
     path::Path,
     sync::{Arc, RwLock},
@@ -39,6 +46,16 @@ lazy_static! {
         Arc::new(RwLock::new(registry))
     };
     pub static ref ENTITY_SERIALIZER: Canon = Canon::default();
+}
+
+pub fn register_component<T: Component + Serialize + for<'de> Deserialize<'de>>(
+    key: &str,
+) -> Result<()> {
+    let mut registry = COMPONENT_REGISTRY
+        .write()
+        .expect("Failed to access component registry!");
+    registry.register::<T>(key.to_string());
+    Ok(())
 }
 
 pub type Ecs = legion::World;
@@ -85,6 +102,7 @@ impl World {
 
         let camera_entity = self.ecs.push((
             transform,
+            Name("Default Camera".to_string()),
             Camera {
                 name: Self::MAIN_CAMERA_NAME.to_string(),
                 projection: Projection::Perspective(PerspectiveCamera {
@@ -111,6 +129,7 @@ impl World {
         transform.look_at(&(-position), &glm::Vec3::y());
         let light_entity = self.ecs.push((
             transform,
+            Name("Default Directional Light".to_string()),
             Light {
                 color: glm::vec3(200.0, 200.0, 200.0),
                 kind: LightKind::Point,
@@ -199,9 +218,12 @@ impl World {
     }
 
     pub fn clear(&mut self) -> Result<()> {
+        self.physics = WorldPhysics::new();
         self.ecs.clear();
         self.scene.graphs.clear();
         self.textures.clear();
+        self.fonts.clear();
+        self.hdr_textures.clear();
         self.animations.clear();
         self.materials.clear();
         self.geometry.clear();
@@ -368,6 +390,32 @@ impl World {
         Ok(joint_matrices)
     }
 
+    pub fn add_cylinder_collider(
+        &mut self,
+        entity: Entity,
+        half_height: f32,
+        radius: f32,
+        collision_groups: InteractionGroups,
+    ) -> Result<()> {
+        let collider = ColliderBuilder::cylinder(half_height, radius)
+            .collision_groups(collision_groups)
+            .build();
+
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+
+        self.physics.colliders.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut self.physics.bodies,
+        );
+
+        Ok(())
+    }
+
     pub fn add_trimesh_collider(
         &mut self,
         entity: Entity,
@@ -378,6 +426,7 @@ impl World {
         let transform = self.entity_global_transform(entity)?;
         let mesh = &self.geometry.meshes[&mesh.name];
 
+        // TODO: Add collider handles to component
         let rigid_body_handle = self
             .ecs
             .entry_ref(entity)?
@@ -406,20 +455,22 @@ impl World {
             let collider = ColliderBuilder::trimesh(vertices, indices)
                 .collision_groups(collision_groups)
                 .build();
-            self.physics
-                .colliders
-                .insert(collider, rigid_body_handle, &mut self.physics.bodies);
+            self.physics.colliders.insert_with_parent(
+                collider,
+                rigid_body_handle,
+                &mut self.physics.bodies,
+            );
         }
         Ok(())
     }
 
-    pub fn add_rigid_body(&mut self, entity: Entity, body_status: BodyStatus) -> Result<()> {
+    pub fn add_rigid_body(&mut self, entity: Entity, rigid_body_type: RigidBodyType) -> Result<()> {
         let handle = {
             let isometry =
                 Transform::from(self.entity_global_transform_matrix(entity)?).as_isometry();
 
             // Insert a corresponding rigid body
-            let rigid_body = RigidBodyBuilder::new(body_status)
+            let rigid_body = RigidBodyBuilder::new(rigid_body_type)
                 .position(isometry)
                 .build();
             self.physics.bodies.insert(rigid_body)
@@ -428,6 +479,98 @@ impl World {
             .entry(entity)
             .context("")?
             .add_component(RigidBody::new(handle));
+        Ok(())
+    }
+
+    pub fn remove_rigid_body(&mut self, entity: Entity) -> Result<()> {
+        let mut entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+        let rigid_body_handle = entry.get_component::<RigidBody>()?.handle;
+        entry.remove_component::<RigidBody>();
+        self.physics.remove_rigid_body(rigid_body_handle);
+        Ok(())
+    }
+
+    pub fn flatten_scenegraphs(&self) -> Vec<SceneGraphNode> {
+        let mut offset = 0;
+        self.scene
+            .graphs
+            .iter()
+            .flat_map(|graph| {
+                let mut graph_nodes = graph.collect_nodes().expect("Failed to collect nodes");
+                graph_nodes
+                    .iter_mut()
+                    .for_each(|node| node.offset += offset);
+                offset += graph_nodes.len() as u32;
+                graph_nodes
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn mouse_ray(&mut self, configuration: &MouseRayConfiguration) -> Result<Ray> {
+        let MouseRayConfiguration {
+            viewport,
+            projection_matrix,
+            view_matrix,
+            mouse_position,
+        } = *configuration;
+
+        let mut position = mouse_position;
+        position.y = viewport.height - position.y;
+
+        let near_point = glm::vec2_to_vec3(&position);
+
+        let mut far_point = near_point;
+        far_point.z = 1.0;
+
+        // TODO: If using vulkan we need to use un/project_zo, maybe add depth to viewport?
+        let viewport = viewport.as_glm_vec();
+        let p_near = glm::unproject(&near_point, &view_matrix, &projection_matrix, viewport);
+        let p_far = glm::unproject(&far_point, &view_matrix, &projection_matrix, viewport);
+
+        let direction = (p_far - p_near).normalize();
+        let ray = Ray::new(Point3::from(p_near), direction);
+
+        Ok(ray)
+    }
+
+    pub fn pick_object(
+        &mut self,
+        mouse_ray_configuration: &MouseRayConfiguration,
+        interact_distance: f32,
+        groups: InteractionGroups,
+    ) -> Result<Option<Entity>> {
+        let ray = self.mouse_ray(mouse_ray_configuration)?;
+
+        let hit = self.physics.query_pipeline.cast_ray(
+            &self.physics.colliders,
+            &ray,
+            interact_distance,
+            true,
+            groups,
+            None,
+        );
+
+        let mut picked_entity = None;
+        if let Some((handle, _)) = hit {
+            let collider = &self.physics.colliders[handle];
+            let rigid_body_handle = collider
+                .parent()
+                .context("Failed to get a collider's parent!")?;
+            let mut query = <(Entity, &RigidBody)>::query();
+            for (entity, rigid_body) in query.iter(&self.ecs) {
+                if rigid_body.handle == rigid_body_handle {
+                    picked_entity = Some(*entity);
+                    break;
+                }
+            }
+        }
+
+        Ok(picked_entity)
+    }
+
+    pub fn tick(&mut self, delta_time: f32) -> Result<()> {
+        self.physics.update(delta_time);
+        self.sync_all_rigid_bodies();
         Ok(())
     }
 
@@ -444,17 +587,115 @@ impl World {
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
+        log::info!("Saved world!");
         Ok(std::fs::write(path, &self.as_bytes()?)?)
     }
 
-    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        Self::from_bytes(&std::fs::read(path)?)
+    pub fn load(&mut self, path: impl AsRef<Path>) -> Result<()> {
+        let world = Self::from_bytes(&std::fs::read(path)?)?;
+        let _ = replace(self, world);
+        Ok(())
     }
 
     pub fn load_hdr(&mut self, path: impl AsRef<Path>) -> Result<()> {
         self.hdr_textures.push(Texture::from_hdr(path)?);
         Ok(())
     }
+
+    /// Sync the entity's physics rigid body with its transform
+    pub fn sync_rigid_body_to_transform(&mut self, entity: Entity) -> Result<()> {
+        let entry = self.ecs.entry_ref(entity)?;
+        let rigid_body = entry.get_component::<RigidBody>()?;
+        let transform = entry.get_component::<Transform>()?;
+        if let Some(body) = self.physics.bodies.get_mut(rigid_body.handle) {
+            let mut position = body.position().clone();
+            position.translation.vector = transform.translation;
+            body.set_position(position, true);
+        }
+        Ok(())
+    }
+
+    /// Sync the entity's transform with its physics rigid body
+    pub fn sync_transform_to_rigid_body(&mut self, entity: Entity) -> Result<()> {
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+        let mut entry = self.ecs.entry(entity).context("Failed to find entity!")?;
+        let transform = entry.get_component_mut::<Transform>()?;
+        if let Some(body) = self.physics.bodies.get(rigid_body_handle) {
+            let position = body.position();
+            transform.translation = position.translation.vector;
+            transform.rotation = *position.rotation.quaternion();
+        }
+        if let Some(body) = self.physics.bodies.get_mut(rigid_body_handle) {
+            body.wake_up(true);
+        }
+        Ok(())
+    }
+
+    /// Sync the render transforms with the physics rigid bodies
+    pub fn sync_all_rigid_bodies(&mut self) {
+        let mut query = <(&RigidBody, &mut Transform)>::query();
+        for (rigid_body, transform) in query.iter_mut(&mut self.ecs) {
+            if let Some(body) = self.physics.bodies.get(rigid_body.handle) {
+                let position = body.position();
+                transform.translation = position.translation.vector;
+                transform.rotation = *position.rotation.quaternion();
+            }
+        }
+    }
+
+    pub fn entity_model_matrix(
+        &self,
+        entity: Entity,
+        global_transform: glm::Mat4,
+    ) -> Result<glm::Mat4> {
+        let entry = self.ecs.entry_ref(entity)?;
+        let model = match entry.get_component::<RigidBody>() {
+            Ok(rigid_body) => {
+                let body = self
+                    .physics
+                    .bodies
+                    .get(rigid_body.handle)
+                    .context("Failed to acquire physics body to render!")?;
+                let position = body.position();
+                let translation = position.translation.vector;
+                let rotation = *position.rotation.quaternion();
+                let scale = Transform::from(global_transform).scale;
+                Transform::new(translation, rotation, scale).matrix()
+            }
+            Err(_) => global_transform,
+        };
+        Ok(model)
+    }
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct Viewport {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl Viewport {
+    pub fn aspect_ratio(&self) -> f32 {
+        let height = if self.height > 0.0 { self.height } else { 1.0 };
+        self.width / height
+    }
+
+    pub fn as_glm_vec(&self) -> glm::Vec4 {
+        glm::vec4(self.x, self.y, self.width, self.height)
+    }
+}
+
+pub struct MouseRayConfiguration {
+    pub viewport: Viewport,
+    pub projection_matrix: glm::Mat4,
+    pub view_matrix: glm::Mat4,
+    pub mouse_position: glm::Vec2,
 }
 
 fn serialize_ecs<S>(ecs: &Ecs, serializer: S) -> Result<S::Ok, S::Error>
@@ -502,6 +743,17 @@ impl Scene {
             Some(graph) => Ok(graph),
             None => bail!("Failed to find default scenegraph in scene: {}!", self.name),
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn recurse_scenegraphs(
+        &self,
+        action: &mut impl FnMut(&SceneGraph, NodeIndex) -> Result<()>,
+    ) -> Result<()> {
+        for graph in self.graphs.iter() {
+            graph.recurse(NodeIndex::new(0), action)?;
+        }
+        Ok(())
     }
 }
 
@@ -847,6 +1099,7 @@ impl Geometry {
     }
 }
 
+#[repr(C)]
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 #[serde(crate = "dragonglass_deps::serde")]
 pub struct Vertex {
@@ -979,47 +1232,103 @@ impl Default for AlphaMode {
 #[serde(crate = "dragonglass_deps::serde")]
 pub struct Texture {
     pub pixels: Vec<u8>,
-    pub format: Format,
+    pub format: TextureFormat,
     pub width: u32,
     pub height: u32,
     pub sampler: Sampler,
+    pub mip_levels: u32,
 }
 
 impl Texture {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let image = ImageReader::open(path)?.decode()?;
-        let pixels = image.to_bytes();
-        let (width, height) = image.dimensions();
-        let format = Self::map_format(&image)?;
-
-        Ok(Self {
-            pixels,
+    pub fn empty(width: u32, height: u32, format: TextureFormat) -> Self {
+        Self {
             format,
             width,
             height,
+            pixels: Vec::new(),
             sampler: Sampler::default(),
+            mip_levels: Self::calculate_mip_levels(width, height),
+        }
+    }
+
+    pub fn calculate_mip_levels(width: u32, height: u32) -> u32 {
+        ((width.min(height) as f32).log2().floor() + 1.0) as u32
+    }
+
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let image = ImageReader::open(path)?.decode()?;
+        Self::from_image(image)
+    }
+
+    pub fn from_bytes(image_bytes: &[u8]) -> Result<Self> {
+        let image = ImageReader::new(Cursor::new(image_bytes)).decode()?;
+        Self::from_image(image)
+    }
+
+    pub fn from_bytes_and_format(image_bytes: &[u8], format: ImageFormat) -> Result<Self> {
+        let mut decoder = ImageReader::new(Cursor::new(image_bytes));
+        decoder.set_format(format);
+        let image = decoder.decode()?;
+        Self::from_image(image)
+    }
+
+    pub fn from_image(image: DynamicImage) -> Result<Self> {
+        let (width, height) = image.dimensions();
+        let format = Self::map_format(&image)?;
+        let mut texture = Self {
+            pixels: image.to_bytes(),
+            format,
+            width,
+            height,
+            mip_levels: Self::calculate_mip_levels(width, height),
+            sampler: Sampler::default(),
+        };
+        texture.convert_24bit_formats()?;
+        Ok(texture)
+    }
+
+    pub fn map_format(image: &DynamicImage) -> Result<TextureFormat> {
+        Ok(match image {
+            DynamicImage::ImageRgb8(_) => TextureFormat::R8G8B8,
+            DynamicImage::ImageRgba8(_) => TextureFormat::R8G8B8A8,
+            DynamicImage::ImageBgr8(_) => TextureFormat::B8G8R8,
+            DynamicImage::ImageBgra8(_) => TextureFormat::B8G8R8A8,
+            DynamicImage::ImageRgb16(_) => TextureFormat::R16G16B16,
+            DynamicImage::ImageRgba16(_) => TextureFormat::R16G16B16A16,
+            _ => bail!("Failed to match the provided image format to a vulkan format!"),
         })
     }
 
-    pub fn map_format(image: &DynamicImage) -> Result<Format> {
-        Ok(match image {
-            DynamicImage::ImageRgb8(_) => Format::R8G8B8,
-            DynamicImage::ImageRgba8(_) => Format::R8G8B8A8,
-            DynamicImage::ImageBgr8(_) => Format::B8G8R8,
-            DynamicImage::ImageBgra8(_) => Format::B8G8R8A8,
-            DynamicImage::ImageRgb16(_) => Format::R16G16B16,
-            DynamicImage::ImageRgba16(_) => Format::R16G16B16A16,
-            _ => bail!("Failed to match the provided image format to a vulkan format!"),
-        })
+    pub fn convert_24bit_formats(&mut self) -> Result<()> {
+        // 24-bit formats are unsupported, so they
+        // need to have an alpha channel added to make them 32-bit
+        let format = match self.format {
+            TextureFormat::R8G8B8 => TextureFormat::R8G8B8A8,
+            TextureFormat::B8G8R8 => TextureFormat::B8G8R8A8,
+            _ => return Ok(()),
+        };
+        self.format = format;
+        self.attach_alpha_channel()
+    }
+
+    fn attach_alpha_channel(&mut self) -> Result<()> {
+        let image_buffer: RgbImage =
+            ImageBuffer::from_raw(self.width, self.height, self.pixels.to_vec())
+                .context("Failed to load image from raw pixels!")?;
+
+        self.pixels = image_buffer
+            .pixels()
+            .flat_map(|pixel| pixel.to_rgba().channels().to_vec())
+            .collect::<Vec<_>>();
+
+        Ok(())
     }
 
     pub fn from_hdr(path: impl AsRef<Path>) -> Result<Self> {
         let file = std::fs::File::open(&path)?;
         let decoder = HdrDecoder::new(BufReader::new(file))?;
-        let metadata = decoder.metadata();
+        let HdrMetadata { width, height, .. } = decoder.metadata();
         let decoded = decoder.read_image_hdr()?;
-        let width = metadata.width as u32;
-        let height = metadata.height as u32;
         let data = decoded
             .iter()
             .flat_map(|pixel| vec![pixel[0], pixel[1], pixel[2], 1.0])
@@ -1028,18 +1337,48 @@ impl Texture {
             unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
                 .to_vec();
         Ok(Self {
-            pixels,
-            format: Format::R32G32B32A32F,
             width,
             height,
+            format: TextureFormat::R32G32B32A32F,
+            pixels,
             sampler: Sampler::default(),
+            mip_levels: Self::calculate_mip_levels(width, height),
         })
+    }
+
+    pub fn padded_bytes_per_row(&self, alignment: u32) -> u32 {
+        let bytes_per_row = self.bytes_per_row();
+        let padding = (alignment - bytes_per_row % alignment) % alignment;
+        bytes_per_row + padding
+    }
+
+    pub fn bytes_per_row(&self) -> u32 {
+        self.bytes_per_pixel() * self.width
+    }
+
+    pub fn bytes_per_pixel(&self) -> u32 {
+        match self.format {
+            TextureFormat::R8 => 1,
+            TextureFormat::R8G8 => 2,
+            TextureFormat::R8G8B8 | TextureFormat::B8G8R8 => 3,
+            TextureFormat::R8G8B8A8 | TextureFormat::B8G8R8A8 => 4,
+
+            TextureFormat::R16 | TextureFormat::R16F => 2,
+            TextureFormat::R16G16 | TextureFormat::R16G16F => 4,
+            TextureFormat::R16G16B16 | TextureFormat::R16G16B16F => 6,
+            TextureFormat::R16G16B16A16 | TextureFormat::R16G16B16A16F => 8,
+
+            TextureFormat::R32 | TextureFormat::R32F => 4,
+            TextureFormat::R32G32 | TextureFormat::R32G32F => 8,
+            TextureFormat::R32G32B32 | TextureFormat::R32G32B32F => 12,
+            TextureFormat::R32G32B32A32 | TextureFormat::R32G32B32A32F => 16,
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(crate = "dragonglass_deps::serde")]
-pub enum Format {
+pub enum TextureFormat {
     R8,
     R8G8,
     R8G8B8,
@@ -1133,6 +1472,17 @@ impl SceneGraph {
         incoming_walker.next_node(&self.0)
     }
 
+    pub fn collect_nodes(&self) -> Result<Vec<SceneGraphNode>> {
+        let mut nodes = Vec::new();
+        let mut linear_offset = 0;
+        self.walk(|node_index| {
+            nodes.push(SceneGraphNode::new(self[node_index], linear_offset));
+            linear_offset += 1;
+            Ok(())
+        })?;
+        return Ok(nodes);
+    }
+
     pub fn walk(&self, mut action: impl FnMut(NodeIndex) -> Result<()>) -> Result<()> {
         for node_index in self.0.node_indices() {
             if self.has_parents(node_index) {
@@ -1165,6 +1515,20 @@ impl SceneGraph {
     pub fn find_node(&self, entity: Entity) -> Option<NodeIndex> {
         self.0.node_indices().find(|i| self[*i] == entity)
     }
+
+    pub fn recurse(
+        &self,
+        index: NodeIndex,
+        action: &mut impl FnMut(&SceneGraph, NodeIndex) -> Result<()>,
+    ) -> Result<()> {
+        action(&self, index)?;
+        let mut neighbors = self.neighbors(index, Outgoing);
+        while let Some(child) = neighbors.next_node(&self.0) {
+            action(&self, index)?;
+            self.recurse(child, action)?;
+        }
+        Ok(())
+    }
 }
 
 impl Index<NodeIndex> for SceneGraph {
@@ -1178,6 +1542,17 @@ impl Index<NodeIndex> for SceneGraph {
 impl IndexMut<NodeIndex> for SceneGraph {
     fn index_mut(&mut self, index: NodeIndex) -> &mut Self::Output {
         &mut self.0[index]
+    }
+}
+
+pub struct SceneGraphNode {
+    pub entity: Entity,
+    pub offset: u32,
+}
+
+impl SceneGraphNode {
+    pub fn new(entity: Entity, offset: u32) -> Self {
+        Self { entity, offset }
     }
 }
 

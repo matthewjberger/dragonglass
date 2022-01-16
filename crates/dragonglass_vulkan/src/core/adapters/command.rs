@@ -1,7 +1,6 @@
 use crate::core::{Device, Fence};
-use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
+use dragonglass_deps::{anyhow::Result, ash::vk};
 use std::sync::Arc;
 
 pub struct CommandPool {

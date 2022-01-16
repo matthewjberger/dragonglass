@@ -1,9 +1,11 @@
 use crate::core::{AllocatedImage, Device, Framebuffer, Image, ImageView, RenderPass, Sampler};
-use anyhow::{bail, ensure, Context, Result};
-use ash::vk;
-use petgraph::prelude::*;
+use dragonglass_deps::{
+    anyhow::{bail, ensure, Context, Result},
+    ash::vk,
+    petgraph::prelude::*,
+    vk_mem::{self, Allocator},
+};
 use std::{collections::HashMap, fmt, sync::Arc};
-use vk_mem::Allocator;
 
 #[derive(Default)]
 pub struct RenderGraph {

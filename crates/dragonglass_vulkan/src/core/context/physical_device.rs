@@ -1,7 +1,9 @@
 use crate::core::Surface;
-use anyhow::{anyhow, Result};
-use ash::{version::InstanceV1_0, vk};
-use log::info;
+use dragonglass_deps::{
+    anyhow::{anyhow, Result},
+    ash::{self, vk},
+    log::info,
+};
 use std::ffi::CStr;
 
 pub struct PhysicalDevice {

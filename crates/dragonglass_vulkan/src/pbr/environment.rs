@@ -2,8 +2,7 @@ use crate::{
     core::{CommandPool, Context, Cubemap, ShaderCache},
     pbr::{load_hdr_map, load_irradiance_map, load_prefilter_map, Brdflut},
 };
-use anyhow::Result;
-use log::info;
+use dragonglass_deps::{anyhow::Result, log::info};
 
 pub struct EnvironmentMapSet {
     pub hdr: Cubemap,

@@ -2,15 +2,18 @@ use crate::core::{
     BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, Context, CpuToGpuBuffer, Device,
     PipelineBarrierBuilder,
 };
-use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
-use derive_builder::Builder;
-use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
+use dragonglass_deps::{
+    anyhow::{anyhow, bail, Context as AnyhowContext, Result},
+    ash::vk,
+    derive_builder::Builder,
+    image::{self, DynamicImage, ImageBuffer, Pixel, RgbImage},
+    vk_mem::{self, Allocator},
+};
+use dragonglass_world::TextureFormat;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use vk_mem::Allocator;
 
 #[derive(Builder)]
 pub struct ImageLayoutTransition {
@@ -97,34 +100,34 @@ impl ImageDescription {
         Ok(description)
     }
 
-    fn map_to_vulkan_format(format: &dragonglass_world::Format) -> vk::Format {
+    fn map_to_vulkan_format(format: &TextureFormat) -> vk::Format {
         match format {
-            dragonglass_world::Format::R8 => vk::Format::R8_UNORM,
-            dragonglass_world::Format::R8G8 => vk::Format::R8G8_UNORM,
-            dragonglass_world::Format::R8G8B8A8 => vk::Format::R8G8B8A8_UNORM,
-            dragonglass_world::Format::B8G8R8A8 => vk::Format::B8G8R8A8_UNORM,
-            dragonglass_world::Format::R8G8B8 => vk::Format::R8G8B8_UNORM,
-            dragonglass_world::Format::B8G8R8 => vk::Format::B8G8R8_UNORM,
+            TextureFormat::R8 => vk::Format::R8_UNORM,
+            TextureFormat::R8G8 => vk::Format::R8G8_UNORM,
+            TextureFormat::R8G8B8A8 => vk::Format::R8G8B8A8_UNORM,
+            TextureFormat::B8G8R8A8 => vk::Format::B8G8R8A8_UNORM,
+            TextureFormat::R8G8B8 => vk::Format::R8G8B8_UNORM,
+            TextureFormat::B8G8R8 => vk::Format::B8G8R8_UNORM,
 
-            dragonglass_world::Format::R16 => vk::Format::R16_UNORM,
-            dragonglass_world::Format::R16G16 => vk::Format::R16G16_UNORM,
-            dragonglass_world::Format::R16G16B16 => vk::Format::R16G16B16_UNORM,
-            dragonglass_world::Format::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
+            TextureFormat::R16 => vk::Format::R16_UNORM,
+            TextureFormat::R16G16 => vk::Format::R16G16_UNORM,
+            TextureFormat::R16G16B16 => vk::Format::R16G16B16_UNORM,
+            TextureFormat::R16G16B16A16 => vk::Format::R16G16B16A16_UNORM,
 
-            dragonglass_world::Format::R16F => vk::Format::R16_SFLOAT,
-            dragonglass_world::Format::R16G16F => vk::Format::R16G16_SFLOAT,
-            dragonglass_world::Format::R16G16B16F => vk::Format::R16G16B16_SFLOAT,
-            dragonglass_world::Format::R16G16B16A16F => vk::Format::R16G16B16A16_SFLOAT,
+            TextureFormat::R16F => vk::Format::R16_SFLOAT,
+            TextureFormat::R16G16F => vk::Format::R16G16_SFLOAT,
+            TextureFormat::R16G16B16F => vk::Format::R16G16B16_SFLOAT,
+            TextureFormat::R16G16B16A16F => vk::Format::R16G16B16A16_SFLOAT,
 
-            dragonglass_world::Format::R32 => vk::Format::R32_UINT,
-            dragonglass_world::Format::R32G32 => vk::Format::R32G32_UINT,
-            dragonglass_world::Format::R32G32B32 => vk::Format::R32G32B32_UINT,
-            dragonglass_world::Format::R32G32B32A32 => vk::Format::R32G32B32A32_UINT,
+            TextureFormat::R32 => vk::Format::R32_UINT,
+            TextureFormat::R32G32 => vk::Format::R32G32_UINT,
+            TextureFormat::R32G32B32 => vk::Format::R32G32B32_UINT,
+            TextureFormat::R32G32B32A32 => vk::Format::R32G32B32A32_UINT,
 
-            dragonglass_world::Format::R32F => vk::Format::R32_SFLOAT,
-            dragonglass_world::Format::R32G32F => vk::Format::R32G32_SFLOAT,
-            dragonglass_world::Format::R32G32B32F => vk::Format::R32G32B32_SFLOAT,
-            dragonglass_world::Format::R32G32B32A32F => vk::Format::R32G32B32A32_SFLOAT,
+            TextureFormat::R32F => vk::Format::R32_SFLOAT,
+            TextureFormat::R32G32F => vk::Format::R32G32_SFLOAT,
+            TextureFormat::R32G32B32F => vk::Format::R32G32B32_SFLOAT,
+            TextureFormat::R32G32B32A32F => vk::Format::R32G32B32A32_SFLOAT,
         }
     }
 

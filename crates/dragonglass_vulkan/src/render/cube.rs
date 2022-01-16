@@ -6,9 +6,11 @@ use crate::{
     },
     geometry::Cube,
 };
-use anyhow::{Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
-use nalgebra_glm as glm;
+use dragonglass_deps::{
+    anyhow::{Context as AnyhowContext, Result},
+    ash::vk,
+    nalgebra_glm as glm,
+};
 use std::sync::Arc;
 
 #[derive(Debug)]

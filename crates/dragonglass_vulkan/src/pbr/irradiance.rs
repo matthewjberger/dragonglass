@@ -8,14 +8,16 @@ use crate::{
     },
     geometry::Cube,
 };
-use anyhow::Result;
-use ash::{
-    version::DeviceV1_0,
-    vk::{self, Handle},
+use dragonglass_deps::{
+    anyhow::Result,
+    ash::{
+        self,
+        vk::{self, Handle},
+    },
+    nalgebra_glm as glm,
+    vk_mem::Allocator,
 };
-use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
-use vk_mem::Allocator;
 
 #[allow(dead_code)]
 struct PushConstantIrradiance {

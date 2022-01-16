@@ -1,11 +1,11 @@
 use crate::byte_slice_from;
 use dragonglass_deps::{
     anyhow::{ensure, Context as AnyhowContext, Result},
+    ash::vk,
     legion::EntityStore,
     nalgebra_glm as glm,
 };
 use dragonglass_vulkan::{
-    ash::{version::DeviceV1_0, vk},
     core::{
         CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
         GeometryBuffer, GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline,

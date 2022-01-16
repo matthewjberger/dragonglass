@@ -1,6 +1,5 @@
 use crate::core::Device;
-use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
+use dragonglass_deps::{anyhow::Result, ash::vk};
 use std::sync::Arc;
 
 pub struct RenderPass {

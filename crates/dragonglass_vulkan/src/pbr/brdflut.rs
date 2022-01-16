@@ -5,8 +5,10 @@ use crate::{
     },
     render::FullscreenRender,
 };
-use anyhow::Result;
-use ash::vk::{self, Handle};
+use dragonglass_deps::{
+    anyhow::Result,
+    ash::vk::{self, Handle},
+};
 
 pub struct Brdflut {
     pub image: Box<dyn Image>,

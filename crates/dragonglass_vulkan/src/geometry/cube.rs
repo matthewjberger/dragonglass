@@ -1,8 +1,10 @@
 use crate::core::{CommandPool, GeometryBuffer};
-use anyhow::{Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use dragonglass_deps::{
+    anyhow::{Context as AnyhowContext, Result},
+    ash::{self, vk},
+    vk_mem::Allocator,
+};
 use std::sync::Arc;
-use vk_mem::Allocator;
 
 #[rustfmt::skip]
 pub const VERTICES: &[f32; 24] =

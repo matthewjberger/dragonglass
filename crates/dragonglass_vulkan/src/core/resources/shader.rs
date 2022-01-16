@@ -1,7 +1,9 @@
 use crate::core::Device;
-use anyhow::{Context, Result};
-use ash::{version::DeviceV1_0, vk};
 use derive_builder::Builder;
+use dragonglass_deps::{
+    anyhow::{Context, Result},
+    ash::{self, vk},
+};
 use std::{
     collections::HashMap,
     ffi::CStr,

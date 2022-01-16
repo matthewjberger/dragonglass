@@ -1,6 +1,5 @@
+use dragonglass_deps::{log::error, simplelog::*};
 use dragonglass_shader::compile_shaders;
-use log::error;
-use simplelog::*;
 use std::{boxed::Box, error::Error, fs::File};
 
 type Result<T, E = Box<dyn Error>> = std::result::Result<T, E>;

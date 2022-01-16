@@ -2,12 +2,12 @@ use dragonglass::{
     app::{run_application, AppConfig, Application, ApplicationRunner, MouseLook},
     deps::{
         anyhow::{Context, Result},
-        imgui::{im_str, Condition, Ui, Window},
         legion::{EntityStore, IntoQuery},
         log, nalgebra_glm as glm,
         rapier3d::{
             dynamics::{BodyStatus, RigidBodyBuilder},
             geometry::{ColliderBuilder, InteractionGroups},
+            prelude::RigidBodyType,
         },
         winit::event::{ElementState, VirtualKeyCode},
     },
@@ -125,12 +125,8 @@ impl ApplicationRunner for Game {
         // Setup player
         if let Some(entity) = self.player.as_ref() {
             activate_first_person(application, *entity)?;
-            let rigid_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
-                .translation(
-                    transform.translation.x,
-                    transform.translation.y,
-                    transform.translation.z,
-                )
+            let rigid_body = RigidBodyBuilder::new(RigidBodyType::Dynamic)
+                .translation(transform.translation)
                 .lock_rotations()
                 .build();
             let handle = application.world.physics.bodies.insert(rigid_body);
@@ -141,19 +137,11 @@ impl ApplicationRunner for Game {
                 .context("")?
                 .add_component(RigidBody::new(handle));
 
-            add_cylinder_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
+            application
+                .world
+                .add_cylinder_collider(*entity, 1.0, 0.5, PLAYER_COLLISION_GROUP)?;
         }
 
-        Ok(())
-    }
-
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Physics Test"))
-            .size([100.0, 40.0], Condition::FirstUseEver)
-            .no_decoration()
-            .build(ui, || {
-                ui.text(im_str!("Physics test"));
-            });
         Ok(())
     }
 
@@ -162,7 +150,7 @@ impl ApplicationRunner for Game {
             application.system.exit_requested = true;
         }
 
-        sync_all_rigid_bodies(application);
+        application.world.sync_all_rigid_bodies();
         if let Some(player) = self.player.as_ref() {
             self.camera.update(application, *player)?;
             update_player(application, *player)?;
@@ -197,104 +185,35 @@ fn main() -> Result<()> {
     )
 }
 
-#[allow(dead_code)]
-fn add_box_collider(
-    application: &mut Application,
-    entity: Entity,
-    collision_groups: InteractionGroups,
-) -> Result<()> {
-    let bounding_box = {
-        let entry = application.world.ecs.entry_ref(entity)?;
-        let mesh = entry.get_component::<MeshRender>()?;
-        application.world.geometry.meshes[&mesh.name].bounding_box()
-    };
-    let entry = application.world.ecs.entry_ref(entity)?;
-    let transform = entry.get_component::<Transform>()?;
-    let rigid_body_handle = application
-        .world
-        .ecs
-        .entry_ref(entity)?
-        .get_component::<RigidBody>()?
-        .handle;
-    let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
-    let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
-        .collision_groups(collision_groups)
-        .build();
-    application.world.physics.colliders.insert(
-        collider,
-        rigid_body_handle,
-        &mut application.world.physics.bodies,
-    );
-    Ok(())
-}
-
-fn add_cylinder_collider(
-    application: &mut Application,
-    entity: Entity,
-    collision_groups: InteractionGroups,
-) -> Result<()> {
-    let mut entry = application
-        .world
-        .ecs
-        .entry_mut(entity)
-        .context("entity not found")?;
-    let rigid_body = entry.get_component_mut::<RigidBody>()?;
-    let (half_height, radius) = (1.0, 0.5);
-    let collider = ColliderBuilder::cylinder(half_height, radius)
-        .collision_groups(collision_groups)
-        .build();
-    let collider_handle = application.world.physics.colliders.insert(
-        collider,
-        rigid_body.handle,
-        &mut application.world.physics.bodies,
-    );
-    rigid_body.colliders.push(collider_handle);
-    Ok(())
-}
-
-fn sync_rigid_body_to_transform(application: &mut Application, entity: Entity) -> Result<()> {
-    let entry = application.world.ecs.entry_ref(entity)?;
-    let rigid_body = entry.get_component::<RigidBody>()?;
-    let transform = entry.get_component::<Transform>()?;
-    if let Some(body) = application.world.physics.bodies.get_mut(rigid_body.handle) {
-        let mut position = body.position().clone();
-        position.translation.vector = transform.translation;
-        body.set_position(position, true);
-    }
-    Ok(())
-}
-
-fn sync_transform_to_rigid_body(application: &mut Application, entity: Entity) -> Result<()> {
-    let rigid_body_handle = application
-        .world
-        .ecs
-        .entry_ref(entity)?
-        .get_component::<RigidBody>()?
-        .handle;
-    let mut entry = application.world.ecs.entry(entity).context("")?;
-    let transform = entry.get_component_mut::<Transform>()?;
-    if let Some(body) = application.world.physics.bodies.get(rigid_body_handle) {
-        let position = body.position();
-        transform.translation = position.translation.vector;
-        transform.rotation = *position.rotation.quaternion();
-    }
-    if let Some(body) = application.world.physics.bodies.get_mut(rigid_body_handle) {
-        body.wake_up(true);
-    }
-    Ok(())
-}
-
-fn sync_all_rigid_bodies(application: &mut Application) {
-    // Sync the render transforms with the physics rigid bodies
-    let mut query = <(&RigidBody, &mut Transform)>::query();
-    for (rigid_body, transform) in query.iter_mut(&mut application.world.ecs) {
-        if let Some(body) = application.world.physics.bodies.get(rigid_body.handle) {
-            let position = body.position();
-            transform.translation = position.translation.vector;
-            transform.rotation = *position.rotation.quaternion();
-        }
-    }
-}
+// fn add_box_collider(
+//     application: &mut Application,
+//     entity: Entity,
+//     collision_groups: InteractionGroups,
+// ) -> Result<()> {
+//     let bounding_box = {
+//         let entry = application.world.ecs.entry_ref(entity)?;
+//         let mesh = entry.get_component::<MeshRender>()?;
+//         application.world.geometry.meshes[&mesh.name].bounding_box()
+//     };
+//     let entry = application.world.ecs.entry_ref(entity)?;
+//     let transform = entry.get_component::<Transform>()?;
+//     let rigid_body_handle = application
+//         .world
+//         .ecs
+//         .entry_ref(entity)?
+//         .get_component::<RigidBody>()?
+//         .handle;
+//     let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+//     let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
+//         .collision_groups(collision_groups)
+//         .build();
+//     application.world.physics.colliders.insert(
+//         collider,
+//         rigid_body_handle,
+//         &mut application.world.physics.bodies,
+//     );
+//     Ok(())
+// }
 
 fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
     let speed = 6.0 * application.system.delta_time as f32;
@@ -321,7 +240,7 @@ fn update_player(application: &mut Application, entity: Entity) -> Result<()> {
 
         transform.translation += translation;
     }
-    sync_rigid_body_to_transform(application, entity)?;
+    application.world.sync_rigid_body_to_transform(entity)?;
     Ok(())
 }
 
@@ -337,7 +256,7 @@ fn jump_player(application: &mut Application, entity: Entity) -> Result<()> {
         let impulse = jump_strength * glm::Vec3::y();
         rigid_body.apply_impulse(impulse, true);
     }
-    sync_transform_to_rigid_body(application, entity)?;
+    application.world.sync_transform_to_rigid_body(entity)?;
     Ok(())
 }
 

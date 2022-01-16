@@ -1,8 +1,10 @@
 use crate::core::{BufferToBufferCopyBuilder, CommandPool};
-use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
+use dragonglass_deps::{
+    anyhow::Result,
+    ash::{self, vk},
+    vk_mem::{self, Allocator},
+};
 use std::sync::Arc;
-use vk_mem::Allocator;
 
 pub struct GpuBuffer {
     buffer: Buffer,

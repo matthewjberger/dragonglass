@@ -2,7 +2,6 @@ use dragonglass::{
     app::{Application, ApplicationRunner, MouseOrbit},
     deps::{
         anyhow::Result,
-        imgui::{im_str, Condition, Ui, Window},
         legion::{Entity, IntoQuery},
         log::{self, info, warn},
         rapier3d::{dynamics::BodyStatus, geometry::InteractionGroups},
@@ -79,15 +78,6 @@ impl ApplicationRunner for Editor {
         Ok(())
     }
 
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Scene Info"))
-            .collapsed(true, Condition::FirstUseEver)
-            .build(ui, || {
-                ui.text(im_str!(" ",));
-            });
-        Ok(())
-    }
-
     fn update(&mut self, application: &mut Application) -> Result<()> {
         if self.reload_shaders.load(Ordering::Acquire) {
             application.renderer.reload_asset_shaders()?;
@@ -150,7 +140,7 @@ impl ApplicationRunner for Editor {
                 Some("glb") | Some("gltf") => Self::load_gltf(raw_path, application)?,
                 Some("hdr") => Self::load_hdr(raw_path, application)?,
                 Some("dga") => {
-                    application.world = World::load(raw_path)?;
+                    application.world.load(raw_path)?;
                     application.renderer.load_world(&application.world)?;
                     log::info!("Loaded world!");
                 }
@@ -184,15 +174,6 @@ impl ApplicationRunner for Editor {
         button: MouseButton,
         state: ElementState,
     ) -> Result<()> {
-        if !application.input.allowed {
-            return Ok(());
-        }
-
-        if (MouseButton::Left, ElementState::Pressed) == (button, state) {
-            if let Some(entity) = application.pick_object(f32::MAX, InteractionGroups::all())? {
-                log::info!("Picked entity: {:?}", entity);
-            }
-        }
         Ok(())
     }
 }

@@ -3,8 +3,10 @@ use crate::core::{
     GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
     ShaderPathSet,
 };
-use anyhow::{Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use dragonglass_deps::{
+    anyhow::{Context as AnyhowContext, Result},
+    ash::vk,
+};
 use std::sync::Arc;
 
 pub struct FullscreenRender {

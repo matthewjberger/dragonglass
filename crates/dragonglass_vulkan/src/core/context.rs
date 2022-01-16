@@ -5,16 +5,18 @@ mod device;
 mod instance;
 mod physical_device;
 
-use anyhow::{ensure, Context as AnyhowContext, Result};
-use ash::{
-    extensions::khr::{Surface as AshSurface, Swapchain},
-    version::{DeviceV1_0, InstanceV1_0},
-    vk::{self, SurfaceKHR},
+use dragonglass_deps::{
+    anyhow::{ensure, Context as AnyhowContext, Result},
+    ash::{
+        self,
+        extensions::khr::{Surface as AshSurface, Swapchain},
+        vk::{self, SurfaceKHR},
+    },
+    ash_window::{create_surface, enumerate_required_extensions},
+    raw_window_handle::HasRawWindowHandle,
+    vk_mem::{self, Allocator, AllocatorCreateInfo},
 };
-use ash_window::{create_surface, enumerate_required_extensions};
-use raw_window_handle::HasRawWindowHandle;
 use std::{os::raw::c_char, sync::Arc};
-use vk_mem::{Allocator, AllocatorCreateInfo};
 
 // The order the struct members are declared in
 // determines the order they are 'Drop'ped in
@@ -36,7 +38,7 @@ impl Context {
         let device_extensions = Self::device_extensions();
         let features = Self::features();
 
-        let entry = unsafe { ash::Entry::new()? };
+        let entry = unsafe { ash::Entry::load()? };
         let instance = Instance::new(&entry, &instance_extensions, &layers)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;

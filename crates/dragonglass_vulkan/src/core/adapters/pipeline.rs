@@ -1,7 +1,9 @@
 use crate::core::{DescriptorSetLayout, Device, RenderPass, ShaderSet};
-use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
-use derive_builder::Builder;
+use dragonglass_deps::{
+    anyhow::Result,
+    ash::{self, vk},
+    derive_builder::Builder,
+};
 use std::sync::Arc;
 
 pub struct Pipeline {
@@ -240,7 +242,7 @@ impl GraphicsPipelineSettings {
 
     fn blend_attachment_opaque<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
         vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
+            .color_write_mask(vk::ColorComponentFlags::default())
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::ONE)
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
@@ -252,7 +254,7 @@ impl GraphicsPipelineSettings {
 
     fn blend_attachment_blended<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
         vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
+            .color_write_mask(vk::ColorComponentFlags::default())
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)

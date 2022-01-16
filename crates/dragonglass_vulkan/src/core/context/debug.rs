@@ -1,11 +1,13 @@
 use crate::core::Device;
-use anyhow::Result;
-use ash::{
-    extensions::ext::DebugUtils,
-    version::{EntryV1_0, InstanceV1_0},
-    vk::{self, Bool32, DebugUtilsMessengerEXT},
+use dragonglass_deps::{
+    anyhow::Result,
+    ash::{
+        extensions::ext::DebugUtils,
+        vk::{self, Bool32, DebugUtilsMessengerEXT},
+        Entry, Instance,
+    },
+    log::{debug, error, info, trace, warn},
 };
-use log::{debug, error, info, trace, warn};
 use std::{
     ffi::{c_void, CStr},
     sync::Arc,
@@ -18,17 +20,13 @@ pub struct VulkanDebug {
 }
 
 impl VulkanDebug {
-    pub fn new(
-        entry: &impl EntryV1_0,
-        instance: &impl InstanceV1_0,
-        device: Arc<Device>,
-    ) -> Result<Self> {
+    pub fn new(entry: &Entry, instance: &Instance, device: Arc<Device>) -> Result<Self> {
         let debug = DebugUtils::new(entry, instance);
 
         let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-            .flags(vk::DebugUtilsMessengerCreateFlagsEXT::all())
-            .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
-            .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+            .flags(vk::DebugUtilsMessengerCreateFlagsEXT::default())
+            .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::default())
+            .message_type(vk::DebugUtilsMessageTypeFlagsEXT::default())
             .pfn_user_callback(Some(vulkan_debug_callback));
 
         let messenger = unsafe { debug.create_debug_utils_messenger(&create_info, None) }?;

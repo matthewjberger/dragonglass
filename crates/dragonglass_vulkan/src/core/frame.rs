@@ -2,11 +2,12 @@ use crate::core::{
     create_swapchain, CommandPool, Context, Device, Fence, Semaphore, Swapchain,
     SwapchainProperties,
 };
-use anyhow::{bail, Context as AnyhowContext, Result};
-use ash::{
-    prelude::VkResult,
-    version::DeviceV1_0,
-    vk::{self, Handle},
+use dragonglass_deps::{
+    anyhow::{bail, Context as AnyhowContext, Result},
+    ash::{
+        prelude::VkResult,
+        vk::{self, Handle},
+    },
 };
 use std::sync::Arc;
 

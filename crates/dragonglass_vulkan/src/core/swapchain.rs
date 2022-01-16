@@ -1,6 +1,8 @@
 use crate::core::context::{Context, Surface};
-use anyhow::{ensure, Result};
-use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
+use dragonglass_deps::{
+    anyhow::{ensure, Result},
+    ash::{self, extensions::khr::Swapchain as AshSwapchain, vk},
+};
 use std::cmp;
 
 pub struct Swapchain {
