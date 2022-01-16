@@ -3,14 +3,14 @@ use crate::core::{
     PipelineBarrierBuilder,
 };
 use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use derive_builder::Builder;
+use gpu_allocator::vulkan::{Allocation, Allocator};
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use vk_mem::Allocator;
 
 #[derive(Builder)]
 pub struct ImageLayoutTransition {
@@ -246,9 +246,9 @@ impl Image for RawImage {
 
 pub struct AllocatedImage {
     pub handle: vk::Image,
-    allocation: vk_mem::Allocation,
-    allocation_info: vk_mem::AllocationInfo,
+    allocation: Allocation,
     allocator: Arc<Allocator>,
+    device: Arc<Device>,
 }
 
 impl Image for AllocatedImage {

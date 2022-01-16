@@ -9,10 +9,7 @@ use crate::{
     geometry::Cube,
 };
 use anyhow::Result;
-use ash::{
-    version::DeviceV1_0,
-    vk::{self, Handle},
-};
+use ash::vk::{self, Handle};
 use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
 use vk_mem::Allocator;

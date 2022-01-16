@@ -1,8 +1,5 @@
 use anyhow::Result;
-use ash::{
-    version::{DeviceV1_0, InstanceV1_0},
-    vk,
-};
+use ash::vk;
 
 pub struct Device {
     pub handle: ash::Device,

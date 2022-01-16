@@ -1,7 +1,7 @@
 use crate::byte_slice_from;
 use anyhow::{ensure, Context as AnyhowContext, Result};
 use dragonglass_vulkan::{
-    ash::{version::DeviceV1_0, vk},
+    ash::vk,
     core::{
         CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
         GeometryBuffer, GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline,

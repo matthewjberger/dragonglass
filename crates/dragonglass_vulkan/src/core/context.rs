@@ -8,20 +8,19 @@ mod physical_device;
 use anyhow::{ensure, Context as AnyhowContext, Result};
 use ash::{
     extensions::khr::{Surface as AshSurface, Swapchain},
-    version::{DeviceV1_0, InstanceV1_0},
     vk::{self, SurfaceKHR},
 };
 use ash_window::{create_surface, enumerate_required_extensions};
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use raw_window_handle::HasRawWindowHandle;
 use std::{os::raw::c_char, sync::Arc};
-use vk_mem::{Allocator, AllocatorCreateInfo};
 
 // The order the struct members are declared in
 // determines the order they are 'Drop'ped in
 // when this struct is dropped
 pub struct Context {
     pub debug: Option<VulkanDebug>,
-    pub allocator: Arc<vk_mem::Allocator>,
+    pub allocator: Arc<Allocator>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
     pub surface: Option<Surface>,
@@ -69,14 +68,13 @@ impl Context {
         let device = Device::new(&instance.handle, physical_device.handle, create_info)?;
         let device = Arc::new(device);
 
-        let allocator_create_info = AllocatorCreateInfo {
-            device: device.handle.clone(),
-            instance: instance.handle.clone(),
+        let mut allocator = Allocator::new(&AllocatorCreateDesc {
+            instance: instance.handle,
+            device: device.handle,
             physical_device: physical_device.handle,
-            ..Default::default()
-        };
-
-        let allocator = Arc::new(Allocator::new(&allocator_create_info)?);
+            debug_settings: Default::default(),
+            buffer_device_address: true, // Ideally, check the BufferDeviceAddressFeatures struct.
+        });
 
         let debug = if VulkanDebug::enabled() {
             Some(VulkanDebug::new(&entry, &instance.handle, device.clone())?)

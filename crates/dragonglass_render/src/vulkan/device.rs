@@ -7,10 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use dragonglass_gui::egui::{epaint::ClippedShape, CtxRef};
-use dragonglass_vulkan::{
-    ash::version::DeviceV1_0,
-    core::{Context, Frame},
-};
+use dragonglass_vulkan::core::{Context, Frame};
 use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
 use log::error;
 use nalgebra_glm as glm;

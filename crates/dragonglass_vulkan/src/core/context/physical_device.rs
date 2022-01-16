@@ -1,6 +1,6 @@
 use crate::core::Surface;
 use anyhow::{anyhow, Result};
-use ash::{version::InstanceV1_0, vk};
+use ash::vk;
 use log::info;
 use std::ffi::CStr;
 

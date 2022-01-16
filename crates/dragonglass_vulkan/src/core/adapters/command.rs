@@ -1,6 +1,6 @@
 use crate::core::{Device, Fence};
 use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use derive_builder::Builder;
 use std::sync::Arc;
 
