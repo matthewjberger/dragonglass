@@ -1,5 +1,5 @@
 use anyhow::Result;
-// use dragonglass_gui::Gui;
+use dragonglass_gui::Gui;
 use dragonglass_render::Renderer;
 use dragonglass_world::{load_gltf, MouseRayConfiguration, World};
 use nalgebra_glm as glm;
@@ -19,7 +19,7 @@ pub struct AppState<'a> {
     pub window: &'a mut Window,
     pub input: &'a mut Input,
     pub system: &'a mut System,
-    // pub gui: &'a mut Gui,
+    pub gui: &'a mut Gui,
     pub renderer: &'a mut Box<dyn Renderer>,
     pub world: &'a mut World,
 }

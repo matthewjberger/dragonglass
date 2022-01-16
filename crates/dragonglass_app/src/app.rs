@@ -4,6 +4,7 @@ use crate::{
     AppState,
 };
 use anyhow::Result;
+use dragonglass_gui::{Gui, ScreenDescriptor};
 use dragonglass_render::{create_render_backend, Backend};
 use dragonglass_world::{SdfFont, World};
 use image::io::Reader;
@@ -100,6 +101,12 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
     let mut input = Input::default();
     let mut system = System::new(window_dimensions);
 
+    let screen_descriptor = ScreenDescriptor {
+        dimensions: window_dimensions,
+        scale_factor: window.scale_factor() as _,
+    };
+    let mut gui = Gui::new(screen_descriptor);
+
     let mut world = World::new()?;
     world.fonts.insert(
         "default".to_string(),
@@ -109,7 +116,7 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
     app.initialize(&mut AppState {
         window: &mut window,
         world: &mut world,
-        // gui: &mut gui,
+        gui: &mut gui,
         renderer: &mut renderer,
         input: &mut input,
         system: &mut system,
@@ -119,7 +126,7 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
         let state = AppState {
             window: &mut window,
             world: &mut world,
-            // gui: &mut gui,
+            gui: &mut gui,
             renderer: &mut renderer,
             input: &mut input,
             system: &mut system,
@@ -138,11 +145,16 @@ fn run_loop(
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
-    app.handle_events(&event, &mut app_state)?;
-    app_state.system.handle_event(&event);
-    app_state
-        .input
-        .handle_event(&event, app_state.system.window_center());
+    if app.gui_active() {
+        app_state.gui.handle_event(&event);
+    }
+    if !app.gui_active() || !app_state.gui.captures_event(&event) {
+        app.handle_events(&event, &mut app_state)?;
+        app_state.system.handle_event(&event);
+        app_state
+            .input
+            .handle_event(&event, app_state.system.window_center());
+    }
 
     match event {
         Event::NewEvents(_) => {
@@ -170,10 +182,23 @@ fn run_loop(
             app_state.world.tick(app_state.system.delta_time as f32)?;
             app.update(&mut app_state)?;
 
+            let clipped_shapes = if app.gui_active() {
+                let _frame_data = app_state
+                    .gui
+                    .start_frame(app_state.window.scale_factor() as _);
+                app.update_gui(&mut app_state)?;
+                app_state.gui.end_frame(app_state.window)
+            } else {
+                Vec::new()
+            };
+
             let dimensions = app_state.window.inner_size();
-            app_state
-                .renderer
-                .render(&[dimensions.width, dimensions.height], app_state.world)?;
+            app_state.renderer.render(
+                &[dimensions.width, dimensions.height],
+                app_state.world,
+                &app_state.gui.context(),
+                clipped_shapes,
+            )?;
         }
         Event::LoopDestroyed => {
             app.cleanup()?;

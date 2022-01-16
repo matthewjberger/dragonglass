@@ -6,6 +6,7 @@ use crate::{
     Renderer,
 };
 use anyhow::Result;
+use dragonglass_gui::egui::{epaint::ClippedShape, CtxRef};
 use dragonglass_vulkan::{
     ash::version::DeviceV1_0,
     core::{Context, Frame},
@@ -44,7 +45,13 @@ impl Renderer for VulkanRenderBackend {
         Ok(())
     }
 
-    fn render(&mut self, dimensions: &[u32; 2], world: &World) -> Result<()> {
+    fn render(
+        &mut self,
+        dimensions: &[u32; 2],
+        world: &World,
+        _context: &CtxRef,
+        _clipped_shapes: Vec<ClippedShape>,
+    ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
