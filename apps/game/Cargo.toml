@@ -1,13 +1,12 @@
 [package]
-name = "game"
-version = "0.1.0"
 authors = ["Matthew J. Berger <matthewberger@nevada.unr.edu>"]
 edition = "2018"
+name = "game"
+version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.40"
-dragonglass = { path = "../.." }
-imgui = "0.7.0"
+dragonglass = {path = "../.."}
 log = "0.4.14"
 nalgebra = "0.26.1"
 nalgebra-glm = "0.12.0"

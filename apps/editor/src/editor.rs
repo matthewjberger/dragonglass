@@ -7,7 +7,6 @@ use dragonglass::{
     },
 };
 use hotwatch::{Event, Hotwatch};
-use imgui::{im_str, Condition, Ui, Window};
 use log::{info, warn};
 use std::{
     ffi::OsStr,
@@ -94,15 +93,6 @@ impl ApplicationRunner for Editor {
     fn initialize(&mut self, application: &mut Application) -> Result<()> {
         self.setup_file_reloading()?;
         application.world.add_default_light()?;
-        Ok(())
-    }
-
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Scene Info"))
-            .collapsed(true, Condition::FirstUseEver)
-            .build(ui, || {
-                ui.text(im_str!(" ",));
-            });
         Ok(())
     }
 

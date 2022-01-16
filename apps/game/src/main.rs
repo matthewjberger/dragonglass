@@ -7,7 +7,6 @@ use dragonglass::{
         MeshRender, PerspectiveCamera, Projection, RigidBody, Transform,
     },
 };
-use imgui::{im_str, Condition, Ui, Window};
 use nalgebra_glm as glm;
 use rapier3d::{
     dynamics::{BodyStatus, RigidBodyBuilder},
@@ -141,16 +140,6 @@ impl ApplicationRunner for Game {
             add_cylinder_collider(application, *entity, PLAYER_COLLISION_GROUP)?;
         }
 
-        Ok(())
-    }
-
-    fn create_ui(&mut self, _application: &mut Application, ui: &Ui) -> Result<()> {
-        Window::new(im_str!("Physics Test"))
-            .size([100.0, 40.0], Condition::FirstUseEver)
-            .no_decoration()
-            .build(ui, || {
-                ui.text(im_str!("Physics test"));
-            });
         Ok(())
     }
 
