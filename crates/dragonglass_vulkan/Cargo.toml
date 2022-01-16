@@ -5,20 +5,20 @@ name = "dragonglass_vulkan"
 version = "0.1.0"
 
 [dependencies]
-anyhow = "1.0.40"
-ash = "0.32.0"
-ash-window = "0.6.0"
-derive_builder = "0.10.0"
+anyhow = "1.0.52"
+ash = "0.35.0"
+ash-window = "0.9.0"
+derive_builder = "0.10.2"
 dragonglass_shader = {path = "../dragonglass_shader"}
 dragonglass_world = {path = "../dragonglass_world"}
+gpu-allocator = "0.15.1"
 image = "0.23.14"
 log = "0.4.14"
 nalgebra-glm = {version = "0.16.0", features = ["serde-serialize"]}
-petgraph = "0.5.1"
-raw-window-handle = "0.3.3"
-vk-mem = {git = "https://github.com/gwihlidal/vk-mem-rs"}
+petgraph = "0.6.0"
+raw-window-handle = "0.4.2"
 
 [build-dependencies]
 dragonglass_shader = {path = "../dragonglass_shader"}
 log = "0.4.14"
-simplelog = {version = "0.10.0", features = ["termcolor"]}
+simplelog = {version = "0.11.2", features = ["termcolor"]}

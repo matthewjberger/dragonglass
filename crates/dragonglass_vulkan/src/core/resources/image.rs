@@ -1,16 +1,21 @@
 use crate::core::{
-    BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, Context, CpuToGpuBuffer, Device,
+    BlitImageBuilder, BufferToImageCopyBuilder, CommandPool, Context, Device,
     PipelineBarrierBuilder,
 };
 use anyhow::{anyhow, bail, Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use derive_builder::Builder;
+use gpu_allocator::{
+    vulkan::{Allocation, AllocationCreateDesc, Allocator},
+    MemoryLocation,
+};
 use image::{DynamicImage, ImageBuffer, Pixel, RgbImage};
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
-use vk_mem::Allocator;
+
+use super::CpuToGpuBuffer;
 
 #[derive(Builder)]
 pub struct ImageLayoutTransition {
@@ -157,17 +162,26 @@ impl ImageDescription {
         Ok(())
     }
 
-    pub fn as_image(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
-        self.create_image(allocator, vk::ImageCreateFlags::empty(), 1)
+    pub fn as_image(
+        &self,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+    ) -> Result<AllocatedImage> {
+        self.create_image(device, allocator, vk::ImageCreateFlags::empty(), 1)
     }
 
-    pub fn as_cubemap(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
-        self.create_image(allocator, vk::ImageCreateFlags::CUBE_COMPATIBLE, 6)
+    pub fn as_cubemap(
+        &self,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+    ) -> Result<AllocatedImage> {
+        self.create_image(device, allocator, vk::ImageCreateFlags::CUBE_COMPATIBLE, 6)
     }
 
     fn create_image(
         &self,
-        allocator: Arc<Allocator>,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         flags: vk::ImageCreateFlags,
         layers: u32,
     ) -> Result<AllocatedImage> {
@@ -193,12 +207,7 @@ impl ImageDescription {
             .samples(vk::SampleCountFlags::TYPE_1)
             .flags(flags);
 
-        let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        AllocatedImage::new(allocator, &allocation_create_info, &create_info)
+        AllocatedImage::new(device, allocator, &create_info)
     }
 }
 
@@ -246,9 +255,9 @@ impl Image for RawImage {
 
 pub struct AllocatedImage {
     pub handle: vk::Image,
-    allocation: vk_mem::Allocation,
-    allocation_info: vk_mem::AllocationInfo,
-    allocator: Arc<Allocator>,
+    allocation: Allocation,
+    allocator: Arc<RwLock<Allocator>>,
+    device: Arc<Device>,
 }
 
 impl Image for AllocatedImage {
@@ -259,21 +268,34 @@ impl Image for AllocatedImage {
 
 impl AllocatedImage {
     pub fn new(
-        allocator: Arc<Allocator>,
-        allocation_create_info: &vk_mem::AllocationCreateInfo,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         image_create_info: &vk::ImageCreateInfoBuilder,
     ) -> Result<Self> {
-        let (handle, allocation, allocation_info) =
-            allocator.create_image(image_create_info, allocation_create_info)?;
-
-        let texture = Self {
+        let handle = unsafe { device.handle.create_image(&image_create_info, None) }?;
+        let requirements = unsafe { device.handle.get_image_memory_requirements(handle) };
+        let allocation_create_info = AllocationCreateDesc {
+            // TODO: Allow custom naming allocations
+            name: "Image Allocation",
+            requirements,
+            location: MemoryLocation::GpuOnly,
+            linear: true, // Linear texture
+        };
+        let allocation = {
+            let mut allocator = allocator.write().expect("Failed to acquire allocator!");
+            allocator.allocate(&allocation_create_info)?
+        };
+        unsafe {
+            device
+                .handle
+                .bind_image_memory(handle, allocation.memory(), allocation.offset())?
+        };
+        Ok(Self {
             handle,
             allocation,
-            allocation_info,
             allocator,
-        };
-
-        Ok(texture)
+            device,
+        })
     }
 
     pub fn upload_data(
@@ -283,8 +305,9 @@ impl AllocatedImage {
         description: &ImageDescription,
     ) -> Result<()> {
         let buffer = CpuToGpuBuffer::staging_buffer(
+            self.device.clone(),
             self.allocator.clone(),
-            self.allocation_info.get_size() as _,
+            self.allocation.size(),
         )?;
         buffer.upload_data(&description.pixels, 0)?;
         self.transition_base_to_transfer_dst(pool, description.mip_levels)?;
@@ -446,7 +469,14 @@ impl AllocatedImage {
 
 impl Drop for AllocatedImage {
     fn drop(&mut self) {
-        self.allocator.destroy_image(self.handle, &self.allocation);
+        let mut allocator = self
+            .allocator
+            .write()
+            .expect("Failed to acquire allocator!");
+        allocator
+            .free(self.allocation.clone())
+            .expect("Failed to free allocated image!");
+        unsafe { self.device.handle.destroy_image(self.handle, None) };
     }
 }
 
@@ -561,7 +591,7 @@ impl Texture {
         command_pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<Self> {
-        let image = description.as_image(context.allocator.clone())?;
+        let image = description.as_image(context.device.clone(), context.allocator.clone())?;
         image.upload_data(context, command_pool, description)?;
         let view = Self::image_view(context.device.clone(), &image, description)?;
         let texture = Self { image, view };
@@ -601,7 +631,7 @@ impl Cubemap {
         command_pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<Self> {
-        let image = description.as_cubemap(context.allocator.clone())?;
+        let image = description.as_cubemap(context.device.clone(), context.allocator.clone())?;
         if !description.pixels.is_empty() {
             image.upload_data(context, command_pool, description)?;
         }

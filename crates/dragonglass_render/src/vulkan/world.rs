@@ -1,7 +1,7 @@
 use crate::byte_slice_from;
 use anyhow::{ensure, Context as AnyhowContext, Result};
 use dragonglass_vulkan::{
-    ash::{version::DeviceV1_0, vk},
+    ash::vk,
     core::{
         CommandPool, Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device,
         GeometryBuffer, GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline,
@@ -183,12 +183,14 @@ impl WorldPipelineData {
             descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
 
         let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
+            device.clone(),
             allocator.clone(),
             mem::size_of::<WorldUniformBuffer>() as _,
         )?;
 
         let dynamic_alignment = context.dynamic_alignment_of::<EntityDynamicUniformBuffer>();
         let dynamic_uniform_buffer = CpuToGpuBuffer::uniform_buffer(
+            device.clone(),
             allocator,
             (Self::MAX_NUMBER_OF_MESHES as u64 * dynamic_alignment) as vk::DeviceSize,
         )?;
@@ -325,6 +327,7 @@ impl WorldPipelineData {
         };
 
         let geometry_buffer = GeometryBuffer::new(
+            context.device.clone(),
             context.allocator.clone(),
             (geometry.vertices.len() * std::mem::size_of::<Vertex>()) as _,
             index_buffer_size,
@@ -569,7 +572,11 @@ impl WorldRender {
         environment_maps: &EnvironmentMapSet,
     ) -> Result<Self> {
         let pipeline_data = WorldPipelineData::new(context, command_pool, world, environment_maps)?;
-        let cube = Cube::new(context.allocator.clone(), command_pool)?;
+        let cube = Cube::new(
+            context.device.clone(),
+            context.allocator.clone(),
+            command_pool,
+        )?;
         let cube_render = CubeRender::new(context.device.clone(), cube);
         Ok(Self {
             cube_render,

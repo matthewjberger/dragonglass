@@ -1,8 +1,5 @@
 use anyhow::{anyhow, Result};
-use ash::{
-    version::{EntryV1_0, InstanceV1_0},
-    vk::{self, make_version},
-};
+use ash::vk::{self, make_api_version};
 use log::info;
 use std::ffi::{CStr, CString};
 
@@ -12,9 +9,10 @@ pub struct Instance {
 
 impl Instance {
     const APPLICATION_NAME: &'static str = "Dragonglass";
-    const APPLICATION_VERSION: u32 = make_version(1, 0, 0);
-    const API_VERSION: u32 = make_version(1, 2, 0);
-    const ENGINE_VERSION: u32 = make_version(1, 0, 0);
+    // The 'variant' field is always 0 for Vulkan
+    const APPLICATION_VERSION: u32 = make_api_version(0, 1, 0, 0);
+    const API_VERSION: u32 = make_api_version(0, 1, 2, 0);
+    const ENGINE_VERSION: u32 = make_api_version(0, 1, 0, 0);
     const ENGINE_NAME: &'static str = "Dragonglass Engine";
 
     pub fn new(entry: &ash::Entry, extensions: &[*const i8], layers: &[*const i8]) -> Result<Self> {

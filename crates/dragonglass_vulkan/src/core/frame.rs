@@ -5,7 +5,6 @@ use crate::core::{
 use anyhow::{bail, Context as AnyhowContext, Result};
 use ash::{
     prelude::VkResult,
-    version::DeviceV1_0,
     vk::{self, Handle},
 };
 use std::sync::Arc;

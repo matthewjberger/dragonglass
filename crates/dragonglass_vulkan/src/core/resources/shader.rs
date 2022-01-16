@@ -1,6 +1,6 @@
 use crate::core::Device;
 use anyhow::{Context, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use derive_builder::Builder;
 use std::{
     collections::HashMap,

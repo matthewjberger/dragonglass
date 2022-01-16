@@ -1,34 +1,44 @@
-use crate::core::{BufferToBufferCopyBuilder, CommandPool};
-use anyhow::Result;
-use ash::{version::DeviceV1_0, vk};
-use std::sync::Arc;
-use vk_mem::Allocator;
+use crate::core::{BufferToBufferCopyBuilder, CommandPool, Device};
+use anyhow::{Context, Result};
+use ash::vk;
+use gpu_allocator::{
+    vulkan::{Allocation, AllocationCreateDesc, Allocator},
+    MemoryLocation,
+};
+use std::{
+    ffi::c_void,
+    ptr::NonNull,
+    sync::{Arc, RwLock},
+};
 
 pub struct GpuBuffer {
     buffer: Buffer,
-    allocator: Arc<Allocator>,
+    allocator: Arc<RwLock<Allocator>>,
+    device: Arc<Device>,
 }
 
 impl GpuBuffer {
     pub fn new(
-        allocator: Arc<Allocator>,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         size: vk::DeviceSize,
         usage: vk::BufferUsageFlags,
     ) -> Result<Self> {
-        let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
         let buffer_create_info = vk::BufferCreateInfo::builder()
             .size(size)
             .usage(vk::BufferUsageFlags::TRANSFER_DST | usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         let buffer = Buffer::new(
+            device.clone(),
             allocator.clone(),
-            &allocation_create_info,
             buffer_create_info,
+            MemoryLocation::GpuOnly,
         )?;
-        Ok(Self { buffer, allocator })
+        Ok(Self {
+            buffer,
+            allocator,
+            device,
+        })
     }
 
     pub fn handle(&self) -> vk::Buffer {
@@ -43,7 +53,8 @@ impl GpuBuffer {
     ) -> Result<()> {
         let size = data.len() * std::mem::size_of::<T>();
 
-        let staging_buffer = CpuToGpuBuffer::staging_buffer(self.allocator.clone(), size as _)?;
+        let staging_buffer =
+            CpuToGpuBuffer::staging_buffer(self.device.clone(), self.allocator.clone(), size as _)?;
         staging_buffer.upload_data(data, 0)?;
 
         let region = vk::BufferCopy::builder()
@@ -62,12 +73,20 @@ impl GpuBuffer {
         Ok(())
     }
 
-    pub fn vertex_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
-        Self::new(allocator, size, vk::BufferUsageFlags::VERTEX_BUFFER)
+    pub fn vertex_buffer(
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+        size: vk::DeviceSize,
+    ) -> Result<Self> {
+        Self::new(device, allocator, size, vk::BufferUsageFlags::VERTEX_BUFFER)
     }
 
-    pub fn index_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
-        Self::new(allocator, size, vk::BufferUsageFlags::INDEX_BUFFER)
+    pub fn index_buffer(
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+        size: vk::DeviceSize,
+    ) -> Result<Self> {
+        Self::new(device, allocator, size, vk::BufferUsageFlags::INDEX_BUFFER)
     }
 }
 
@@ -77,19 +96,21 @@ pub struct CpuToGpuBuffer {
 
 impl CpuToGpuBuffer {
     fn new(
-        allocator: Arc<Allocator>,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         size: vk::DeviceSize,
         usage: vk::BufferUsageFlags,
     ) -> Result<Self> {
-        let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuToGpu,
-            ..Default::default()
-        };
         let buffer_create_info = vk::BufferCreateInfo::builder()
             .size(size)
             .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
-        let buffer = Buffer::new(allocator, &allocation_create_info, buffer_create_info)?;
+        let buffer = Buffer::new(
+            device,
+            allocator.clone(),
+            buffer_create_info,
+            MemoryLocation::CpuToGpu,
+        )?;
         Ok(Self { buffer })
     }
 
@@ -97,21 +118,33 @@ impl CpuToGpuBuffer {
         self.buffer.handle
     }
 
-    pub fn staging_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
-        Self::new(allocator, size, vk::BufferUsageFlags::TRANSFER_SRC)
+    pub fn staging_buffer(
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+        size: vk::DeviceSize,
+    ) -> Result<Self> {
+        Self::new(device, allocator, size, vk::BufferUsageFlags::TRANSFER_SRC)
     }
 
-    pub fn uniform_buffer(allocator: Arc<Allocator>, size: vk::DeviceSize) -> Result<Self> {
-        Self::new(allocator, size, vk::BufferUsageFlags::UNIFORM_BUFFER)
+    pub fn uniform_buffer(
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+        size: vk::DeviceSize,
+    ) -> Result<Self> {
+        Self::new(
+            device,
+            allocator,
+            size,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+        )
     }
 
     pub fn upload_data<T>(&self, data: &[T], offset: usize) -> Result<()> {
-        let data_pointer = self.map_memory()?;
+        let data_pointer = self.mapped_ptr()?.as_ptr();
         unsafe {
             let data_pointer = data_pointer.add(offset);
             (data_pointer as *mut T).copy_from_nonoverlapping(data.as_ptr(), data.len());
         }
-        self.unmap_memory();
         Ok(())
     }
 
@@ -121,60 +154,75 @@ impl CpuToGpuBuffer {
         offset: usize,
         alignment: vk::DeviceSize,
     ) -> Result<()> {
-        let data_pointer = self.map_memory()?;
-        let size = self.buffer.allocation_info.get_size();
+        let data_pointer = self.mapped_ptr()?.as_ptr();
+        let size = self.buffer.allocation.size();
         unsafe {
             let data_pointer = data_pointer.add(offset);
             let mut align = ash::util::Align::new(data_pointer as _, alignment, size as _);
             align.copy_from_slice(data);
         }
-        self.buffer.flush(0, size);
-        self.unmap_memory();
         Ok(())
     }
 
-    pub fn map_memory(&self) -> vk_mem::error::Result<*mut u8> {
-        self.buffer.allocator.map_memory(&self.buffer.allocation)
-    }
-
-    pub fn unmap_memory(&self) {
-        self.buffer.allocator.unmap_memory(&self.buffer.allocation)
+    pub fn mapped_ptr(&self) -> Result<NonNull<c_void>> {
+        self.buffer
+            .allocation
+            .mapped_ptr()
+            .context("Failed to get mapped buffer ptr!")
     }
 }
 
 pub struct Buffer {
     pub handle: vk::Buffer,
-    pub allocation_info: vk_mem::AllocationInfo,
-    allocation: vk_mem::Allocation,
-    allocator: Arc<Allocator>,
+    allocation: Allocation,
+    allocator: Arc<RwLock<Allocator>>,
+    device: Arc<Device>,
 }
 
 impl Buffer {
     pub fn new(
-        allocator: Arc<Allocator>,
-        allocation_create_info: &vk_mem::AllocationCreateInfo,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         buffer_create_info: vk::BufferCreateInfoBuilder,
+        location: MemoryLocation,
     ) -> Result<Self> {
-        let (handle, allocation, allocation_info) =
-            allocator.create_buffer(&buffer_create_info, allocation_create_info)?;
-
+        let handle = unsafe { device.handle.create_buffer(&buffer_create_info, None) }?;
+        let requirements = unsafe { device.handle.get_buffer_memory_requirements(handle) };
+        let allocation_create_info = AllocationCreateDesc {
+            // TODO: Allow custom naming allocations
+            name: "Buffer Allocation",
+            requirements,
+            location,
+            linear: true, // Buffers are always linear
+        };
+        let allocation = {
+            let mut allocator = allocator.write().expect("Failed to acquire allocator!");
+            allocator.allocate(&allocation_create_info)?
+        };
+        unsafe {
+            device
+                .handle
+                .bind_buffer_memory(handle, allocation.memory(), allocation.offset())?
+        };
         Ok(Self {
             handle,
-            allocation_info,
             allocation,
             allocator,
+            device,
         })
-    }
-
-    pub fn flush(&self, offset: usize, size: usize) {
-        self.allocator
-            .flush_allocation(&self.allocation, offset, size);
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        self.allocator.destroy_buffer(self.handle, &self.allocation);
+        let mut allocator = self
+            .allocator
+            .write()
+            .expect("Failed to acquire allocator!");
+        allocator
+            .free(self.allocation.clone())
+            .expect("Failed to free allocated buffer!");
+        unsafe { self.device.handle.destroy_buffer(self.handle, None) };
     }
 }
 
@@ -187,13 +235,15 @@ pub struct GeometryBuffer {
 
 impl GeometryBuffer {
     pub fn new(
-        allocator: Arc<Allocator>,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         vertex_buffer_size: vk::DeviceSize,
         index_buffer_size: Option<vk::DeviceSize>,
     ) -> Result<Self> {
-        let vertex_buffer = GpuBuffer::vertex_buffer(allocator.clone(), vertex_buffer_size)?;
+        let vertex_buffer =
+            GpuBuffer::vertex_buffer(device.clone(), allocator.clone(), vertex_buffer_size)?;
         let index_buffer = if let Some(index_buffer_size) = index_buffer_size {
-            let index_buffer = GpuBuffer::index_buffer(allocator, index_buffer_size)?;
+            let index_buffer = GpuBuffer::index_buffer(device, allocator, index_buffer_size)?;
             Some(index_buffer)
         } else {
             None
@@ -208,20 +258,22 @@ impl GeometryBuffer {
 
     pub fn reallocate_vertex_buffer(
         &mut self,
-        allocator: Arc<Allocator>,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         size: vk::DeviceSize,
     ) -> Result<()> {
-        self.vertex_buffer = GpuBuffer::vertex_buffer(allocator.clone(), size)?;
+        self.vertex_buffer = GpuBuffer::vertex_buffer(device, allocator.clone(), size)?;
         self.vertex_buffer_size = size;
         Ok(())
     }
 
     pub fn reallocate_index_buffer(
         &mut self,
-        allocator: Arc<Allocator>,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
         size: vk::DeviceSize,
     ) -> Result<()> {
-        self.index_buffer = Some(GpuBuffer::index_buffer(allocator, size)?);
+        self.index_buffer = Some(GpuBuffer::index_buffer(device, allocator, size)?);
         self.index_buffer_size = Some(size);
         Ok(())
     }

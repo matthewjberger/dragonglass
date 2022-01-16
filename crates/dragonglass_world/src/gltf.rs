@@ -215,7 +215,7 @@ fn load_material(primitive_material: &gltf::Material) -> Result<Material> {
     material.roughness_factor = pbr.roughness_factor();
     material.emissive_factor = glm::Vec3::from(primitive_material.emissive_factor());
     material.alpha_mode = map_gltf_alpha_mode(&primitive_material.alpha_mode());
-    material.alpha_cutoff = primitive_material.alpha_cutoff();
+    material.alpha_cutoff = primitive_material.alpha_cutoff().unwrap_or(0.5);
     material.is_unlit = primitive_material.unlit();
     if let Some(base_color_texture) = pbr.base_color_texture() {
         material.color_texture_index = base_color_texture.texture().index() as i32;

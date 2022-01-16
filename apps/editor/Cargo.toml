@@ -6,10 +6,10 @@ name = "editor"
 version = "0.1.0"
 
 [dependencies]
-anyhow = "1.0.40"
+anyhow = "1.0.52"
 dragonglass = {path = "../.."}
 log = "0.4.14"
 nalgebra = "0.30.1"
-nalgebra-glm = {version = "0.16.0", features = ["serde-serialize"]}
-structopt = "0.3.21"
+nalgebra-glm = { version = "0.16.0", features = ["serde-serialize"] }
+structopt = "0.3.25"
 winit = "0.26.1"

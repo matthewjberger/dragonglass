@@ -1,9 +1,13 @@
 use crate::core::{AllocatedImage, Device, Framebuffer, Image, ImageView, RenderPass, Sampler};
 use anyhow::{bail, ensure, Context, Result};
 use ash::vk;
+use gpu_allocator::vulkan::Allocator;
 use petgraph::prelude::*;
-use std::{collections::HashMap, fmt, sync::Arc};
-use vk_mem::Allocator;
+use std::{
+    collections::HashMap,
+    fmt,
+    sync::{Arc, RwLock},
+};
 
 #[derive(Default)]
 pub struct RenderGraph {
@@ -59,7 +63,7 @@ impl RenderGraph {
         })
     }
 
-    pub fn build(&mut self, device: Arc<Device>, allocator: Arc<Allocator>) -> Result<()> {
+    pub fn build(&mut self, device: Arc<Device>, allocator: Arc<RwLock<Allocator>>) -> Result<()> {
         self.process_images(device.clone(), allocator)?;
         self.process_passes(device.clone())?;
 
@@ -69,7 +73,11 @@ impl RenderGraph {
         Ok(())
     }
 
-    fn process_images(&mut self, device: Arc<Device>, allocator: Arc<Allocator>) -> Result<()> {
+    fn process_images(
+        &mut self,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+    ) -> Result<()> {
         for index in self.graph.node_indices() {
             if let Node::Image(image_node) = &self.graph[index] {
                 let allocation_result =
@@ -284,14 +292,14 @@ impl RenderGraph {
     fn allocate_image(
         image_node: &ImageNode,
         device: Arc<Device>,
-        allocator: Arc<Allocator>,
+        allocator: Arc<RwLock<Allocator>>,
     ) -> Result<Option<(AllocatedImage, ImageView)>> {
         if image_node.is_backbuffer() {
             // The backbuffer image, imageview, and framebuffer must be injected into the rendergraph
             return Ok(None);
         }
 
-        let allocated_image = image_node.allocate_image(allocator)?;
+        let allocated_image = image_node.allocate_image(device.clone(), allocator)?;
         let image_view = image_node.create_image_view(device, allocated_image.handle())?;
 
         Ok(Some((allocated_image, image_view)))
@@ -427,7 +435,11 @@ impl ImageNode {
             .build()
     }
 
-    pub fn allocate_image(&self, allocator: Arc<Allocator>) -> Result<AllocatedImage> {
+    pub fn allocate_image(
+        &self,
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+    ) -> Result<AllocatedImage> {
         let extent = vk::Extent3D::builder()
             .width(self.extent.width)
             .height(self.extent.height)
@@ -447,12 +459,7 @@ impl ImageNode {
             .samples(self.samples)
             .flags(vk::ImageCreateFlags::empty());
 
-        let allocation_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
-            ..Default::default()
-        };
-
-        AllocatedImage::new(allocator, &allocation_create_info, &create_info)
+        AllocatedImage::new(device, allocator, &create_info)
     }
 
     fn usage(&self) -> vk::ImageUsageFlags {

@@ -1,8 +1,8 @@
-use crate::core::{CommandPool, GeometryBuffer};
+use crate::core::{CommandPool, Device, GeometryBuffer};
 use anyhow::{Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
-use std::sync::Arc;
-use vk_mem::Allocator;
+use ash::vk;
+use gpu_allocator::vulkan::Allocator;
+use std::sync::{Arc, RwLock};
 
 #[rustfmt::skip]
 pub const VERTICES: &[f32; 24] =
@@ -54,8 +54,13 @@ pub struct Cube {
 }
 
 impl Cube {
-    pub fn new(allocator: Arc<Allocator>, command_pool: &CommandPool) -> Result<Self> {
+    pub fn new(
+        device: Arc<Device>,
+        allocator: Arc<RwLock<Allocator>>,
+        command_pool: &CommandPool,
+    ) -> Result<Self> {
         let geometry_buffer = GeometryBuffer::new(
+            device,
             allocator,
             (VERTICES.len() * std::mem::size_of::<f32>()) as _,
             Some((INDICES.len() * std::mem::size_of::<u32>()) as _),

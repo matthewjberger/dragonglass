@@ -8,20 +8,22 @@ mod physical_device;
 use anyhow::{ensure, Context as AnyhowContext, Result};
 use ash::{
     extensions::khr::{Surface as AshSurface, Swapchain},
-    version::{DeviceV1_0, InstanceV1_0},
     vk::{self, SurfaceKHR},
 };
 use ash_window::{create_surface, enumerate_required_extensions};
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use raw_window_handle::HasRawWindowHandle;
-use std::{os::raw::c_char, sync::Arc};
-use vk_mem::{Allocator, AllocatorCreateInfo};
+use std::{
+    os::raw::c_char,
+    sync::{Arc, RwLock},
+};
 
 // The order the struct members are declared in
 // determines the order they are 'Drop'ped in
 // when this struct is dropped
 pub struct Context {
     pub debug: Option<VulkanDebug>,
-    pub allocator: Arc<vk_mem::Allocator>,
+    pub allocator: Arc<RwLock<Allocator>>,
     pub device: Arc<Device>,
     pub physical_device: PhysicalDevice,
     pub surface: Option<Surface>,
@@ -36,7 +38,7 @@ impl Context {
         let device_extensions = Self::device_extensions();
         let features = Self::features();
 
-        let entry = unsafe { ash::Entry::new()? };
+        let entry = unsafe { ash::Entry::load()? };
         let instance = Instance::new(&entry, &instance_extensions, &layers)?;
         let surface = Surface::new(&entry, &instance.handle, window_handle)?;
         let physical_device = PhysicalDevice::new(&instance.handle, &surface)?;
@@ -69,14 +71,14 @@ impl Context {
         let device = Device::new(&instance.handle, physical_device.handle, create_info)?;
         let device = Arc::new(device);
 
-        let allocator_create_info = AllocatorCreateInfo {
-            device: device.handle.clone(),
+        let allocator_create_info = AllocatorCreateDesc {
             instance: instance.handle.clone(),
+            device: device.handle.clone(),
             physical_device: physical_device.handle,
-            ..Default::default()
+            debug_settings: Default::default(),
+            buffer_device_address: true,
         };
-
-        let allocator = Arc::new(Allocator::new(&allocator_create_info)?);
+        let allocator = Arc::new(RwLock::new(Allocator::new(&allocator_create_info)?));
 
         let debug = if VulkanDebug::enabled() {
             Some(VulkanDebug::new(&entry, &instance.handle, device.clone())?)

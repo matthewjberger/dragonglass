@@ -9,13 +9,13 @@ use crate::{
     geometry::Cube,
 };
 use anyhow::Result;
-use ash::{
-    version::DeviceV1_0,
-    vk::{self, Handle},
-};
+use ash::vk::{self, Handle};
+use gpu_allocator::vulkan::Allocator;
 use nalgebra_glm as glm;
-use std::{mem, sync::Arc};
-use vk_mem::Allocator;
+use std::{
+    mem,
+    sync::{Arc, RwLock},
+};
 
 #[allow(dead_code)]
 struct PushConstantPrefilter {
@@ -63,7 +63,11 @@ pub fn load_prefilter_map(
         output_cubemap_description.mip_levels,
     )?;
 
-    let cube = Arc::new(Cube::new(context.allocator.clone(), command_pool)?);
+    let cube = Arc::new(Cube::new(
+        context.device.clone(),
+        context.allocator.clone(),
+        command_pool,
+    )?);
     let projection = glm::perspective_zo(1.0, 90_f32.to_radians(), 0.1_f32, 512_f32);
     let matrices = cubemap_matrices();
     let (pipeline, pipeline_layout) = pipeline(
@@ -178,7 +182,7 @@ pub fn load_prefilter_map(
 
 fn rendergraph(
     device: Arc<Device>,
-    allocator: Arc<Allocator>,
+    allocator: Arc<RwLock<Allocator>>,
     output_cubemap_description: &ImageDescription,
 ) -> Result<RenderGraph> {
     let offscreen = "offscreen";

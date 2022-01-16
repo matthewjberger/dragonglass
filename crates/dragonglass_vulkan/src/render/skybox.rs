@@ -8,7 +8,7 @@ use crate::{
     geometry::Cube,
 };
 use anyhow::{Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use nalgebra_glm as glm;
 use std::sync::Arc;
 
@@ -32,7 +32,11 @@ pub struct SkyboxRender {
 
 impl SkyboxRender {
     pub fn new(context: &Context, command_pool: &CommandPool, cubemap: &Cubemap) -> Result<Self> {
-        let cube = Cube::new(context.allocator.clone(), command_pool)?;
+        let cube = Cube::new(
+            context.device.clone(),
+            context.allocator.clone(),
+            command_pool,
+        )?;
         let descriptor_set_layout = Arc::new(Self::descriptor_set_layout(context.device.clone())?);
         let descriptor_pool = Self::descriptor_pool(context.device.clone())?;
         let descriptor_set =

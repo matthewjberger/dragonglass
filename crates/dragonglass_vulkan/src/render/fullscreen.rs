@@ -4,7 +4,7 @@ use crate::core::{
     ShaderPathSet,
 };
 use anyhow::{Context as AnyhowContext, Result};
-use ash::{version::DeviceV1_0, vk};
+use ash::vk;
 use std::sync::Arc;
 
 pub struct FullscreenRender {
