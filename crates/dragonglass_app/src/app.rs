@@ -92,11 +92,6 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
     let mut window = window_builder.build(&event_loop)?;
 
     let window_dimensions = window.inner_size();
-    let mut renderer = create_render_backend(
-        &config.backend,
-        &window,
-        &[window_dimensions.width, window_dimensions.height],
-    )?;
 
     let mut input = Input::default();
     let mut system = System::new(window_dimensions);
@@ -106,6 +101,13 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
         scale_factor: window.scale_factor() as _,
     };
     let mut gui = Gui::new(screen_descriptor);
+
+    let mut renderer = create_render_backend(
+        &config.backend,
+        &window,
+        &[window_dimensions.width, window_dimensions.height],
+        &gui.context(),
+    )?;
 
     let mut world = World::new()?;
     world.fonts.insert(

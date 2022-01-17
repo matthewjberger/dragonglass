@@ -25,10 +25,11 @@ pub fn create_render_backend(
     backend: &Backend,
     window_handle: &impl HasRawWindowHandle,
     dimensions: &[u32; 2],
+    gui_context: &CtxRef,
 ) -> Result<Box<dyn Renderer>> {
     match backend {
         Backend::Vulkan => {
-            let backend = VulkanRenderBackend::new(window_handle, dimensions)?;
+            let backend = VulkanRenderBackend::new(window_handle, dimensions, gui_context)?;
             Ok(Box::new(backend) as Box<dyn Renderer>)
         }
     }

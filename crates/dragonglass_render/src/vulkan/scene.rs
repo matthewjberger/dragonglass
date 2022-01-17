@@ -1,5 +1,6 @@
 use crate::vulkan::world::WorldRender;
 use anyhow::Result;
+use dragonglass_gui::egui::CtxRef;
 use dragonglass_vulkan::{
     ash::vk,
     core::{
@@ -12,10 +13,13 @@ use dragonglass_vulkan::{
 use dragonglass_world::World;
 use std::sync::Arc;
 
+use super::gui::GuiRender;
+
 pub struct Scene {
     pub environment_maps: EnvironmentMapSet,
     pub world_render: Option<WorldRender>,
     pub skybox_render: SkyboxRender,
+    pub gui_render: GuiRender,
     pub fullscreen_pipeline: Option<FullscreenRender>,
     pub rendergraph: RenderGraph,
     pub transient_command_pool: CommandPool,
@@ -26,6 +30,7 @@ pub struct Scene {
 impl Scene {
     pub fn new(
         context: &Context,
+        gui_context: &CtxRef,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
     ) -> Result<Self> {
@@ -54,10 +59,20 @@ impl Scene {
             &environment_maps.prefilter,
         )?;
 
+        let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
+        let gui_render = GuiRender::new(
+            context,
+            gui_context,
+            &mut shader_cache,
+            fullscreen_pass,
+            &transient_command_pool,
+        )?;
+
         let mut scene = Self {
             environment_maps,
             world_render: None,
             skybox_render,
+            gui_render,
             fullscreen_pipeline: None,
             rendergraph,
             transient_command_pool,
@@ -86,6 +101,9 @@ impl Scene {
             shader_path_set,
         )?;
         self.fullscreen_pipeline = Some(fullscreen_pipeline);
+
+        self.gui_render
+            .create_pipeline(&mut self.shader_cache, fullscreen_pass)?;
 
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         self.skybox_render.create_pipeline(

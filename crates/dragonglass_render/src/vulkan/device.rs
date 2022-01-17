@@ -23,10 +23,19 @@ pub struct VulkanRenderBackend {
 impl VulkanRenderBackend {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new(window_handle: &impl HasRawWindowHandle, dimensions: &[u32; 2]) -> Result<Self> {
+    pub fn new(
+        window_handle: &impl HasRawWindowHandle,
+        dimensions: &[u32; 2],
+        gui_context: &CtxRef,
+    ) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
         let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
-        let scene = Scene::new(&context, frame.swapchain()?, &frame.swapchain_properties)?;
+        let scene = Scene::new(
+            &context,
+            gui_context,
+            frame.swapchain()?,
+            &frame.swapchain_properties,
+        )?;
         let renderer = Self {
             frame,
             scene,
@@ -47,7 +56,7 @@ impl Renderer for VulkanRenderBackend {
         dimensions: &[u32; 2],
         world: &World,
         _context: &CtxRef,
-        _clipped_meshes: Vec<ClippedMesh>,
+        clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -129,6 +138,9 @@ impl Renderer for VulkanRenderBackend {
                     if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
                         fullscreen_pipeline.issue_commands(command_buffer)?;
                     }
+                    scene
+                        .gui_render
+                        .issue_commands(command_buffer, &clipped_meshes)?;
                     Ok(())
                 },
             )?;
