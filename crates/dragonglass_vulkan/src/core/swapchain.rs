@@ -1,6 +1,7 @@
 use crate::core::context::{Context, Surface};
 use anyhow::{ensure, Result};
 use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
+use dragonglass_world::Viewport;
 use std::cmp;
 
 pub struct Swapchain {
@@ -56,12 +57,8 @@ pub struct SwapchainProperties {
 }
 
 impl SwapchainProperties {
-    pub fn new(
-        dimensions: &[u32; 2],
-        device: vk::PhysicalDevice,
-        surface: &Surface,
-    ) -> Result<Self> {
-        let extent = Self::select_extent(dimensions, device, surface)?;
+    pub fn new(viewport: Viewport, device: vk::PhysicalDevice, surface: &Surface) -> Result<Self> {
+        let extent = Self::select_extent(viewport, device, surface)?;
         let surface_format = Self::select_format(device, surface)?;
         let present_mode = Self::select_present_mode(device, surface)?;
         let properties = Self {
@@ -73,7 +70,7 @@ impl SwapchainProperties {
     }
 
     fn select_extent(
-        dimensions: &[u32; 2],
+        viewport: Viewport,
         device: vk::PhysicalDevice,
         surface: &Surface,
     ) -> Result<vk::Extent2D> {
@@ -86,8 +83,8 @@ impl SwapchainProperties {
         if capabilities.current_extent.width == std::u32::MAX {
             let min = capabilities.min_image_extent;
             let max = capabilities.max_image_extent;
-            let width = dimensions[0].min(max.width).max(min.width);
-            let height = dimensions[1].min(max.height).max(min.height);
+            let width = (viewport.width as u32).min(max.width).max(min.width);
+            let height = (viewport.height as u32).min(max.height).max(min.height);
             let extent = vk::Extent2D { width, height };
             Ok(extent)
         } else {
@@ -152,13 +149,10 @@ impl SwapchainProperties {
 
 pub fn create_swapchain(
     context: &Context,
-    dimensions: &[u32; 2],
+    viewport: Viewport,
 ) -> Result<(Swapchain, SwapchainProperties)> {
-    let properties = SwapchainProperties::new(
-        dimensions,
-        context.physical_device.handle,
-        context.surface()?,
-    )?;
+    let properties =
+        SwapchainProperties::new(viewport, context.physical_device.handle, context.surface()?)?;
 
     let queue_indices = context.physical_device.queue_indices();
     let create_info = swapchain_create_info(context, &queue_indices, properties)?;

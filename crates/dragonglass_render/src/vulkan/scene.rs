@@ -1,5 +1,6 @@
 use crate::vulkan::world::WorldRender;
 use anyhow::Result;
+use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::{
     ash::vk,
     core::{
@@ -12,10 +13,13 @@ use dragonglass_vulkan::{
 use dragonglass_world::World;
 use std::sync::Arc;
 
+use super::gui::GuiRender;
+
 pub struct Scene {
     pub environment_maps: EnvironmentMapSet,
     pub world_render: Option<WorldRender>,
     pub skybox_render: SkyboxRender,
+    pub gui_render: GuiRender,
     pub fullscreen_pipeline: Option<FullscreenRender>,
     pub rendergraph: RenderGraph,
     pub transient_command_pool: CommandPool,
@@ -54,10 +58,14 @@ impl Scene {
             &environment_maps.prefilter,
         )?;
 
+        let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
+        let gui_render = GuiRender::new(context, &mut shader_cache, fullscreen_pass)?;
+
         let mut scene = Self {
             environment_maps,
             world_render: None,
             skybox_render,
+            gui_render,
             fullscreen_pipeline: None,
             rendergraph,
             transient_command_pool,
@@ -86,6 +94,9 @@ impl Scene {
             shader_path_set,
         )?;
         self.fullscreen_pipeline = Some(fullscreen_pipeline);
+
+        self.gui_render
+            .create_pipeline(&mut self.shader_cache, fullscreen_pass)?;
 
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         self.skybox_render.create_pipeline(
@@ -242,5 +253,19 @@ impl Scene {
         self.world_render = Some(rendering);
 
         Ok(())
+    }
+
+    pub fn update(
+        &mut self,
+        context: &Context,
+        gui_context: &CtxRef,
+        clipped_meshes: &[ClippedMesh],
+    ) -> Result<()> {
+        self.gui_render.update(
+            context,
+            gui_context,
+            &self.transient_command_pool,
+            clipped_meshes,
+        )
     }
 }

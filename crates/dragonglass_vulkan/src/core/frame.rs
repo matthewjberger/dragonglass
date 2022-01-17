@@ -7,6 +7,7 @@ use ash::{
     prelude::VkResult,
     vk::{self, Handle},
 };
+use dragonglass_world::Viewport;
 use std::sync::Arc;
 
 pub struct Frame {
@@ -22,11 +23,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(
-        context: Arc<Context>,
-        dimensions: &[u32; 2],
-        frames_in_flight: usize,
-    ) -> Result<Self> {
+    pub fn new(context: Arc<Context>, viewport: Viewport, frames_in_flight: usize) -> Result<Self> {
         let frame_locks = (0..frames_in_flight)
             .map(|index| {
                 let frame_lock = FrameLock::new(context.device.clone())?;
@@ -44,7 +41,7 @@ impl Frame {
                 .queue_family_index(graphics_queue_index),
         )?;
 
-        let (swapchain, properties) = create_swapchain(&context, dimensions)?;
+        let (swapchain, properties) = create_swapchain(&context, viewport)?;
         let number_of_framebuffers = swapchain.images()?.len() as _;
         let command_buffers = command_pool
             .allocate_command_buffers(number_of_framebuffers, vk::CommandBufferLevel::PRIMARY)?;
@@ -68,12 +65,12 @@ impl Frame {
 
     pub fn render(
         &mut self,
-        dimensions: &[u32; 2],
+        viewport: Viewport,
         mut action: impl FnMut(vk::CommandBuffer, usize) -> Result<()>,
     ) -> Result<()> {
         self.recreated_swapchain = false;
         self.wait_for_in_flight_fence()?;
-        if let Some(image_index) = self.acquire_next_frame(dimensions)? {
+        if let Some(image_index) = self.acquire_next_frame(viewport)? {
             self.reset_in_flight_fence()?;
             self.context.device.record_command_buffer(
                 self.command_buffer_at(image_index)?,
@@ -82,7 +79,7 @@ impl Frame {
             )?;
             self.submit_command_buffer(image_index)?;
             let result = self.present_next_frame(image_index)?;
-            self.check_presentation_result(result, dimensions)?;
+            self.check_presentation_result(result, viewport)?;
             self.increment_frame_counter();
         }
         Ok(())
@@ -109,7 +106,7 @@ impl Frame {
         Ok(())
     }
 
-    fn acquire_next_frame(&mut self, dimensions: &[u32; 2]) -> Result<Option<usize>> {
+    fn acquire_next_frame(&mut self, viewport: Viewport) -> Result<Option<usize>> {
         let result = self
             .swapchain()?
             .acquire_next_image(self.frame_lock()?.image_available.handle, vk::Fence::null());
@@ -117,7 +114,7 @@ impl Frame {
         match result {
             Ok((image_index, _)) => Ok(Some(image_index as usize)),
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                self.create_swapchain(dimensions)?;
+                self.create_swapchain(viewport)?;
                 Ok(None)
             }
             Err(error) => bail!(error),
@@ -146,14 +143,14 @@ impl Frame {
     fn check_presentation_result(
         &mut self,
         presentation_result: VkResult<bool>,
-        dimensions: &[u32; 2],
+        viewport: Viewport,
     ) -> Result<()> {
         match presentation_result {
             Ok(is_suboptimal) if is_suboptimal => {
-                self.create_swapchain(dimensions)?;
+                self.create_swapchain(viewport)?;
             }
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                self.create_swapchain(dimensions)?;
+                self.create_swapchain(viewport)?;
             }
             Err(error) => bail!(error),
             _ => {}
@@ -161,15 +158,15 @@ impl Frame {
         Ok(())
     }
 
-    fn create_swapchain(&mut self, dimensions: &[u32; 2]) -> Result<()> {
-        if dimensions[0] == 0 || dimensions[1] == 0 {
+    fn create_swapchain(&mut self, viewport: Viewport) -> Result<()> {
+        if viewport.width == 0.0 || viewport.height == 0.0 {
             return Ok(());
         }
 
         unsafe { self.context.device.handle.device_wait_idle() }?;
 
         self.swapchain = None;
-        let (swapchain, properties) = create_swapchain(&self.context, dimensions)?;
+        let (swapchain, properties) = create_swapchain(&self.context, viewport)?;
         self.swapchain = Some(swapchain);
         self.swapchain_properties = properties;
 

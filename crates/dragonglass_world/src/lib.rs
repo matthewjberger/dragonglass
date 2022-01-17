@@ -9,6 +9,7 @@ pub use self::{
     world::*,
 };
 pub use legion;
+pub use petgraph;
 
 use serde::{Deserialize, Serialize};
 

@@ -8,13 +8,14 @@ use crate::{
 use anyhow::Result;
 use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::core::{Context, Frame};
-use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
+use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, Viewport, World};
 use log::error;
 use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
 pub struct VulkanRenderBackend {
+    viewport: Viewport,
     frame: Frame,
     scene: Scene,
     context: Arc<Context>,
@@ -23,11 +24,12 @@ pub struct VulkanRenderBackend {
 impl VulkanRenderBackend {
     const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
-    pub fn new(window_handle: &impl HasRawWindowHandle, dimensions: &[u32; 2]) -> Result<Self> {
+    pub fn new(window_handle: &impl HasRawWindowHandle, viewport: Viewport) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
-        let frame = Frame::new(context.clone(), dimensions, Self::MAX_FRAMES_IN_FLIGHT)?;
+        let frame = Frame::new(context.clone(), viewport, Self::MAX_FRAMES_IN_FLIGHT)?;
         let scene = Scene::new(&context, frame.swapchain()?, &frame.swapchain_properties)?;
         let renderer = Self {
+            viewport,
             frame,
             scene,
             context,
@@ -44,10 +46,9 @@ impl Renderer for VulkanRenderBackend {
 
     fn render(
         &mut self,
-        dimensions: &[u32; 2],
         world: &World,
-        _context: &CtxRef,
-        _clipped_meshes: Vec<ClippedMesh>,
+        gui_context: &CtxRef,
+        clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 
@@ -76,7 +77,10 @@ impl Renderer for VulkanRenderBackend {
             projection
         };
 
-        frame.render(dimensions, |command_buffer, image_index| {
+        scene.update(&self.context, gui_context, &clipped_meshes)?;
+
+        let viewport = self.viewport;
+        frame.render(viewport, |command_buffer, image_index| {
             if let Some(world_render) = scene.world_render.as_mut() {
                 world_render.pipeline_data.update_dynamic_ubo(world)?;
 
@@ -129,6 +133,9 @@ impl Renderer for VulkanRenderBackend {
                     if let Some(fullscreen_pipeline) = scene.fullscreen_pipeline.as_ref() {
                         fullscreen_pipeline.issue_commands(command_buffer)?;
                     }
+                    scene
+                        .gui_render
+                        .issue_commands(viewport, command_buffer, &clipped_meshes)?;
                     Ok(())
                 },
             )?;
@@ -150,12 +157,12 @@ impl Renderer for VulkanRenderBackend {
         Ok(())
     }
 
-    fn viewport(&self) -> dragonglass_world::Viewport {
-        todo!()
+    fn viewport(&self) -> Viewport {
+        self.viewport
     }
 
-    fn set_viewport(&mut self, _viewport: dragonglass_world::Viewport) {
-        todo!()
+    fn set_viewport(&mut self, viewport: Viewport) {
+        self.viewport = viewport;
     }
 }
 

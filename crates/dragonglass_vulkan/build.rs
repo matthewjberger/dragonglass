@@ -24,7 +24,7 @@ fn init_logger() -> Result<()> {
         WriteLogger::new(
             LevelFilter::Info,
             Config::default(),
-            File::create("shadercompilation.log")?,
+            File::create("shader_compilation.log")?,
         ),
     ])?;
 

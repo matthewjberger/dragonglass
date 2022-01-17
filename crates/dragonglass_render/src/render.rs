@@ -12,9 +12,8 @@ pub trait Renderer {
     fn load_world(&mut self, world: &World) -> Result<()>;
     fn render(
         &mut self,
-        dimensions: &[u32; 2],
         world: &World,
-        context: &CtxRef,
+        gui_context: &CtxRef,
         clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()>;
     fn viewport(&self) -> Viewport;
@@ -24,11 +23,11 @@ pub trait Renderer {
 pub fn create_render_backend(
     backend: &Backend,
     window_handle: &impl HasRawWindowHandle,
-    dimensions: &[u32; 2],
+    viewport: Viewport,
 ) -> Result<Box<dyn Renderer>> {
     match backend {
         Backend::Vulkan => {
-            let backend = VulkanRenderBackend::new(window_handle, dimensions)?;
+            let backend = VulkanRenderBackend::new(window_handle, viewport)?;
             Ok(Box::new(backend) as Box<dyn Renderer>)
         }
     }

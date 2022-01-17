@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use dragonglass_gui::{Gui, ScreenDescriptor};
 use dragonglass_render::{create_render_backend, Backend};
-use dragonglass_world::{SdfFont, World};
+use dragonglass_world::{SdfFont, Viewport, World};
 use image::io::Reader;
 use std::path::PathBuf;
 use winit::{
@@ -92,11 +92,6 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
     let mut window = window_builder.build(&event_loop)?;
 
     let window_dimensions = window.inner_size();
-    let mut renderer = create_render_backend(
-        &config.backend,
-        &window,
-        &[window_dimensions.width, window_dimensions.height],
-    )?;
 
     let mut input = Input::default();
     let mut system = System::new(window_dimensions);
@@ -106,6 +101,14 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
         scale_factor: window.scale_factor() as _,
     };
     let mut gui = Gui::new(screen_descriptor);
+
+    let viewport = Viewport {
+        x: 0.0,
+        y: 0.0,
+        width: window_dimensions.width as _,
+        height: window_dimensions.height as _,
+    };
+    let mut renderer = create_render_backend(&config.backend, &window, viewport)?;
 
     let mut world = World::new()?;
     world.fonts.insert(
@@ -163,6 +166,12 @@ fn run_loop(
             }
         }
         Event::WindowEvent { ref event, .. } => match event {
+            WindowEvent::Resized(physical_size) => app_state.renderer.set_viewport(Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: physical_size.width as _,
+                height: physical_size.height as _,
+            }),
             WindowEvent::DroppedFile(ref path) => app.on_file_dropped(path, &mut app_state)?,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             WindowEvent::MouseInput { button, state, .. } => {
@@ -193,13 +202,9 @@ fn run_loop(
                 Vec::new()
             };
 
-            let dimensions = app_state.window.inner_size();
-            app_state.renderer.render(
-                &[dimensions.width, dimensions.height],
-                app_state.world,
-                &app_state.gui.context(),
-                clipped_meshes,
-            )?;
+            app_state
+                .renderer
+                .render(app_state.world, &app_state.gui.context(), clipped_meshes)?;
         }
         Event::LoopDestroyed => {
             app.cleanup()?;

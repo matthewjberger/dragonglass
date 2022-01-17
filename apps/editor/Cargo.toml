@@ -10,6 +10,8 @@ anyhow = "1.0.52"
 dragonglass = {path = "../.."}
 log = "0.4.14"
 nalgebra = "0.30.1"
-nalgebra-glm = { version = "0.16.0", features = ["serde-serialize"] }
+nalgebra-glm = {version = "0.16.0", features = ["serde-serialize"]}
+rfd = "0.6.3"
+serde = {version = "1.0.133", features = ["derive"]}
 structopt = "0.3.25"
 winit = "0.26.1"
