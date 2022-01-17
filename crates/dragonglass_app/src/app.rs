@@ -182,12 +182,13 @@ fn run_loop(
             app_state.world.tick(app_state.system.delta_time as f32)?;
             app.update(&mut app_state)?;
 
-            let clipped_shapes = if app.gui_active() {
+            let clipped_meshes = if app.gui_active() {
                 let _frame_data = app_state
                     .gui
                     .start_frame(app_state.window.scale_factor() as _);
                 app.update_gui(&mut app_state)?;
-                app_state.gui.end_frame(app_state.window)
+                let shapes = app_state.gui.end_frame(app_state.window);
+                app_state.gui.context().tessellate(shapes)
             } else {
                 Vec::new()
             };
@@ -197,7 +198,7 @@ fn run_loop(
                 &[dimensions.width, dimensions.height],
                 app_state.world,
                 &app_state.gui.context(),
-                clipped_shapes,
+                clipped_meshes,
             )?;
         }
         Event::LoopDestroyed => {

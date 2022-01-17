@@ -6,7 +6,7 @@ use crate::{
     Renderer,
 };
 use anyhow::Result;
-use dragonglass_gui::egui::{epaint::ClippedShape, CtxRef};
+use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::core::{Context, Frame};
 use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, World};
 use log::error;
@@ -47,7 +47,7 @@ impl Renderer for VulkanRenderBackend {
         dimensions: &[u32; 2],
         world: &World,
         _context: &CtxRef,
-        _clipped_shapes: Vec<ClippedShape>,
+        _clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
 

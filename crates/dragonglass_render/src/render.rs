@@ -1,6 +1,6 @@
 use crate::vulkan::VulkanRenderBackend;
 use anyhow::Result;
-use dragonglass_gui::egui::{epaint::ClippedShape, CtxRef};
+use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_world::{Viewport, World};
 use raw_window_handle::HasRawWindowHandle;
 
@@ -15,7 +15,7 @@ pub trait Renderer {
         dimensions: &[u32; 2],
         world: &World,
         context: &CtxRef,
-        clipped_shapes: Vec<ClippedShape>,
+        clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()>;
     fn viewport(&self) -> Viewport;
     fn set_viewport(&mut self, viewport: Viewport);
