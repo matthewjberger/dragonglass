@@ -22,9 +22,16 @@ impl VulkanDebug {
         let debug = DebugUtils::new(entry, instance);
 
         let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-            .flags(vk::DebugUtilsMessengerCreateFlagsEXT::default())
-            .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::default())
-            .message_type(vk::DebugUtilsMessageTypeFlagsEXT::default())
+            .message_severity(
+                vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
+            )
+            .message_type(
+                vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                    | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                    | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+            )
             .pfn_user_callback(Some(vulkan_debug_callback));
 
         let messenger = unsafe { debug.create_debug_utils_messenger(&create_info, None) }?;
