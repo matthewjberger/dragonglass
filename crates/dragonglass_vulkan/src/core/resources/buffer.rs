@@ -114,6 +114,10 @@ impl CpuToGpuBuffer {
         Ok(Self { buffer })
     }
 
+    pub fn size(&self) -> u64 {
+        self.buffer.allocation.size()
+    }
+
     pub fn handle(&self) -> vk::Buffer {
         self.buffer.handle
     }

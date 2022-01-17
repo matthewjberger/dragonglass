@@ -214,7 +214,7 @@ impl WorldPipelineData {
             dummy_texture,
             dummy_sampler,
         };
-        data.update_descriptor_set(device, environment_maps);
+        data.update_descriptor_set(context, device, environment_maps);
         Ok(data)
     }
 
@@ -348,7 +348,12 @@ impl WorldPipelineData {
         Ok(geometry_buffer)
     }
 
-    fn update_descriptor_set(&self, device: Arc<Device>, environment_maps: &EnvironmentMapSet) {
+    fn update_descriptor_set(
+        &self,
+        context: &Context,
+        device: Arc<Device>,
+        environment_maps: &EnvironmentMapSet,
+    ) {
         let uniform_buffer_size = mem::size_of::<WorldUniformBuffer>() as vk::DeviceSize;
         let buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.uniform_buffer.handle())
@@ -360,7 +365,7 @@ impl WorldPipelineData {
         let dynamic_buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(self.dynamic_uniform_buffer.handle())
             .offset(0)
-            .range(vk::WHOLE_SIZE)
+            .range(context.dynamic_alignment_of::<EntityDynamicUniformBuffer>())
             .build();
         let dynamic_buffer_infos = [dynamic_buffer_info];
 
