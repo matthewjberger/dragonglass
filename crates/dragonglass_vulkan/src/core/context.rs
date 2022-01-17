@@ -11,7 +11,10 @@ use ash::{
     vk::{self, SurfaceKHR},
 };
 use ash_window::{create_surface, enumerate_required_extensions};
-use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use gpu_allocator::{
+    vulkan::{Allocator, AllocatorCreateDesc},
+    AllocatorDebugSettings,
+};
 use raw_window_handle::HasRawWindowHandle;
 use std::{
     os::raw::c_char,
@@ -75,8 +78,15 @@ impl Context {
             instance: instance.handle.clone(),
             device: device.handle.clone(),
             physical_device: physical_device.handle,
-            debug_settings: Default::default(),
-            buffer_device_address: true,
+            debug_settings: AllocatorDebugSettings {
+                log_memory_information: true,
+                log_leaks_on_shutdown: true,
+                store_stack_traces: true,
+                log_allocations: true,
+                log_frees: true,
+                log_stack_traces: true,
+            },
+            buffer_device_address: false,
         };
         let allocator = Arc::new(RwLock::new(Allocator::new(&allocator_create_info)?));
 
