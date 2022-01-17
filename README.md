@@ -6,8 +6,6 @@ Dragonglass is a 3D game engine written in Rust!
 
 - [Rust](https://www.rust-lang.org/)
 - [glslang](https://github.com/KhronosGroup/glslang/releases/tag/master-tot) for shader compilation (glsl -> SPIR-V)
-- gcc
-- cmake
 
 ## Instructions
 
