@@ -7,6 +7,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - run: sudo apt-get install -y libcairo2-dev libjpeg-dev libgif-dev
       - uses: actions/checkout@v1
       - uses: icepuma/rust-action@master
         with:
