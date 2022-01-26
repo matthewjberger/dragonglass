@@ -13,7 +13,7 @@ pub trait Renderer {
     fn render(
         &mut self,
         world: &World,
-        gui_context: &CtxRef,
+        gui_context: Option<&CtxRef>,
         clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()>;
     fn viewport(&self) -> Viewport;

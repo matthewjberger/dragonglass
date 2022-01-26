@@ -258,14 +258,17 @@ impl Scene {
     pub fn update(
         &mut self,
         context: &Context,
-        gui_context: &CtxRef,
+        gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
-        self.gui_render.update(
-            context,
-            gui_context,
-            &self.transient_command_pool,
-            clipped_meshes,
-        )
+        if let Some(gui_context) = gui_context {
+            self.gui_render.update(
+                context,
+                gui_context,
+                &self.transient_command_pool,
+                clipped_meshes,
+            )?;
+        }
+        Ok(())
     }
 }

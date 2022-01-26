@@ -202,9 +202,15 @@ fn run_loop(
                 Vec::new()
             };
 
+            let context_ref = &app_state.gui.context();
+            let context = if app.gui_active() {
+                Some(context_ref)
+            } else {
+                None
+            };
             app_state
                 .renderer
-                .render(app_state.world, &app_state.gui.context(), clipped_meshes)?;
+                .render(app_state.world, context, clipped_meshes)?;
         }
         Event::LoopDestroyed => {
             app.cleanup()?;

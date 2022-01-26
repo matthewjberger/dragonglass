@@ -47,7 +47,7 @@ impl Renderer for VulkanRenderBackend {
     fn render(
         &mut self,
         world: &World,
-        gui_context: &CtxRef,
+        gui_context: Option<&CtxRef>,
         clipped_meshes: Vec<ClippedMesh>,
     ) -> Result<()> {
         let Self { frame, scene, .. } = self;
