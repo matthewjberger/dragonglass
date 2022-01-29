@@ -403,6 +403,67 @@ impl World {
         Ok(())
     }
 
+    pub fn add_box_collider(
+        &mut self,
+        entity: Entity,
+        collision_groups: InteractionGroups,
+    ) -> Result<()> {
+        let bounding_box = {
+            let entry = self.ecs.entry_ref(entity)?;
+            let mesh = entry.get_component::<MeshRender>()?;
+            self.geometry.meshes[&mesh.name].bounding_box()
+        };
+        let entry = self.ecs.entry_ref(entity)?;
+        let transform = entry.get_component::<Transform>()?;
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+        let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
+            .collision_groups(collision_groups)
+            .build();
+        self.physics.colliders.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut self.physics.bodies,
+        );
+        Ok(())
+    }
+
+    pub fn add_capsule_collider(
+        &mut self,
+        entity: Entity,
+        collision_groups: InteractionGroups,
+    ) -> Result<()> {
+        let bounding_box = {
+            let entry = self.ecs.entry_ref(entity)?;
+            let mesh = entry.get_component::<MeshRender>()?;
+            self.geometry.meshes[&mesh.name].bounding_box()
+        };
+        let entry = self.ecs.entry_ref(entity)?;
+        let transform = entry.get_component::<Transform>()?;
+        let rigid_body_handle = self
+            .ecs
+            .entry_ref(entity)?
+            .get_component::<RigidBody>()?
+            .handle;
+        let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        let collider = ColliderBuilder::capsule_y(
+            half_extents.y,
+            std::cmp::max(half_extents.x as u32, half_extents.z as u32) as f32,
+        )
+        .collision_groups(collision_groups)
+        .build();
+        self.physics.colliders.insert_with_parent(
+            collider,
+            rigid_body_handle,
+            &mut self.physics.bodies,
+        );
+        Ok(())
+    }
+
     pub fn add_trimesh_collider(
         &mut self,
         entity: Entity,

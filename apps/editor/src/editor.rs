@@ -110,6 +110,7 @@ impl Editor {
             // TODO: Probably don't want this added every time
             app_state.renderer.load_world(app_state.world)?;
 
+            // TODO: Don't add an additional collider to existing entities...
             let mut query = <(Entity, &MeshRender)>::query();
             let entities = query
                 .iter(&mut app_state.world.ecs)
