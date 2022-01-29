@@ -662,8 +662,10 @@ name = "dragonglass_gui"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "egui-gizmo",
  "egui_winit_platform",
  "epi",
+ "nalgebra-glm",
  "winit",
 ]
 
@@ -756,6 +758,16 @@ dependencies = [
  "ahash",
  "epaint",
  "nohash-hasher",
+]
+
+[[package]]
+name = "egui-gizmo"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e258745fb62002b4fe0f9b256b2c44af4e6a77b1153195f9a76b6d4b956559e8"
+dependencies = [
+ "egui",
+ "glam",
 ]
 
 [[package]]
@@ -920,6 +932,12 @@ dependencies = [
  "system-deps",
  "winapi",
 ]
+
+[[package]]
+name = "glam"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b8509e6791516e81c1a630d0bd7fbac36d2fa8712a9da8662e716b52d5051ca"
 
 [[package]]
 name = "glib-sys"

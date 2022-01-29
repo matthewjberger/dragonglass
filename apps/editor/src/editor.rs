@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
 use dragonglass::{
     app::{App, AppState, MouseOrbit},
-    gui::egui::{
-        self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId, SelectableLabel,
-        Ui,
+    gui::{
+        egui::{
+            self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
+            SelectableLabel, Ui,
+        },
+        GizmoWidget,
     },
     world::{
         legion::Entity,
@@ -27,6 +30,7 @@ pub struct Editor {
     camera: MouseOrbit,
     moving_selected: bool,
     selected_entity: Option<Entity>,
+    gizmo: GizmoWidget,
 }
 
 impl Default for Editor {
@@ -35,6 +39,7 @@ impl Default for Editor {
             camera: MouseOrbit::default(),
             moving_selected: false,
             selected_entity: None,
+            gizmo: GizmoWidget::new(),
         }
     }
 }
@@ -318,6 +323,10 @@ impl App for Editor {
                     for graph in scene.graphs.iter_mut() {
                         self.print_node(ecs, graph, NodeIndex::new(0), ui);
                     }
+                    ui.end_row();
+
+                    self.gizmo.render_controls(ui);
+
                     ui.allocate_space(ui.available_size());
                 });
             });
@@ -387,6 +396,22 @@ impl App for Editor {
             ctx.input().screen_rect(),
         )
         .max_rect();
+
+        egui::Area::new("Viewport")
+            .fixed_pos((0.0, 0.0))
+            .show(ctx, |ui| {
+                if let Some(entity) = self.selected_entity {
+                    let (projection, view) = app_state
+                        .world
+                        .active_camera_matrices(app_state.system.aspect_ratio())
+                        .expect("Failed to get camera matrices!");
+                    let transform = app_state
+                        .world
+                        .entity_global_transform(entity)
+                        .expect("Failed to get entity transform!");
+                    let _result = self.gizmo.render(ui, transform.matrix(), view, projection);
+                }
+            });
 
         // TODO: Don't render underneath the gui
         let _viewport = Viewport {
