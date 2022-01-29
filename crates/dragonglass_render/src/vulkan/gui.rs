@@ -56,7 +56,23 @@ impl GuiRender {
             Some(index_buffer_size),
         )?;
 
-        let font_texture_sampler = Sampler::default(context.device.clone())?;
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(vk::LOD_CLAMP_NONE);
+        let font_texture_sampler = Sampler::new(context.device.clone(), sampler_info)?;
 
         let mut gui_renderer = Self {
             descriptor_set,
@@ -125,7 +141,9 @@ impl GuiRender {
             .descriptor_set_layout(self.descriptor_set_layout.clone())
             .shader_set(shader_set)
             .push_constant_range(push_constant_range)
-            // .blended(true)
+            .cull_mode(vk::CullModeFlags::NONE)
+            .blended(true)
+            .blended_src_color_blend_factor(vk::BlendFactor::ONE)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .depth_test_enabled(false)
             .depth_write_enabled(false)

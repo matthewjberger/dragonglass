@@ -1,4 +1,4 @@
-use egui::{epaint::ClippedShape, CtxRef, FontDefinitions};
+use egui::{epaint::ClippedShape, CtxRef, FontDefinitions, FontFamily, TextStyle};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi;
 use std::{sync::Arc, time::Instant};
@@ -25,11 +25,18 @@ pub struct Gui {
 
 impl Gui {
     pub fn new(screen_descriptor: ScreenDescriptor) -> Self {
+        let mut font_definitions = FontDefinitions::default();
+
+        // Large button text:
+        font_definitions
+            .family_and_size
+            .insert(TextStyle::Body, (FontFamily::Proportional, 18.0));
+
         let platform = Platform::new(PlatformDescriptor {
             physical_width: screen_descriptor.dimensions.width,
             physical_height: screen_descriptor.dimensions.height,
             scale_factor: screen_descriptor.scale_factor as _,
-            font_definitions: FontDefinitions::default(),
+            font_definitions,
             style: Default::default(),
         });
 

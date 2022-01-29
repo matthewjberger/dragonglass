@@ -110,6 +110,9 @@ pub struct GraphicsPipelineSettings {
     #[builder(default)]
     pub blended: bool,
 
+    #[builder(default = "vk::BlendFactor::SRC_ALPHA")]
+    pub blended_src_color_blend_factor: vk::BlendFactor,
+
     #[builder(default = "true")]
     pub depth_test_enabled: bool,
 
@@ -232,7 +235,7 @@ impl GraphicsPipelineSettings {
 
     fn color_blend_attachment_state(&self) -> vk::PipelineColorBlendAttachmentStateBuilder {
         if self.blended {
-            Self::blend_attachment_blended()
+            self.blend_attachment_blended()
         } else {
             Self::blend_attachment_opaque()
         }
@@ -255,7 +258,7 @@ impl GraphicsPipelineSettings {
             .alpha_blend_op(vk::BlendOp::ADD)
     }
 
-    fn blend_attachment_blended<'a>() -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
+    fn blend_attachment_blended<'a>(&self) -> vk::PipelineColorBlendAttachmentStateBuilder<'a> {
         vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(
                 vk::ColorComponentFlags::R
@@ -264,7 +267,7 @@ impl GraphicsPipelineSettings {
                     | vk::ColorComponentFlags::A,
             )
             .blend_enable(true)
-            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .src_color_blend_factor(self.blended_src_color_blend_factor)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .color_blend_op(vk::BlendOp::ADD)
             .src_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
