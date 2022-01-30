@@ -2,7 +2,10 @@ use crate::core::{AllocatedImage, Device, Framebuffer, Image, ImageView, RenderP
 use anyhow::{bail, ensure, Context, Result};
 use ash::vk;
 use gpu_allocator::vulkan::Allocator;
-use petgraph::prelude::*;
+use petgraph::{
+    dot::{Config, Dot},
+    prelude::*,
+};
 use std::{
     collections::HashMap,
     fmt,
@@ -23,6 +26,13 @@ impl RenderGraph {
     pub const BACKBUFFER_PREFIX: &'static str = "backbuffer";
     pub const RESOLVE_SUFFIX: &'static str = "resolve";
     pub const DEPTH_STENCIL: &'static str = "depth_stencil";
+
+    pub fn print_graph(&self) {
+        println!(
+            "Rendergraph:\n{:#?}",
+            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
+        );
+    }
 
     pub fn backbuffer_name(index: usize) -> String {
         format!("{} {}", Self::BACKBUFFER_PREFIX, index)

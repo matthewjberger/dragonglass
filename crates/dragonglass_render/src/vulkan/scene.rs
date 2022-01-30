@@ -210,6 +210,8 @@ impl Scene {
 
         rendergraph.build(device.clone(), allocator)?;
 
+        rendergraph.print_graph();
+
         let swapchain_images = swapchain
             .images()?
             .into_iter()
