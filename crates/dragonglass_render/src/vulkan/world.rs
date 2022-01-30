@@ -597,8 +597,8 @@ impl WorldRender {
 
     fn shader_paths() -> Result<ShaderPathSet> {
         let shader_path_set = ShaderPathSetBuilder::default()
-            .vertex("assets/shaders/model/model.vert.spv")
-            .fragment("assets/shaders/model/model.frag.spv")
+            .vertex("assets/shaders/world/world.vert.spv")
+            .fragment("assets/shaders/world/world.frag.spv")
             .build()?;
         Ok(shader_path_set)
     }
@@ -717,7 +717,6 @@ impl WorldRender {
                         .entry_ref(entity)?
                         .get_component::<dragonglass_world::Light>()
                     {
-                        // FIXME: Render a solid cube for this instead of a bounding box unit cube
                         let offset = glm::translation(&transform.translation);
                         let rotation = glm::quat_to_mat4(&transform.rotation);
                         let extents = glm::vec3(0.25, 0.25, 0.25);
