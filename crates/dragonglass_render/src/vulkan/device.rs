@@ -1,7 +1,7 @@
 use crate::{
     vulkan::{
         scene::Scene,
-        world::{Light, WorldPipelineData, WorldUniformBuffer},
+        world::{Light, PbrPipelineData, WorldUniformBuffer},
     },
     Renderer,
 };
@@ -82,12 +82,12 @@ impl Renderer for VulkanRenderBackend {
         let viewport = self.viewport;
         frame.render(viewport, |command_buffer, image_index| {
             if let Some(world_render) = scene.world_render.as_mut() {
-                world_render.pipeline_data.update_dynamic_ubo(world)?;
+                world_render.pbr_pipeline_data.update_dynamic_ubo(world)?;
 
                 let (lights, number_of_lights) = load_lights(world)?;
 
                 let mut joint_matrices =
-                    [glm::Mat4::identity(); WorldPipelineData::MAX_NUMBER_OF_JOINTS];
+                    [glm::Mat4::identity(); PbrPipelineData::MAX_NUMBER_OF_JOINTS];
                 joint_matrices
                     .iter_mut()
                     .zip(world.joint_matrices()?.into_iter())
@@ -102,7 +102,7 @@ impl Renderer for VulkanRenderBackend {
                     joint_matrices,
                 };
                 world_render
-                    .pipeline_data
+                    .pbr_pipeline_data
                     .uniform_buffer
                     .upload_data(&[ubo], 0)?;
             }
@@ -176,8 +176,8 @@ impl Drop for VulkanRenderBackend {
     }
 }
 
-fn load_lights(world: &World) -> Result<([Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS], u32)> {
-    let mut lights = [Light::default(); WorldPipelineData::MAX_NUMBER_OF_LIGHTS];
+fn load_lights(world: &World) -> Result<([Light; PbrPipelineData::MAX_NUMBER_OF_LIGHTS], u32)> {
+    let mut lights = [Light::default(); PbrPipelineData::MAX_NUMBER_OF_LIGHTS];
     let world_lights = world
         .lights()?
         .iter()

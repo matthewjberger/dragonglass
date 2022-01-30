@@ -120,8 +120,8 @@ pub struct WorldUniformBuffer {
     pub projection: glm::Mat4,
     pub camera_position: glm::Vec3,
     pub number_of_lights: u32,
-    pub joint_matrices: [glm::Mat4; WorldPipelineData::MAX_NUMBER_OF_JOINTS],
-    pub lights: [Light; WorldPipelineData::MAX_NUMBER_OF_LIGHTS],
+    pub joint_matrices: [glm::Mat4; PbrPipelineData::MAX_NUMBER_OF_JOINTS],
+    pub lights: [Light; PbrPipelineData::MAX_NUMBER_OF_LIGHTS],
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -133,7 +133,7 @@ pub struct EntityDynamicUniformBuffer {
     pub node_info: glm::Vec4,
 }
 
-pub struct WorldPipelineData {
+pub struct PbrPipelineData {
     pub uniform_buffer: CpuToGpuBuffer,
     pub dynamic_uniform_buffer: CpuToGpuBuffer,
     pub dynamic_alignment: u64,
@@ -147,7 +147,7 @@ pub struct WorldPipelineData {
     pub dummy_sampler: Sampler,
 }
 
-impl WorldPipelineData {
+impl PbrPipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
     pub const MAX_NUMBER_OF_JOINTS: usize = 200;
@@ -560,7 +560,7 @@ impl WorldPipelineData {
 
 pub struct WorldRender {
     pub cube_render: CubeRender,
-    pub pipeline_data: WorldPipelineData,
+    pub pbr_pipeline_data: PbrPipelineData,
     pub pipeline: Option<Pipeline>,
     pub pipeline_blended: Option<Pipeline>,
     pub pipeline_wireframe: Option<Pipeline>,
@@ -576,7 +576,7 @@ impl WorldRender {
         world: &World,
         environment_maps: &EnvironmentMapSet,
     ) -> Result<Self> {
-        let pipeline_data = WorldPipelineData::new(context, command_pool, world, environment_maps)?;
+        let pipeline_data = PbrPipelineData::new(context, command_pool, world, environment_maps)?;
         let cube = Cube::new(
             context.device.clone(),
             context.allocator.clone(),
@@ -585,7 +585,7 @@ impl WorldRender {
         let cube_render = CubeRender::new(context.device.clone(), cube);
         Ok(Self {
             cube_render,
-            pipeline_data,
+            pbr_pipeline_data: pipeline_data,
             pipeline: None,
             pipeline_blended: None,
             pipeline_wireframe: None,
@@ -625,7 +625,7 @@ impl WorldRender {
             .render_pass(render_pass)
             .vertex_inputs(vertex_inputs())
             .vertex_attributes(vertex_attributes())
-            .descriptor_set_layout(self.pipeline_data.descriptor_set_layout.clone())
+            .descriptor_set_layout(self.pbr_pipeline_data.descriptor_set_layout.clone())
             .shader_set(shader_set)
             .rasterization_samples(samples)
             .sample_shading_enabled(true)
@@ -692,7 +692,11 @@ impl WorldRender {
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
-            let has_indices = self.pipeline_data.geometry_buffer.index_buffer.is_some();
+            let has_indices = self
+                .pbr_pipeline_data
+                .geometry_buffer
+                .index_buffer
+                .is_some();
             let mut ubo_offset: i32 = -1;
             for graph in world.scene.graphs.iter() {
                 graph.walk(|node_index| {
@@ -746,7 +750,7 @@ impl WorldRender {
                                     }
                                 }
 
-                                self.pipeline_data
+                                self.pbr_pipeline_data
                                     .geometry_buffer
                                     .bind(&self.device.handle, command_buffer)?;
 
@@ -756,12 +760,10 @@ impl WorldRender {
                                         vk::PipelineBindPoint::GRAPHICS,
                                         pipeline_layout.handle,
                                         0,
-                                        &[self.pipeline_data.descriptor_set],
-                                        &[
-                                            (ubo_offset as u64
-                                                * self.pipeline_data.dynamic_alignment)
-                                                as _,
-                                        ],
+                                        &[self.pbr_pipeline_data.descriptor_set],
+                                        &[(ubo_offset as u64
+                                            * self.pbr_pipeline_data.dynamic_alignment)
+                                            as _],
                                     );
                                 }
 
