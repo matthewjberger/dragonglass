@@ -203,14 +203,15 @@ fn run_loop(
             };
 
             let context_ref = &app_state.gui.context();
-            let context = if app.gui_active() {
+            let gui_context = if app.gui_active() {
                 Some(context_ref)
             } else {
                 None
             };
             app_state
                 .renderer
-                .render(app_state.world, context, clipped_meshes)?;
+                .update(app_state.world, gui_context, &clipped_meshes)?;
+            app_state.renderer.render(app_state.world, clipped_meshes)?;
         }
         Event::LoopDestroyed => {
             app.cleanup()?;

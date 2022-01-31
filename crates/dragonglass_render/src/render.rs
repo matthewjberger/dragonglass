@@ -10,12 +10,13 @@ pub enum Backend {
 
 pub trait Renderer {
     fn load_world(&mut self, world: &World) -> Result<()>;
-    fn render(
+    fn update(
         &mut self,
         world: &World,
         gui_context: Option<&CtxRef>,
-        clipped_meshes: Vec<ClippedMesh>,
+        clipped_meshes: &[ClippedMesh],
     ) -> Result<()>;
+    fn render(&mut self, world: &World, clipped_meshes: Vec<ClippedMesh>) -> Result<()>;
     fn viewport(&self) -> Viewport;
     fn set_viewport(&mut self, viewport: Viewport);
 }

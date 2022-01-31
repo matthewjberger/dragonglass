@@ -1,16 +1,9 @@
-use crate::{
-    vulkan::{
-        scene::Scene,
-        world::{Light, PbrPipelineData, WorldUniformBuffer},
-    },
-    Renderer,
-};
+use crate::{vulkan::scene::Scene, Renderer};
 use anyhow::Result;
 use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::core::{Context, Frame};
-use dragonglass_world::{legion::EntityStore, Camera, PerspectiveCamera, Viewport, World};
+use dragonglass_world::{Viewport, World};
 use log::error;
-use nalgebra_glm as glm;
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -44,23 +37,27 @@ impl Renderer for VulkanRenderBackend {
         Ok(())
     }
 
-    fn render(
+    fn update(
         &mut self,
         world: &World,
         gui_context: Option<&CtxRef>,
-        clipped_meshes: Vec<ClippedMesh>,
+        clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
-        let Self { frame, scene, .. } = self;
-
-        let aspect_ratio = frame.swapchain_properties.aspect_ratio();
-        scene.update(
+        let aspect_ratio = self.frame.swapchain_properties.aspect_ratio();
+        self.scene.update(
             &world,
             aspect_ratio,
             &self.context,
             gui_context,
             &clipped_meshes,
         )?;
+        Ok(())
+    }
 
+    fn render(&mut self, world: &World, clipped_meshes: Vec<ClippedMesh>) -> Result<()> {
+        let Self { frame, scene, .. } = self;
+
+        let aspect_ratio = frame.swapchain_properties.aspect_ratio();
         let context = &self.context;
         let viewport = self.viewport;
         frame.render(viewport, |command_buffer, image_index| {
