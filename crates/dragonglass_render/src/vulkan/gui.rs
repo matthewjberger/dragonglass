@@ -2,10 +2,7 @@ use crate::byte_slice_from;
 use anyhow::Result;
 use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::{
-    ash::{
-        self,
-        vk::{self, Handle},
-    },
+    ash::vk::{self, Handle},
     core::{
         CommandPool, Context, DescriptorPool, DescriptorSetLayout, Device, GeometryBuffer,
         GraphicsPipelineSettingsBuilder, ImageDescription, Pipeline, PipelineLayout, RenderPass,
@@ -30,12 +27,12 @@ pub struct GuiRender {
     pub pipeline: Option<Pipeline>,
     pub pipeline_layout: Option<PipelineLayout>,
     pub geometry_buffer: GeometryBuffer,
-    device: Arc<Device>,
+    context: Arc<Context>,
 }
 
 impl GuiRender {
     pub fn new(
-        context: &Context,
+        context: Arc<Context>,
         shader_cache: &mut ShaderCache,
         render_pass: Arc<RenderPass>,
     ) -> Result<Self> {
@@ -83,27 +80,22 @@ impl GuiRender {
             pipeline: None,
             pipeline_layout: None,
             geometry_buffer,
-            device,
+            context,
         };
         gui_renderer.create_pipeline(shader_cache, render_pass)?;
         Ok(gui_renderer)
     }
 
-    fn update_descriptor_set(
-        device: &ash::Device,
-        descriptor_set: vk::DescriptorSet,
-        texture: &Texture,
-        sampler: &Sampler,
-    ) {
+    fn update_descriptor_set(&self, texture: &Texture) {
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(texture.view.handle)
-            .sampler(sampler.handle)
+            .sampler(self.font_texture_sampler.handle)
             .build();
         let image_infos = [image_info];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(descriptor_set)
+            .dst_set(self.descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
@@ -112,7 +104,12 @@ impl GuiRender {
 
         let descriptor_writes = [sampler_descriptor_write];
 
-        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        unsafe {
+            self.context
+                .device
+                .handle
+                .update_descriptor_sets(&descriptor_writes, &[])
+        }
     }
 
     pub fn create_pipeline(
@@ -131,7 +128,8 @@ impl GuiRender {
             .build()
             .unwrap();
 
-        let shader_set = shader_cache.create_shader_set(self.device.clone(), &shader_paths)?;
+        let shader_set =
+            shader_cache.create_shader_set(self.context.device.clone(), &shader_paths)?;
 
         let mut settings = GraphicsPipelineSettingsBuilder::default();
         settings
@@ -151,7 +149,9 @@ impl GuiRender {
             .build()
             .expect("Failed to create render pipeline settings");
 
-        let (pipeline, pipeline_layout) = settings.build()?.create_pipeline(self.device.clone())?;
+        let (pipeline, pipeline_layout) = settings
+            .build()?
+            .create_pipeline(self.context.device.clone())?;
         self.pipeline = Some(pipeline);
         self.pipeline_layout = Some(pipeline_layout);
         Ok(())
@@ -228,22 +228,16 @@ impl GuiRender {
 
     pub fn update(
         &mut self,
-        context: &Context,
         gui_context: &CtxRef,
         command_pool: &CommandPool,
         clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
-        self.update_texture(context, gui_context, command_pool)?;
+        self.update_texture(gui_context, command_pool)?;
         self.update_buffers(command_pool, clipped_meshes)?;
         Ok(())
     }
 
-    fn update_texture(
-        &mut self,
-        context: &Context,
-        gui_context: &CtxRef,
-        command_pool: &CommandPool,
-    ) -> Result<()> {
+    fn update_texture(&mut self, gui_context: &CtxRef, command_pool: &CommandPool) -> Result<()> {
         let font_texture = {
             let font_image = &gui_context.fonts().font_image();
             let data = font_image
@@ -258,18 +252,13 @@ impl GuiRender {
                 mip_levels: 1,
                 pixels: data,
             };
-            Texture::new(context, command_pool, &font_texture_description)?
+            Texture::new(&self.context, command_pool, &font_texture_description)?
         };
-        if let Ok(debug) = context.debug() {
+        if let Ok(debug) = &self.context.debug() {
             debug.name_image("egui font", font_texture.image.handle.as_raw())?;
             debug.name_image_view("egui font view", font_texture.view.handle.as_raw())?;
         }
-        Self::update_descriptor_set(
-            &context.device.handle,
-            self.descriptor_set,
-            &font_texture,
-            &self.font_texture_sampler,
-        );
+        self.update_descriptor_set(&font_texture);
         self.font_texture = Some(font_texture);
         Ok(())
     }
@@ -300,7 +289,7 @@ impl GuiRender {
         command_buffer: vk::CommandBuffer,
         clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
-        let device = self.device.clone();
+        let device = self.context.device.clone();
 
         let pipeline = match self.pipeline.as_ref() {
             Some(pipeline) => pipeline,

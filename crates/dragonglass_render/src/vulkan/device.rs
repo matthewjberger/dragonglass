@@ -20,7 +20,11 @@ impl VulkanRenderBackend {
     pub fn new(window_handle: &impl HasRawWindowHandle, viewport: Viewport) -> Result<Self> {
         let context = Arc::new(Context::new(window_handle)?);
         let frame = Frame::new(context.clone(), viewport, Self::MAX_FRAMES_IN_FLIGHT)?;
-        let scene = Scene::new(&context, frame.swapchain()?, &frame.swapchain_properties)?;
+        let scene = Scene::new(
+            context.clone(),
+            frame.swapchain()?,
+            &frame.swapchain_properties,
+        )?;
         let renderer = Self {
             viewport,
             frame,
@@ -33,7 +37,7 @@ impl VulkanRenderBackend {
 
 impl Renderer for VulkanRenderBackend {
     fn load_world(&mut self, world: &World) -> Result<()> {
-        self.scene.load_world(&self.context, world)?;
+        self.scene.load_world(world)?;
         Ok(())
     }
 
@@ -44,13 +48,8 @@ impl Renderer for VulkanRenderBackend {
         clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
         let aspect_ratio = self.frame.swapchain_properties.aspect_ratio();
-        self.scene.update(
-            &world,
-            aspect_ratio,
-            &self.context,
-            gui_context,
-            &clipped_meshes,
-        )?;
+        self.scene
+            .update(&world, aspect_ratio, gui_context, &clipped_meshes)?;
         Ok(())
     }
 
@@ -58,12 +57,10 @@ impl Renderer for VulkanRenderBackend {
         let Self { frame, scene, .. } = self;
 
         let aspect_ratio = frame.swapchain_properties.aspect_ratio();
-        let context = &self.context;
         let viewport = self.viewport;
         frame.render(viewport, |command_buffer, image_index| {
             // TODO: Make this take less parameters...
             scene.execute_passes(
-                context,
                 command_buffer,
                 &world,
                 image_index,
@@ -74,11 +71,7 @@ impl Renderer for VulkanRenderBackend {
         })?;
 
         if frame.recreated_swapchain {
-            scene.recreate_rendergraph(
-                &self.context,
-                frame.swapchain()?,
-                &frame.swapchain_properties,
-            )?;
+            scene.recreate_rendergraph(frame.swapchain()?, &frame.swapchain_properties)?;
         }
 
         Ok(())

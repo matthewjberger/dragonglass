@@ -29,11 +29,12 @@ pub struct Scene {
     pub transient_command_pool: CommandPool,
     pub shader_cache: ShaderCache,
     pub samples: vk::SampleCountFlags,
+    context: Arc<Context>,
 }
 
 impl Scene {
     pub fn new(
-        context: &Context,
+        context: Arc<Context>,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
     ) -> Result<Self> {
@@ -44,26 +45,26 @@ impl Scene {
         )?;
         let samples = context.max_usable_samples();
         let rendergraph =
-            Self::create_rendergraph(context, swapchain, swapchain_properties, samples)?;
+            Self::create_rendergraph(&context, swapchain, swapchain_properties, samples)?;
         let mut shader_cache = ShaderCache::default();
 
         let default_hdr_texture =
             dragonglass_world::Texture::from_hdr("assets/skyboxes/desert.hdr")?;
         let environment_maps = EnvironmentMapSet::new(
-            context,
+            &context,
             &transient_command_pool,
             &mut shader_cache,
             &default_hdr_texture,
         )?;
 
         let skybox_render = SkyboxRender::new(
-            context,
+            &context,
             &transient_command_pool,
             &environment_maps.prefilter,
         )?;
 
         let fullscreen_pass = rendergraph.pass_handle("fullscreen")?;
-        let gui_render = GuiRender::new(context, &mut shader_cache, fullscreen_pass)?;
+        let gui_render = GuiRender::new(context.clone(), &mut shader_cache, fullscreen_pass)?;
 
         let mut scene = Self {
             environment_maps,
@@ -75,12 +76,13 @@ impl Scene {
             transient_command_pool,
             shader_cache,
             samples,
+            context,
         };
-        scene.create_pipelines(context)?;
+        scene.create_pipelines()?;
         Ok(scene)
     }
 
-    pub fn create_pipelines(&mut self, context: &Context) -> Result<()> {
+    pub fn create_pipelines(&mut self) -> Result<()> {
         let fullscreen_pass = self.rendergraph.pass_handle("fullscreen")?;
 
         let shader_path_set = ShaderPathSetBuilder::default()
@@ -90,7 +92,7 @@ impl Scene {
 
         self.fullscreen_pipeline = None;
         let fullscreen_pipeline = FullscreenRender::new(
-            context,
+            &self.context,
             fullscreen_pass.clone(),
             &mut self.shader_cache,
             self.rendergraph.image_view("color_resolve")?.handle,
@@ -226,7 +228,7 @@ impl Scene {
         Ok(rendergraph)
     }
 
-    pub fn load_world(&mut self, context: &Context, world: &World) -> Result<()> {
+    pub fn load_world(&mut self, world: &World) -> Result<()> {
         world
             .scene
             .skybox
@@ -234,14 +236,14 @@ impl Scene {
             .and_then(|index| world.hdr_textures.get(*index))
             .and_then(|texture| {
                 self.environment_maps = EnvironmentMapSet::new(
-                    context,
+                    &self.context,
                     &self.transient_command_pool,
                     &mut self.shader_cache,
                     texture,
                 )
                 .ok()?;
                 self.skybox_render.update_descriptor_set(
-                    context.device.clone(),
+                    self.context.device.clone(),
                     &self.environment_maps.prefilter,
                 );
                 Some(())
@@ -250,7 +252,7 @@ impl Scene {
         self.world_render = None;
         let offscreen_renderpass = self.rendergraph.pass_handle("offscreen")?;
         let mut rendering = WorldRender::new(
-            context,
+            &self.context,
             &self.transient_command_pool,
             world,
             &self.environment_maps,
@@ -263,14 +265,17 @@ impl Scene {
 
     pub fn recreate_rendergraph(
         &mut self,
-        context: &Context,
         swapchain: &Swapchain,
         swapchain_properties: &SwapchainProperties,
     ) -> Result<()> {
-        let rendergraph =
-            Scene::create_rendergraph(&context, swapchain, swapchain_properties, self.samples)?;
+        let rendergraph = Scene::create_rendergraph(
+            &self.context,
+            swapchain,
+            swapchain_properties,
+            self.samples,
+        )?;
         self.rendergraph = rendergraph;
-        self.create_pipelines(context)?;
+        self.create_pipelines()?;
         Ok(())
     }
 
@@ -278,17 +283,12 @@ impl Scene {
         &mut self,
         world: &World,
         aspect_ratio: f32,
-        context: &Context,
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
         if let Some(gui_context) = gui_context {
-            self.gui_render.update(
-                context,
-                gui_context,
-                &self.transient_command_pool,
-                clipped_meshes,
-            )?;
+            self.gui_render
+                .update(gui_context, &self.transient_command_pool, clipped_meshes)?;
         }
 
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
@@ -360,7 +360,6 @@ impl Scene {
 
     pub fn execute_passes(
         &mut self,
-        context: &Context,
         command_buffer: CommandBuffer,
         world: &World,
         image_index: usize,
@@ -368,7 +367,7 @@ impl Scene {
         viewport: Viewport,
         clipped_meshes: &[ClippedMesh],
     ) -> Result<()> {
-        let device = context.device.clone();
+        let device = &self.context.device.clone();
         self.rendergraph.execute_pass(
             command_buffer,
             "offscreen",
