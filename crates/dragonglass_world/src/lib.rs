@@ -2,6 +2,7 @@ mod gltf;
 mod physics;
 mod registry;
 mod scenegraph;
+mod texture;
 mod world;
 
 pub use self::{
@@ -10,6 +11,7 @@ pub use self::{
     physics::*,
     registry::*,
     scenegraph::*,
+    texture::*,
     world::*,
 };
 pub use legion;
