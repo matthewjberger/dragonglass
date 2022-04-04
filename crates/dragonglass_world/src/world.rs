@@ -1,12 +1,11 @@
-use crate::{Ecs, Entity, Name, RigidBody, SceneGraph, SceneGraphNode, WorldPhysics};
+use crate::{
+    deserialize_ecs, serialize_ecs, world_as_bytes, world_from_bytes, Ecs, Entity, RigidBody,
+    SceneGraph, SceneGraphNode, WorldPhysics,
+};
 use anyhow::{bail, Context, Result};
 use bmfont::{BMFont, OrdinateOrientation};
 use image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView};
-use lazy_static::lazy_static;
-use legion::{
-    serialize::set_entity_serializer, serialize::Canon, storage::Component, EntityStore, IntoQuery,
-    Registry,
-};
+use legion::{EntityStore, IntoQuery};
 use na::{linalg::QR, Isometry3, Point, Point3, Translation3, UnitQuaternion};
 use nalgebra as na;
 use nalgebra_glm as glm;
@@ -16,39 +15,8 @@ use rapier3d::{
     geometry::{ColliderBuilder, InteractionGroups, Ray},
     prelude::RigidBodyType,
 };
-use serde::{de::DeserializeSeed, Deserialize, Deserializer, Serialize, Serializer};
-use std::{
-    collections::HashMap,
-    io::BufReader,
-    mem::replace,
-    path::Path,
-    sync::{Arc, RwLock},
-};
-
-lazy_static! {
-    pub static ref COMPONENT_REGISTRY: Arc<RwLock<Registry<String>>> = {
-        let mut registry = Registry::default();
-        registry.register::<Name>("name".to_string());
-        registry.register::<Transform>("transform".to_string());
-        registry.register::<Camera>("camera".to_string());
-        registry.register::<MeshRender>("mesh".to_string());
-        registry.register::<Skin>("skin".to_string());
-        registry.register::<Light>("light".to_string());
-        registry.register::<RigidBody>("rigid_body".to_string());
-        Arc::new(RwLock::new(registry))
-    };
-    pub static ref ENTITY_SERIALIZER: Canon = Canon::default();
-}
-
-pub fn register_component<T: Component + Serialize + for<'de> Deserialize<'de>>(
-    key: &str,
-) -> Result<()> {
-    let mut registry = COMPONENT_REGISTRY
-        .write()
-        .expect("Failed to access component registry!");
-    registry.register::<T>(key.to_string());
-    Ok(())
-}
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, io::BufReader, mem::replace, path::Path};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct World {
@@ -618,15 +586,11 @@ impl World {
     }
 
     pub fn as_bytes(&self) -> Result<Vec<u8>> {
-        Ok(set_entity_serializer(&*ENTITY_SERIALIZER, || {
-            bincode::serialize(&self)
-        })?)
+        world_as_bytes(&self)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<World> {
-        Ok(set_entity_serializer(&*ENTITY_SERIALIZER, || {
-            bincode::deserialize(bytes)
-        })?)
+        world_from_bytes(bytes)
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
@@ -743,27 +707,6 @@ pub struct MouseRayConfiguration {
     pub mouse_position: glm::Vec2,
 }
 
-fn serialize_ecs<S>(ecs: &Ecs, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let registry = (&*COMPONENT_REGISTRY)
-        .read()
-        .expect("Failed to get the component registry lock!");
-    ecs.as_serializable(legion::any(), &*registry, &*ENTITY_SERIALIZER)
-        .serialize(serializer)
-}
-
-fn deserialize_ecs<'de, D>(deserializer: D) -> Result<Ecs, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    (&*COMPONENT_REGISTRY)
-        .read()
-        .expect("Failed to get the component registry lock!")
-        .as_deserialize(&*ENTITY_SERIALIZER)
-        .deserialize(deserializer)
-}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,

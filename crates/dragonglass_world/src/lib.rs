@@ -1,5 +1,6 @@
 mod gltf;
 mod physics;
+mod registry;
 mod scenegraph;
 mod world;
 
@@ -7,6 +8,7 @@ pub use self::{
     gltf::*,
     legion::{EntityStore, IntoQuery},
     physics::*,
+    registry::*,
     scenegraph::*,
     world::*,
 };
