@@ -21,6 +21,7 @@ void main() {
   gl_Position =
       vec4(2.0 * inPos.x / pushConstants.screen_size.x - 1.0,
            2.0 * inPos.y / pushConstants.screen_size.y - 1.0, 0.0, 1.0);
-  outColor = vec4(srgb_to_linear(inColor.rgb), inColor.a);
+  // outColor = vec4(srgb_to_linear(inColor.rgb), inColor.a);
+  outColor = inColor;
   outUV = inUV;
 }

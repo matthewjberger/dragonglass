@@ -55,7 +55,7 @@ struct Light
 };
 
 #define MAX_NUMBER_OF_LIGHTS 4
-#define MAX_NUMBER_OF_JOINTS 200
+#define MAX_NUMBER_OF_JOINTS 1000
 
 layout(binding=0) uniform UboView{
   mat4 view;

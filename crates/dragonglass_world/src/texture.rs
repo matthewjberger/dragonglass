@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use image::{hdr::HdrDecoder, io::Reader as ImageReader, DynamicImage, GenericImageView};
+use nalgebra_glm as glm;
 use serde::{Deserialize, Serialize};
 use std::{io::BufReader, path::Path};
 
@@ -122,5 +123,69 @@ pub enum Filter {
 impl Default for Filter {
     fn default() -> Self {
         Self::Nearest
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Material {
+    pub name: String,
+    pub base_color_factor: glm::Vec4,
+    pub emissive_factor: glm::Vec3,
+    pub color_texture_index: i32,
+    pub color_texture_set: i32,
+    pub metallic_roughness_texture_index: i32,
+    pub metallic_roughness_texture_set: i32, // B channel - metalness values. G channel - roughness values
+    pub normal_texture_index: i32,
+    pub normal_texture_set: i32,
+    pub normal_texture_scale: f32,
+    pub occlusion_texture_index: i32,
+    pub occlusion_texture_set: i32, // R channel - occlusion values
+    pub occlusion_strength: f32,
+    pub emissive_texture_index: i32,
+    pub emissive_texture_set: i32,
+    pub metallic_factor: f32,
+    pub roughness_factor: f32,
+    pub alpha_mode: AlphaMode,
+    pub alpha_cutoff: f32,
+    pub is_unlit: bool,
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Self {
+            name: "<Unnamed>".to_string(),
+            base_color_factor: glm::vec4(1.0, 1.0, 1.0, 1.0),
+            emissive_factor: glm::Vec3::identity(),
+            color_texture_index: -1,
+            color_texture_set: -1,
+            metallic_roughness_texture_index: -1,
+            metallic_roughness_texture_set: -1,
+            normal_texture_index: -1,
+            normal_texture_set: -1,
+            normal_texture_scale: 1.0,
+            occlusion_texture_index: -1,
+            occlusion_texture_set: -1,
+            occlusion_strength: 1.0,
+            emissive_texture_index: -1,
+            emissive_texture_set: -1,
+            metallic_factor: 1.0,
+            roughness_factor: 1.0,
+            alpha_mode: AlphaMode::Opaque,
+            alpha_cutoff: 0.5,
+            is_unlit: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub enum AlphaMode {
+    Opaque = 1,
+    Mask,
+    Blend,
+}
+
+impl Default for AlphaMode {
+    fn default() -> Self {
+        Self::Opaque
     }
 }

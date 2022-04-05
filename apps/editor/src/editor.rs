@@ -12,9 +12,9 @@ use dragonglass::{
         legion::Entity,
         load_gltf,
         petgraph::{graph::NodeIndex, EdgeDirection::Outgoing},
-        rapier3d::{geometry::InteractionGroups, prelude::RigidBodyType},
-        register_component, Ecs, EntityStore, IntoQuery, MeshRender, Name, RigidBody, SceneGraph,
-        Transform, Viewport,
+        rapier3d::geometry::InteractionGroups,
+        register_component, Ecs, EntityStore, IntoQuery, Name, RigidBody, SceneGraph, Transform,
+        Viewport,
     },
 };
 use log::{info, warn};
@@ -110,21 +110,21 @@ impl Editor {
             // TODO: Probably don't want this added every time
             app_state.renderer.load_world(app_state.world)?;
 
-            // TODO: Don't add an additional collider to existing entities...
-            let mut query = <(Entity, &MeshRender)>::query();
-            let entities = query
-                .iter(&mut app_state.world.ecs)
-                .map(|(e, _)| *e)
-                .collect::<Vec<_>>();
+            // // TODO: Don't add an additional collider to existing entities...
+            // let mut query = <(Entity, &MeshRender)>::query();
+            // let entities = query
+            //     .iter(&mut app_state.world.ecs)
+            //     .map(|(e, _)| *e)
+            //     .collect::<Vec<_>>();
 
-            for entity in entities.into_iter() {
-                app_state
-                    .world
-                    .add_rigid_body(entity, RigidBodyType::Static)?;
-                app_state
-                    .world
-                    .add_trimesh_collider(entity, InteractionGroups::all())?;
-            }
+            // for entity in entities.into_iter() {
+            //     app_state
+            //         .world
+            //         .add_rigid_body(entity, RigidBodyType::Static)?;
+            //     app_state
+            //         .world
+            //         .add_trimesh_collider(entity, InteractionGroups::all())?;
+            // }
         }
 
         Ok(())
@@ -204,12 +204,13 @@ impl App for Editor {
             self.camera.update(app_state, camera_entity)?;
         }
 
-        // Animate entities
-        // if !app_state.world.animations.is_empty() {
-        //     app_state
-        //         .world
-        //         .animate(0, 0.75 * app_state.system.delta_time as f32)?;
-        // }
+        // Run first animation
+        if let Some(animation) = app_state.world.animations.first_mut() {
+            animation.animate(
+                &mut app_state.world.ecs,
+                0.75 * app_state.system.delta_time as f32,
+            )?;
+        }
 
         if self.moving_selected {
             let mut query = <(Entity, &Selected)>::query();

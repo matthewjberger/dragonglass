@@ -150,7 +150,7 @@ pub struct PbrPipelineData {
 impl PbrPipelineData {
     // These should match the constants defined in the shader
     pub const MAX_NUMBER_OF_TEXTURES: usize = 200; // TODO: check that this is not larger than the physical device's maxDescriptorSetSamplers
-    pub const MAX_NUMBER_OF_JOINTS: usize = 200;
+    pub const MAX_NUMBER_OF_JOINTS: usize = 1000;
     pub const MAX_NUMBER_OF_LIGHTS: usize = 4; // TODO: Increase this once a deferred or forward+ pipeline is in use
 
     // This does not need to be matched in the shader

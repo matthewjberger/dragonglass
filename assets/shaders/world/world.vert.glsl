@@ -9,7 +9,7 @@ layout(location=5) in vec4 inWeight0;
 layout(location=6) in vec3 inColor0;
 
 #define MAX_NUMBER_OF_LIGHTS 4
-#define MAX_NUMBER_OF_JOINTS 200
+#define MAX_NUMBER_OF_JOINTS 1000
 
 struct Light
 {
