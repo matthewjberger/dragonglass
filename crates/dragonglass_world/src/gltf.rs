@@ -296,7 +296,7 @@ fn load_nodes(
             } else {
                 mesh.name.to_string()
             };
-            if geometry.meshes.insert(name.clone(), mesh).is_some() {}
+            geometry.meshes.insert(name.clone(), mesh);
             entry.add_component(MeshRender { name });
         }
 

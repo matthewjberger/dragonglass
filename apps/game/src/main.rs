@@ -94,7 +94,7 @@ impl App for Game {
         }
 
         // Load the level
-        app_state.load_asset("assets/models/gamemap.glb")?;
+        app_state.load_asset("assets/models/arena.glb")?;
 
         // Add static colliders to level meshes
         let mut level_meshes = Vec::new();
@@ -129,7 +129,7 @@ impl App for Game {
 
             app_state
                 .world
-                .add_cylinder_collider(*entity, 1.0, 0.5, PLAYER_COLLISION_GROUP)?;
+                .add_cylinder_collider(*entity, 0.5, 0.25, PLAYER_COLLISION_GROUP)?;
         }
 
         Ok(())
@@ -177,7 +177,7 @@ fn main() -> Result<()> {
 }
 
 fn update_player(app_state: &mut AppState, entity: Entity) -> Result<()> {
-    let speed = 6.0 * app_state.system.delta_time as f32;
+    let speed = 2.0 * app_state.system.delta_time as f32;
     {
         let mut entry = app_state.world.ecs.entry_mut(entity)?;
         let transform = entry.get_component_mut::<Transform>()?;
@@ -213,7 +213,7 @@ fn jump_player(app_state: &mut AppState, entity: Entity) -> Result<()> {
         .get_component::<RigidBody>()?
         .handle;
     if let Some(rigid_body) = app_state.world.physics.bodies.get_mut(rigid_body_handle) {
-        let jump_strength = 5.0;
+        let jump_strength = 3.0;
         let impulse = jump_strength * glm::Vec3::y();
         rigid_body.apply_impulse(impulse, true);
     }
