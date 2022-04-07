@@ -213,7 +213,7 @@ fn jump_player(app_state: &mut AppState, entity: Entity) -> Result<()> {
         .get_component::<RigidBody>()?
         .handle;
     if let Some(rigid_body) = app_state.world.physics.bodies.get_mut(rigid_body_handle) {
-        let jump_strength = 3.0;
+        let jump_strength = 0.5;
         let impulse = jump_strength * glm::Vec3::y();
         rigid_body.apply_impulse(impulse, true);
     }
