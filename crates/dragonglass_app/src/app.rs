@@ -1,10 +1,7 @@
-use crate::{
-    logger::create_logger,
-    state::{Input, System},
-    AppState,
-};
+use crate::{logger::create_logger, AppState};
 use anyhow::Result;
 use dragonglass_gui::{Gui, ScreenDescriptor};
+use dragonglass_input::{Input, System};
 use dragonglass_render::{create_render_backend, Backend};
 use dragonglass_world::{SdfFont, Viewport, World};
 use image::io::Reader;

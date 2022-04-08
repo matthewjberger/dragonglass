@@ -1,0 +1,8 @@
+[package]
+name = "dragonglass_input"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nalgebra-glm = { version = "0.16.0", features = ["serde-serialize"] }
+winit = "0.26.1"

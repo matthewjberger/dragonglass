@@ -637,6 +637,7 @@ version = "0.1.0"
 dependencies = [
  "dragonglass_app",
  "dragonglass_gui",
+ "dragonglass_input",
  "dragonglass_render",
  "dragonglass_world",
 ]
@@ -647,6 +648,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dragonglass_gui",
+ "dragonglass_input",
  "dragonglass_render",
  "dragonglass_world",
  "image",
@@ -665,6 +667,14 @@ dependencies = [
  "egui-gizmo",
  "egui_winit_platform",
  "epi",
+ "nalgebra-glm",
+ "winit",
+]
+
+[[package]]
+name = "dragonglass_input"
+version = "0.1.0"
+dependencies = [
  "nalgebra-glm",
  "winit",
 ]
