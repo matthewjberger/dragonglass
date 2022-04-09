@@ -1,6 +1,6 @@
 mod app;
 mod camera;
 mod logger;
-mod state;
+mod resources;
 
-pub use self::{app::*, camera::*, logger::*, state::*};
+pub use self::{app::*, camera::*, logger::*, resources::*};
