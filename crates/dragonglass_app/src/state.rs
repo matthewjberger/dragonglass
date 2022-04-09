@@ -13,7 +13,7 @@ use winit::{
 
 pub type KeyMap = HashMap<VirtualKeyCode, ElementState>;
 
-pub struct AppState<'a> {
+pub struct Resources<'a> {
     pub window: &'a mut Window,
     pub input: &'a mut Input,
     pub system: &'a mut System,
@@ -22,7 +22,7 @@ pub struct AppState<'a> {
     pub world: &'a mut World,
 }
 
-impl<'a> AppState<'a> {
+impl<'a> Resources<'a> {
     pub fn set_cursor_grab(&mut self, grab: bool) -> Result<()> {
         Ok(self.window.set_cursor_grab(grab)?)
     }

@@ -1,4 +1,4 @@
-use crate::{logger::create_logger, AppState};
+use crate::{logger::create_logger, Resources};
 use anyhow::Result;
 use dragonglass_gui::{Gui, ScreenDescriptor};
 use dragonglass_input::{Input, System};
@@ -14,19 +14,19 @@ use winit::{
 };
 
 pub trait App {
-    fn initialize(&mut self, _app_state: &mut AppState) -> Result<()> {
+    fn initialize(&mut self, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
-    fn update(&mut self, _app_state: &mut AppState) -> Result<()> {
+    fn update(&mut self, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
     fn gui_active(&mut self) -> bool {
         return false;
     }
-    fn update_gui(&mut self, _app_state: &mut AppState) -> Result<()> {
+    fn update_gui(&mut self, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
-    fn on_file_dropped(&mut self, _path: &PathBuf, _app_state: &mut AppState) -> Result<()> {
+    fn on_file_dropped(&mut self, _path: &PathBuf, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
     fn cleanup(&mut self) -> Result<()> {
@@ -36,14 +36,14 @@ pub trait App {
         &mut self,
         _button: &MouseButton,
         _button_state: &ElementState,
-        _app_state: &mut AppState,
+        _resources: &mut Resources,
     ) -> Result<()> {
         Ok(())
     }
-    fn on_key(&mut self, _input: KeyboardInput, _app_state: &mut AppState) -> Result<()> {
+    fn on_key(&mut self, _input: KeyboardInput, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
-    fn handle_events(&mut self, _event: &Event<()>, _app_state: &mut AppState) -> Result<()> {
+    fn handle_events(&mut self, _event: &Event<()>, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
 }
@@ -113,7 +113,7 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
         SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
     );
 
-    app.initialize(&mut AppState {
+    app.initialize(&mut Resources {
         window: &mut window,
         world: &mut world,
         gui: &mut gui,
@@ -123,7 +123,7 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
     })?;
 
     event_loop.run(move |event, _, control_flow| {
-        let state = AppState {
+        let state = Resources {
             window: &mut window,
             world: &mut world,
             gui: &mut gui,
@@ -139,40 +139,40 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
 
 fn run_loop(
     app: &mut impl App,
-    mut app_state: AppState,
+    mut resources: Resources,
     event: Event<()>,
     control_flow: &mut ControlFlow,
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
     if app.gui_active() {
-        app_state.gui.handle_event(&event);
+        resources.gui.handle_event(&event);
     }
-    if !app.gui_active() || !app_state.gui.captures_event(&event) {
-        app.handle_events(&event, &mut app_state)?;
-        app_state.system.handle_event(&event);
-        app_state
+    if !app.gui_active() || !resources.gui.captures_event(&event) {
+        app.handle_events(&event, &mut resources)?;
+        resources.system.handle_event(&event);
+        resources
             .input
-            .handle_event(&event, app_state.system.window_center());
+            .handle_event(&event, resources.system.window_center());
     }
 
     match event {
         Event::NewEvents(_) => {
-            if app_state.system.exit_requested {
+            if resources.system.exit_requested {
                 *control_flow = ControlFlow::Exit;
             }
         }
         Event::WindowEvent { ref event, .. } => match event {
-            WindowEvent::Resized(physical_size) => app_state.renderer.set_viewport(Viewport {
+            WindowEvent::Resized(physical_size) => resources.renderer.set_viewport(Viewport {
                 x: 0.0,
                 y: 0.0,
                 width: physical_size.width as _,
                 height: physical_size.height as _,
             }),
-            WindowEvent::DroppedFile(ref path) => app.on_file_dropped(path, &mut app_state)?,
+            WindowEvent::DroppedFile(ref path) => app.on_file_dropped(path, &mut resources)?,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             WindowEvent::MouseInput { button, state, .. } => {
-                app.on_mouse(button, state, &mut app_state)?
+                app.on_mouse(button, state, &mut resources)?
             }
             WindowEvent::KeyboardInput { input, .. } => {
                 if let (Some(VirtualKeyCode::Escape), ElementState::Pressed) =
@@ -180,35 +180,35 @@ fn run_loop(
                 {
                     *control_flow = ControlFlow::Exit;
                 }
-                app.on_key(*input, &mut app_state)?;
+                app.on_key(*input, &mut resources)?;
             }
             _ => (),
         },
         Event::MainEventsCleared => {
-            app_state.world.tick(app_state.system.delta_time as f32)?;
-            app.update(&mut app_state)?;
+            resources.world.tick(resources.system.delta_time as f32)?;
+            app.update(&mut resources)?;
 
             let clipped_meshes = if app.gui_active() {
-                let _frame_data = app_state
+                let _frame_data = resources
                     .gui
-                    .start_frame(app_state.window.scale_factor() as _);
-                app.update_gui(&mut app_state)?;
-                let shapes = app_state.gui.end_frame(app_state.window);
-                app_state.gui.context().tessellate(shapes)
+                    .start_frame(resources.window.scale_factor() as _);
+                app.update_gui(&mut resources)?;
+                let shapes = resources.gui.end_frame(resources.window);
+                resources.gui.context().tessellate(shapes)
             } else {
                 Vec::new()
             };
 
-            let context_ref = &app_state.gui.context();
+            let context_ref = &resources.gui.context();
             let gui_context = if app.gui_active() {
                 Some(context_ref)
             } else {
                 None
             };
-            app_state
+            resources
                 .renderer
-                .update(app_state.world, gui_context, &clipped_meshes)?;
-            app_state.renderer.render(app_state.world, clipped_meshes)?;
+                .update(resources.world, gui_context, &clipped_meshes)?;
+            resources.renderer.render(resources.world, clipped_meshes)?;
         }
         Event::LoopDestroyed => {
             app.cleanup()?;

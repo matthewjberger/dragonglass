@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use dragonglass::{
-    app::{run_application, App, AppConfig, AppState, MouseLook},
+    app::{run_application, App, AppConfig, MouseLook, Resources},
     render::Backend,
     world::{
         Camera as WorldCamera, Entity, EntityStore, Hidden, IntoQuery, Light, LightKind,
@@ -24,8 +24,8 @@ pub struct Game {
 }
 
 impl App for Game {
-    fn initialize(&mut self, app_state: &mut dragonglass::app::AppState) -> Result<()> {
-        app_state.set_fullscreen();
+    fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+        resources.set_fullscreen();
         self.camera.orientation.sensitivity = glm::vec2(0.05, 0.05);
 
         // Load light 1
@@ -36,7 +36,7 @@ impl App for Game {
                 ..Default::default()
             };
             transform.look_at(&(-position), &glm::Vec3::y());
-            let light_entity = app_state.world.ecs.push((
+            let light_entity = resources.world.ecs.push((
                 transform,
                 Light {
                     color: glm::vec3(0.0, 10.0, 10.0),
@@ -45,7 +45,7 @@ impl App for Game {
                     ..Default::default()
                 },
             ));
-            app_state
+            resources
                 .world
                 .scene
                 .default_scenegraph_mut()?
@@ -60,7 +60,7 @@ impl App for Game {
                 ..Default::default()
             };
             transform.look_at(&(-position), &glm::Vec3::y());
-            let light_entity = app_state.world.ecs.push((
+            let light_entity = resources.world.ecs.push((
                 transform,
                 Light {
                     color: glm::vec3(20.0, 0.0, 0.0),
@@ -69,7 +69,7 @@ impl App for Game {
                     ..Default::default()
                 },
             ));
-            app_state
+            resources
                 .world
                 .scene
                 .default_scenegraph_mut()?
@@ -84,8 +84,8 @@ impl App for Game {
         };
 
         {
-            let player_entity = app_state.world.ecs.push((transform,));
-            app_state
+            let player_entity = resources.world.ecs.push((transform,));
+            resources
                 .world
                 .scene
                 .default_scenegraph_mut()?
@@ -94,40 +94,40 @@ impl App for Game {
         }
 
         // Load the level
-        app_state.load_asset("assets/models/arena.glb")?;
+        resources.load_asset("assets/models/arena.glb")?;
 
         // Add static colliders to level meshes
         let mut level_meshes = Vec::new();
         let mut query = <(Entity, &MeshRender)>::query();
-        for (entity, mesh) in query.iter(&app_state.world.ecs) {
+        for (entity, mesh) in query.iter(&resources.world.ecs) {
             level_meshes.push(*entity);
             log::info!("Mesh available: {}", mesh.name);
         }
         for entity in level_meshes.into_iter() {
-            app_state
+            resources
                 .world
                 .add_rigid_body(entity, RigidBodyType::Static)?;
-            app_state
+            resources
                 .world
                 .add_trimesh_collider(entity, LEVEL_COLLISION_GROUP)?;
         }
 
         // Setup player
         if let Some(entity) = self.player.as_ref() {
-            activate_first_person(app_state, *entity)?;
+            activate_first_person(resources, *entity)?;
             let rigid_body = RigidBodyBuilder::new(RigidBodyType::Dynamic)
                 .translation(transform.translation)
                 .lock_rotations()
                 .build();
-            let handle = app_state.world.physics.bodies.insert(rigid_body);
-            app_state
+            let handle = resources.world.physics.bodies.insert(rigid_body);
+            resources
                 .world
                 .ecs
                 .entry(*entity)
                 .context("")?
                 .add_component(RigidBody::new(handle));
 
-            app_state
+            resources
                 .world
                 .add_cylinder_collider(*entity, 0.5, 0.25, PLAYER_COLLISION_GROUP)?;
         }
@@ -135,15 +135,15 @@ impl App for Game {
         Ok(())
     }
 
-    fn update(&mut self, app_state: &mut AppState) -> Result<()> {
-        if app_state.input.is_key_pressed(VirtualKeyCode::Escape) {
-            app_state.system.exit_requested = true;
+    fn update(&mut self, resources: &mut Resources) -> Result<()> {
+        if resources.input.is_key_pressed(VirtualKeyCode::Escape) {
+            resources.system.exit_requested = true;
         }
 
-        app_state.world.sync_all_rigid_bodies();
+        resources.world.sync_all_rigid_bodies();
         if let Some(player) = self.player.as_ref() {
-            self.camera.update(app_state, *player)?;
-            update_player(app_state, *player)?;
+            self.camera.update(resources, *player)?;
+            update_player(resources, *player)?;
         }
         Ok(())
     }
@@ -151,13 +151,13 @@ impl App for Game {
     fn on_key(
         &mut self,
         input: winit::event::KeyboardInput,
-        app_state: &mut AppState,
+        resources: &mut Resources,
     ) -> Result<()> {
         if let (Some(VirtualKeyCode::Space), ElementState::Pressed) =
             (input.virtual_keycode, input.state)
         {
             if let Some(player) = self.player.as_ref() {
-                jump_player(app_state, *player)?;
+                jump_player(resources, *player)?;
             }
         }
         Ok(())
@@ -176,68 +176,68 @@ fn main() -> Result<()> {
     )
 }
 
-fn update_player(app_state: &mut AppState, entity: Entity) -> Result<()> {
-    let speed = 2.0 * app_state.system.delta_time as f32;
+fn update_player(resources: &mut Resources, entity: Entity) -> Result<()> {
+    let speed = 2.0 * resources.system.delta_time as f32;
     {
-        let mut entry = app_state.world.ecs.entry_mut(entity)?;
+        let mut entry = resources.world.ecs.entry_mut(entity)?;
         let transform = entry.get_component_mut::<Transform>()?;
         let mut translation = glm::vec3(0.0, 0.0, 0.0);
 
-        if app_state.input.is_key_pressed(VirtualKeyCode::W) {
+        if resources.input.is_key_pressed(VirtualKeyCode::W) {
             translation = speed * transform.forward();
         }
 
-        if app_state.input.is_key_pressed(VirtualKeyCode::A) {
+        if resources.input.is_key_pressed(VirtualKeyCode::A) {
             translation = -speed * transform.right();
         }
 
-        if app_state.input.is_key_pressed(VirtualKeyCode::S) {
+        if resources.input.is_key_pressed(VirtualKeyCode::S) {
             translation = -speed * transform.forward();
         }
 
-        if app_state.input.is_key_pressed(VirtualKeyCode::D) {
+        if resources.input.is_key_pressed(VirtualKeyCode::D) {
             translation = speed * transform.right();
         }
 
         transform.translation += translation;
     }
-    app_state.world.sync_rigid_body_to_transform(entity)?;
+    resources.world.sync_rigid_body_to_transform(entity)?;
     Ok(())
 }
 
-fn jump_player(app_state: &mut AppState, entity: Entity) -> Result<()> {
-    let rigid_body_handle = app_state
+fn jump_player(resources: &mut Resources, entity: Entity) -> Result<()> {
+    let rigid_body_handle = resources
         .world
         .ecs
         .entry_ref(entity)?
         .get_component::<RigidBody>()?
         .handle;
-    if let Some(rigid_body) = app_state.world.physics.bodies.get_mut(rigid_body_handle) {
+    if let Some(rigid_body) = resources.world.physics.bodies.get_mut(rigid_body_handle) {
         let jump_strength = 0.5;
         let impulse = jump_strength * glm::Vec3::y();
         rigid_body.apply_impulse(impulse, true);
     }
-    app_state.world.sync_transform_to_rigid_body(entity)?;
+    resources.world.sync_transform_to_rigid_body(entity)?;
     Ok(())
 }
 
-fn activate_first_person(app_state: &mut AppState, entity: Entity) -> Result<()> {
+fn activate_first_person(resources: &mut Resources, entity: Entity) -> Result<()> {
     // Disable active camera
-    let camera_entity = app_state.world.active_camera()?;
-    app_state
+    let camera_entity = resources.world.active_camera()?;
+    resources
         .world
         .ecs
         .entry_mut(camera_entity)?
         .get_component_mut::<WorldCamera>()?
         .enabled = false;
 
-    app_state
+    resources
         .world
         .ecs
         .entry(entity)
         .context("entity not found")?
         .add_component(Hidden {});
-    app_state
+    resources
         .world
         .ecs
         .entry(entity)
