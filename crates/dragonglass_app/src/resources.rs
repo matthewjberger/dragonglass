@@ -4,14 +4,10 @@ use dragonglass_input::{Input, System};
 use dragonglass_render::Renderer;
 use dragonglass_world::{load_gltf, MouseRayConfiguration, World};
 use nalgebra_glm as glm;
-use std::collections::HashMap;
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, VirtualKeyCode},
     window::{Fullscreen, Window},
 };
-
-pub type KeyMap = HashMap<VirtualKeyCode, ElementState>;
 
 pub struct Resources<'a> {
     pub window: &'a mut Window,
