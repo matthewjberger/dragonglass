@@ -1,46 +1,47 @@
 use anyhow::{Context, Result};
 
-pub trait State<T, E> {
+pub trait State<R, T, E> {
     fn label(&self) -> String {
         "Unlabeled Game State".to_string()
     }
-    fn on_start(&mut self, _data: StateData<'_, T>) {}
-    fn on_stop(&mut self, _data: StateData<'_, T>) {}
-    fn on_pause(&mut self, _data: StateData<'_, T>) {}
-    fn on_resume(&mut self, _data: StateData<'_, T>) {}
-    fn handle_event(&mut self, _data: StateData<'_, T>, _event: E) -> Transition<T, E> {
+    fn on_start(&mut self, _data: StateData<'_, R, T>) {}
+    fn on_stop(&mut self, _data: StateData<'_, R, T>) {}
+    fn on_pause(&mut self, _data: StateData<'_, R, T>) {}
+    fn on_resume(&mut self, _data: StateData<'_, R, T>) {}
+    fn handle_event(&mut self, _data: StateData<'_, R, T>, _event: E) -> Transition<R, T, E> {
         Transition::None
     }
-    fn update(&mut self, _data: StateData<'_, T>) -> Transition<T, E> {
+    fn update(&mut self, _data: StateData<'_, R, T>) -> Transition<R, T, E> {
         Transition::None
     }
 }
 
-pub struct StateData<'a, T> {
+pub struct StateData<'a, R, T> {
+    pub resources: &'a R,
     pub data: &'a mut T,
 }
 
-impl<'a, T> StateData<'a, T> {
-    pub fn new(data: &'a mut T) -> Self {
-        Self { data }
+impl<'a, R, T> StateData<'a, R, T> {
+    pub fn new(resources: &'a R, data: &'a mut T) -> Self {
+        Self { resources, data }
     }
 }
 
-pub enum Transition<T, E> {
+pub enum Transition<R, T, E> {
     None,
     Pop,
-    Push(Box<dyn State<T, E>>),
-    Switch(Box<dyn State<T, E>>),
+    Push(Box<dyn State<R, T, E>>),
+    Switch(Box<dyn State<R, T, E>>),
     Quit,
 }
 
-pub struct StateMachine<'a, T, E> {
+pub struct StateMachine<'a, R, T, E> {
     running: bool,
-    states: Vec<Box<dyn State<T, E> + 'a>>,
+    states: Vec<Box<dyn State<R, T, E> + 'a>>,
 }
 
-impl<'a, T, E> StateMachine<'a, T, E> {
-    pub fn new(initial_state: impl State<T, E> + 'a) -> StateMachine<'a, T, E> {
+impl<'a, R, T, E> StateMachine<'a, R, T, E> {
+    pub fn new(initial_state: impl State<R, T, E> + 'a) -> StateMachine<'a, R, T, E> {
         Self {
             running: false,
             states: vec![Box::new(initial_state)],
@@ -61,7 +62,7 @@ impl<'a, T, E> StateMachine<'a, T, E> {
         self.running
     }
 
-    pub fn start(&mut self, data: StateData<'_, T>) -> Result<()> {
+    pub fn start(&mut self, data: StateData<'_, R, T>) -> Result<()> {
         if !self.running {
             let state = self
                 .states
@@ -73,29 +74,29 @@ impl<'a, T, E> StateMachine<'a, T, E> {
         Ok(())
     }
 
-    pub fn handle_event(&mut self, data: StateData<'_, T>, event: E) {
-        let StateData { data } = data;
+    pub fn handle_event(&mut self, data: StateData<'_, R, T>, event: E) {
+        let StateData { resources, data } = data;
         if self.running {
             let transition = match self.states.last_mut() {
-                Some(state) => state.handle_event(StateData { data }, event),
+                Some(state) => state.handle_event(StateData { resources, data }, event),
                 None => Transition::None,
             };
-            self.transition(transition, StateData { data });
+            self.transition(transition, StateData { resources, data });
         }
     }
 
-    pub fn update(&mut self, data: StateData<'_, T>) {
-        let StateData { data } = data;
+    pub fn update(&mut self, data: StateData<'_, R, T>) {
+        let StateData { resources, data } = data;
         if self.running {
             let trans = match self.states.last_mut() {
-                Some(state) => state.update(StateData { data }),
+                Some(state) => state.update(StateData { resources, data }),
                 None => Transition::None,
             };
-            self.transition(trans, StateData { data });
+            self.transition(trans, StateData { resources, data });
         }
     }
 
-    pub fn transition(&mut self, request: Transition<T, E>, data: StateData<'_, T>) {
+    pub fn transition(&mut self, request: Transition<R, T, E>, data: StateData<'_, R, T>) {
         if self.running {
             match request {
                 Transition::None => (),
@@ -107,49 +108,49 @@ impl<'a, T, E> StateMachine<'a, T, E> {
         }
     }
 
-    fn switch(&mut self, state: Box<dyn State<T, E>>, data: StateData<'_, T>) {
+    fn switch(&mut self, state: Box<dyn State<R, T, E>>, data: StateData<'_, R, T>) {
         if self.running {
-            let StateData { data } = data;
+            let StateData { resources, data } = data;
             if let Some(mut state) = self.states.pop() {
-                state.on_stop(StateData { data });
+                state.on_stop(StateData { resources, data });
             }
             self.states.push(state);
             let new_state = self.states.last_mut().unwrap();
-            new_state.on_start(StateData { data });
+            new_state.on_start(StateData { resources, data });
         }
     }
 
-    fn push(&mut self, state: Box<dyn State<T, E>>, data: StateData<'_, T>) {
+    fn push(&mut self, state: Box<dyn State<R, T, E>>, data: StateData<'_, R, T>) {
         if self.running {
-            let StateData { data } = data;
+            let StateData { resources, data } = data;
             if let Some(state) = self.states.last_mut() {
-                state.on_pause(StateData { data });
+                state.on_pause(StateData { resources, data });
             }
             self.states.push(state);
             let new_state = self.states.last_mut().unwrap();
-            new_state.on_start(StateData { data });
+            new_state.on_start(StateData { resources, data });
         }
     }
 
-    fn pop(&mut self, data: StateData<'_, T>) {
+    fn pop(&mut self, data: StateData<'_, R, T>) {
         if self.running {
-            let StateData { data } = data;
+            let StateData { resources, data } = data;
             if let Some(mut state) = self.states.pop() {
-                state.on_stop(StateData { data });
+                state.on_stop(StateData { resources, data });
             }
             if let Some(state) = self.states.last_mut() {
-                state.on_resume(StateData { data });
+                state.on_resume(StateData { resources, data });
             } else {
                 self.running = false;
             }
         }
     }
 
-    pub fn stop(&mut self, data: StateData<'_, T>) {
+    pub fn stop(&mut self, data: StateData<'_, R, T>) {
         if self.running {
-            let StateData { data } = data;
+            let StateData { resources, data } = data;
             while let Some(mut state) = self.states.pop() {
-                state.on_stop(StateData { data });
+                state.on_stop(StateData { resources, data });
             }
             self.running = false;
         }
@@ -163,11 +164,11 @@ mod tests {
     struct IntroState {
         countdown: u8,
     }
-    impl State<(), ()> for IntroState {
+    impl State<(), (), ()> for IntroState {
         fn label(&self) -> String {
             "Intro".to_string()
         }
-        fn update(&mut self, _: StateData<'_, ()>) -> Transition<(), ()> {
+        fn update(&mut self, _: StateData<'_, (), ()>) -> Transition<(), (), ()> {
             if self.countdown > 0 {
                 self.countdown -= 1;
                 Transition::None
@@ -178,11 +179,11 @@ mod tests {
     }
 
     struct MainMenuState;
-    impl State<(), ()> for MainMenuState {
+    impl State<(), (), ()> for MainMenuState {
         fn label(&self) -> String {
             "MainMenu".to_string()
         }
-        fn update(&mut self, _: StateData<'_, ()>) -> Transition<(), ()> {
+        fn update(&mut self, _: StateData<'_, (), ()>) -> Transition<(), (), ()> {
             Transition::Switch(Box::new(GameplayState {
                 paused: false,
                 finished: false,
@@ -194,14 +195,14 @@ mod tests {
         paused: bool,
         finished: bool,
     }
-    impl State<(), ()> for GameplayState {
+    impl State<(), (), ()> for GameplayState {
         fn label(&self) -> String {
             "Gameplay".to_string()
         }
-        fn on_resume(&mut self, _: StateData<'_, ()>) {
+        fn on_resume(&mut self, _: StateData<'_, (), ()>) {
             self.finished = true;
         }
-        fn update(&mut self, _: StateData<'_, ()>) -> Transition<(), ()> {
+        fn update(&mut self, _: StateData<'_, (), ()>) -> Transition<(), (), ()> {
             if self.finished {
                 Transition::Push(Box::new(GameOverState { countdown: 8 }))
             } else if self.paused {
@@ -214,11 +215,11 @@ mod tests {
     }
 
     struct PauseState;
-    impl State<(), ()> for PauseState {
+    impl State<(), (), ()> for PauseState {
         fn label(&self) -> String {
             "Pause".to_string()
         }
-        fn update(&mut self, _: StateData<'_, ()>) -> Transition<(), ()> {
+        fn update(&mut self, _: StateData<'_, (), ()>) -> Transition<(), (), ()> {
             Transition::Pop
         }
     }
@@ -226,11 +227,11 @@ mod tests {
     struct GameOverState {
         countdown: u8,
     }
-    impl State<(), ()> for GameOverState {
+    impl State<(), (), ()> for GameOverState {
         fn label(&self) -> String {
             "GameOver".to_string()
         }
-        fn update(&mut self, _: StateData<'_, ()>) -> Transition<(), ()> {
+        fn update(&mut self, _: StateData<'_, (), ()>) -> Transition<(), (), ()> {
             if self.countdown > 0 {
                 self.countdown -= 1;
                 Transition::None
@@ -252,7 +253,7 @@ mod tests {
         let mut state_machine = StateMachine::new(intro_state);
         assert_eq!(state_machine.active_state_label(), None);
         state_machine
-            .start(StateData::new(&mut ()))
+            .start(StateData::new(&mut (), &mut ()))
             .context("Tried to start state machine with no states present!")?;
 
         // Play the intro
@@ -261,7 +262,7 @@ mod tests {
                 state_machine.active_state_label(),
                 Some("Intro".to_string())
             );
-            state_machine.update(StateData::new(&mut ()));
+            state_machine.update(StateData::new(&mut (), &mut ()));
             assert!(state_machine.is_running());
         }
 
@@ -270,7 +271,7 @@ mod tests {
             state_machine.active_state_label(),
             Some("MainMenu".to_string())
         );
-        state_machine.update(StateData::new(&mut ()));
+        state_machine.update(StateData::new(&mut (), &mut ()));
 
         // Gameplay State
         assert_eq!(
@@ -278,9 +279,9 @@ mod tests {
             Some("Gameplay".to_string())
         );
         // Simulate some gameplay
-        state_machine.update(StateData::new(&mut ()));
+        state_machine.update(StateData::new(&mut (), &mut ()));
         // On the second pass we'll pause
-        state_machine.update(StateData::new(&mut ()));
+        state_machine.update(StateData::new(&mut (), &mut ()));
 
         // Pause Menu
         assert_eq!(
@@ -288,7 +289,7 @@ mod tests {
             Some("Pause".to_string())
         );
         // Unpause
-        state_machine.update(StateData::new(&mut ()));
+        state_machine.update(StateData::new(&mut (), &mut ()));
 
         // Back to the gameplay
         assert_eq!(
@@ -296,7 +297,7 @@ mod tests {
             Some("Gameplay".to_string())
         );
         // The game has ended
-        state_machine.update(StateData::new(&mut ()));
+        state_machine.update(StateData::new(&mut (), &mut ()));
 
         // Game Over
         assert_eq!(
@@ -304,7 +305,7 @@ mod tests {
             Some("GameOver".to_string())
         );
         // Exit the game
-        state_machine.update(StateData::new(&mut ()));
+        state_machine.update(StateData::new(&mut (), &mut ()));
 
         Ok(())
     }
