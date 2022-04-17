@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use dragonglass::{
-    app::{App, MouseOrbit, Resources},
+    app::{MouseOrbit, Resources, State, Transition},
     gui::{
         egui::{
             self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
@@ -187,14 +187,14 @@ impl Editor {
     }
 }
 
-impl App for Editor {
-    fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+impl State for Editor {
+    fn on_start(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
         register_component::<Selected>("selected")?;
         resources.world.add_default_light()?;
         Ok(())
     }
 
-    fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+    fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<Transition> {
         if resources.input.is_key_pressed(VirtualKeyCode::Escape) {
             resources.system.exit_requested = true;
         }
@@ -239,7 +239,7 @@ impl App for Editor {
             }
         }
 
-        Ok(())
+        Ok(Transition::None)
     }
 
     fn gui_active(&mut self) -> bool {
@@ -429,9 +429,9 @@ impl App for Editor {
 
     fn on_mouse(
         &mut self,
+        resources: &mut Resources,
         button: &winit::event::MouseButton,
         button_state: &ElementState,
-        resources: &mut Resources,
     ) -> Result<()> {
         if (MouseButton::Left, ElementState::Pressed) == (*button, *button_state) {
             let interact_distance = f32::MAX;
@@ -465,8 +465,8 @@ impl App for Editor {
 
     fn on_file_dropped(
         &mut self,
-        path: &PathBuf,
         resources: &mut dragonglass::app::Resources,
+        path: &PathBuf,
     ) -> Result<()> {
         self.load_world_from_file(path, resources)?;
         Ok(())
@@ -474,8 +474,8 @@ impl App for Editor {
 
     fn on_key(
         &mut self,
-        input: winit::event::KeyboardInput,
         resources: &mut dragonglass::app::Resources,
+        input: winit::event::KeyboardInput,
     ) -> Result<()> {
         match (input.virtual_keycode, input.state) {
             (Some(VirtualKeyCode::G), ElementState::Pressed) => {

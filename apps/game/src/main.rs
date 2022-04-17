@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use dragonglass::{
-    app::{run_application, App, AppConfig, MouseLook, Resources},
+    app::{run_application, AppConfig, MouseLook, Resources, State, Transition},
     render::Backend,
     world::{
         Camera as WorldCamera, Entity, EntityStore, Hidden, IntoQuery, Light, LightKind,
@@ -23,8 +23,8 @@ pub struct Game {
     camera: MouseLook,
 }
 
-impl App for Game {
-    fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+impl State for Game {
+    fn on_start(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
         resources.set_fullscreen();
         self.camera.orientation.sensitivity = glm::vec2(0.05, 0.05);
 
@@ -135,7 +135,7 @@ impl App for Game {
         Ok(())
     }
 
-    fn update(&mut self, resources: &mut Resources) -> Result<()> {
+    fn update(&mut self, resources: &mut Resources) -> Result<Transition> {
         if resources.input.is_key_pressed(VirtualKeyCode::Escape) {
             resources.system.exit_requested = true;
         }
@@ -145,13 +145,14 @@ impl App for Game {
             self.camera.update(resources, *player)?;
             update_player(resources, *player)?;
         }
-        Ok(())
+
+        Ok(Transition::None)
     }
 
     fn on_key(
         &mut self,
-        input: winit::event::KeyboardInput,
         resources: &mut Resources,
+        input: winit::event::KeyboardInput,
     ) -> Result<()> {
         if let (Some(VirtualKeyCode::Space), ElementState::Pressed) =
             (input.virtual_keycode, input.state)

@@ -85,6 +85,36 @@ impl StateMachine {
         self.running
     }
 
+    pub fn gui_active(&mut self) -> Result<bool> {
+        Ok(self.active_state()?.gui_active())
+    }
+
+    pub fn on_file_dropped(&mut self, resources: &mut Resources, path: &PathBuf) -> Result<()> {
+        self.active_state()?.on_file_dropped(resources, path)
+    }
+
+    pub fn on_mouse(
+        &mut self,
+        resources: &mut Resources,
+        button: &MouseButton,
+        button_state: &ElementState,
+    ) -> Result<()> {
+        self.active_state()?
+            .on_mouse(resources, button, button_state)
+    }
+
+    pub fn on_key(&mut self, resources: &mut Resources, input: KeyboardInput) -> Result<()> {
+        self.active_state()?.on_key(resources, input)
+    }
+
+    fn active_state(&mut self) -> Result<&mut Box<dyn State>> {
+        let state = self
+            .states
+            .last_mut()
+            .context("No state is available in the state machine!")?;
+        Ok(state)
+    }
+
     pub fn start(&mut self, resources: &mut Resources) -> Result<()> {
         if !self.running {
             let state = self
@@ -111,7 +141,12 @@ impl StateMachine {
     pub fn update(&mut self, resources: &mut Resources) -> Result<()> {
         if self.running {
             let transition = match self.states.last_mut() {
-                Some(state) => state.update(resources)?,
+                Some(state) => {
+                    if state.gui_active() {
+                        state.update_gui(resources)?;
+                    }
+                    state.update(resources)?
+                }
                 None => Transition::None,
             };
             self.transition(transition, resources)?;
