@@ -9,7 +9,7 @@ use editor::Editor;
 
 fn main() -> Result<()> {
     run_application(
-        Editor::default(),
+        Editor::new()?,
         AppConfig {
             width: 1920,
             height: 1080,

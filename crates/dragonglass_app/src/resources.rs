@@ -15,7 +15,6 @@ pub struct Resources<'a> {
     pub system: &'a mut System,
     pub gui: &'a mut Gui,
     pub renderer: &'a mut Box<dyn Renderer>,
-    pub world: &'a mut World,
 }
 
 impl<'a> Resources<'a> {
@@ -42,10 +41,10 @@ impl<'a> Resources<'a> {
             .set_fullscreen(Some(Fullscreen::Borderless(self.window.primary_monitor())));
     }
 
-    pub fn mouse_ray_configuration(&self) -> Result<MouseRayConfiguration> {
+    pub fn mouse_ray_configuration(&self, world: &mut World) -> Result<MouseRayConfiguration> {
         let viewport = self.renderer.viewport();
 
-        let (projection, view) = self.world.active_camera_matrices(viewport.aspect_ratio())?;
+        let (projection, view) = world.active_camera_matrices(viewport.aspect_ratio())?;
 
         let mouse_ray_configuration = MouseRayConfiguration {
             viewport,
@@ -57,9 +56,9 @@ impl<'a> Resources<'a> {
         Ok(mouse_ray_configuration)
     }
 
-    pub fn load_asset(&mut self, path: &str) -> Result<()> {
-        load_gltf(path, &mut self.world)?;
-        self.renderer.load_world(&self.world)?;
+    pub fn load_asset(&mut self, path: &str, world: &mut World) -> Result<()> {
+        load_gltf(path, world)?;
+        self.renderer.load_world(&world)?;
         Ok(())
     }
 }

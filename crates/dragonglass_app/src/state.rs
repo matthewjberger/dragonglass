@@ -1,11 +1,19 @@
-use std::path::PathBuf;
-
 use anyhow::{Context, Result};
+use dragonglass_world::World;
+use std::path::Path;
 use winit::event::{ElementState, Event, KeyboardInput, MouseButton};
 
 use crate::Resources;
 
 pub trait State {
+    fn label(&self) -> String {
+        "Unlabeled Game State".to_string()
+    }
+
+    fn world(&mut self) -> Option<&mut World> {
+        None
+    }
+
     fn on_start(&mut self, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
@@ -26,16 +34,20 @@ pub trait State {
         Ok(Transition::None)
     }
 
-    fn gui_active(&mut self) -> bool {
-        return false;
+    fn update_gui(&mut self, _resources: &mut Resources) -> Result<Transition> {
+        Ok(Transition::None)
     }
 
-    fn update_gui(&mut self, _resources: &mut Resources) -> Result<()> {
-        Ok(())
-    }
+    // fn on_gamepad_event(
+    //     &mut self,
+    //     _resources: &mut Resources,
+    //     _event: GilrsEvent,
+    // ) -> Result<Transition> {
+    //     Ok(Transition::None)
+    // }
 
-    fn on_file_dropped(&mut self, _resources: &mut Resources, _path: &PathBuf) -> Result<()> {
-        Ok(())
+    fn on_file_dropped(&mut self, _resources: &mut Resources, _path: &Path) -> Result<Transition> {
+        Ok(Transition::None)
     }
 
     fn on_mouse(
@@ -43,19 +55,15 @@ pub trait State {
         _resources: &mut Resources,
         _button: &MouseButton,
         _button_state: &ElementState,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn on_key(&mut self, _resources: &mut Resources, _input: KeyboardInput) -> Result<()> {
-        Ok(())
-    }
-
-    fn handle_event(
-        &mut self,
-        _resources: &mut Resources,
-        _event: &Event<()>,
     ) -> Result<Transition> {
+        Ok(Transition::None)
+    }
+
+    fn on_key(&mut self, _resources: &mut Resources, _input: KeyboardInput) -> Result<Transition> {
+        Ok(Transition::None)
+    }
+
+    fn on_event(&mut self, _resources: &mut Resources, _event: &Event<()>) -> Result<Transition> {
         Ok(Transition::None)
     }
 }
@@ -81,102 +89,168 @@ impl StateMachine {
         }
     }
 
+    pub fn world(&mut self) -> Result<Option<&mut World>> {
+        Ok(self.active_state_mut()?.world())
+    }
+
+    pub fn active_state_label(&self) -> Option<String> {
+        if !self.running {
+            return None;
+        }
+        self.states.last().map(|state| state.label())
+    }
+
     pub fn is_running(&self) -> bool {
         self.running
     }
 
     pub fn start(&mut self, resources: &mut Resources) -> Result<()> {
-        if !self.running {
-            let state = self
-                .states
-                .last_mut()
-                .context("Tried to start state machine with no states present!")?;
-            state.on_start(resources)?;
-            self.running = true;
+        if self.running {
+            return Ok(());
         }
-        Ok(())
+        self.running = true;
+        self.active_state_mut()?.on_start(resources)
     }
 
     pub fn handle_event(&mut self, resources: &mut Resources, event: &Event<()>) -> Result<()> {
-        if self.running {
-            let transition = match self.states.last_mut() {
-                Some(state) => state.handle_event(resources, &event)?,
-                None => Transition::None,
-            };
-            self.transition(transition, resources)?;
+        if !self.running {
+            return Ok(());
         }
-        Ok(())
+        let transition = self.active_state_mut()?.on_event(resources, event)?;
+        self.transition(transition, resources)
     }
 
     pub fn update(&mut self, resources: &mut Resources) -> Result<()> {
-        if self.running {
-            let transition = match self.states.last_mut() {
-                Some(state) => state.update(resources)?,
-                None => Transition::None,
-            };
-            self.transition(transition, resources)?;
+        if !self.running {
+            return Ok(());
         }
-        Ok(())
+        let transition = self.active_state_mut()?.update(resources)?;
+        self.transition(transition, resources)
     }
 
-    pub fn transition(&mut self, request: Transition, resources: &mut Resources) -> Result<()> {
-        if self.running {
-            match request {
-                Transition::None => (),
-                Transition::Pop => self.pop(resources)?,
-                Transition::Push(state) => self.push(state, resources)?,
-                Transition::Switch(state) => self.switch(state, resources)?,
-                Transition::Quit => self.stop(resources)?,
-            }
+    pub fn update_gui(&mut self, resources: &mut Resources) -> Result<()> {
+        if !self.running {
+            return Ok(());
         }
-        Ok(())
+        let transition = self.active_state_mut()?.update_gui(resources)?;
+        self.transition(transition, resources)
+    }
+
+    // pub fn on_gamepad_event(&mut self, resources: &mut Resources, event: GilrsEvent) -> Result<()> {
+    //     if !self.running {
+    //         return Ok(());
+    //     }
+    //     let transition = self
+    //         .active_state_mut()?
+    //         .on_gamepad_event(resources, event)?;
+    //     self.transition(transition, resources)
+    // }
+
+    pub fn on_file_dropped(&mut self, resources: &mut Resources, path: &Path) -> Result<()> {
+        if !self.running {
+            return Ok(());
+        }
+        let transition = self.active_state_mut()?.on_file_dropped(resources, path)?;
+        self.transition(transition, resources)
+    }
+
+    pub fn on_mouse(
+        &mut self,
+        resources: &mut Resources,
+        button: &MouseButton,
+        button_state: &ElementState,
+    ) -> Result<()> {
+        if !self.running {
+            return Ok(());
+        }
+        let transition = self
+            .active_state_mut()?
+            .on_mouse(resources, button, button_state)?;
+        self.transition(transition, resources)
+    }
+
+    pub fn on_key(&mut self, resources: &mut Resources, input: KeyboardInput) -> Result<()> {
+        if !self.running {
+            return Ok(());
+        }
+        let transition = self.active_state_mut()?.on_key(resources, input)?;
+        self.transition(transition, resources)
+    }
+
+    pub fn on_event(&mut self, resources: &mut Resources, event: &Event<()>) -> Result<()> {
+        if !self.running {
+            return Ok(());
+        }
+        let transition = self.active_state_mut()?.on_event(resources, event)?;
+        self.transition(transition, resources)
+    }
+
+    fn transition(&mut self, request: Transition, resources: &mut Resources) -> Result<()> {
+        if !self.running {
+            return Ok(());
+        }
+        match request {
+            Transition::None => Ok(()),
+            Transition::Pop => self.pop(resources),
+            Transition::Push(state) => self.push(state, resources),
+            Transition::Switch(state) => self.switch(state, resources),
+            Transition::Quit => self.stop(resources),
+        }
+    }
+
+    fn active_state_mut(&mut self) -> Result<&mut Box<(dyn State + 'static)>> {
+        self.states
+            .last_mut()
+            .context("Tried to access state in state machine with no states present!")
     }
 
     fn switch(&mut self, state: Box<dyn State>, resources: &mut Resources) -> Result<()> {
-        if self.running {
-            if let Some(mut state) = self.states.pop() {
-                state.on_stop(resources)?;
-            }
-            self.states.push(state);
-            let new_state = self.states.last_mut().unwrap();
-            new_state.on_start(resources)?;
+        if !self.running {
+            return Ok(());
         }
-        Ok(())
+        if let Some(mut state) = self.states.pop() {
+            state.on_stop(resources)?;
+        }
+        self.states.push(state);
+        self.active_state_mut()?.on_start(resources)
     }
 
     fn push(&mut self, state: Box<dyn State>, resources: &mut Resources) -> Result<()> {
-        if self.running {
-            if let Some(state) = self.states.last_mut() {
-                state.on_pause(resources)?;
-            }
-            self.states.push(state);
-            let new_state = self.states.last_mut().unwrap();
-            new_state.on_start(resources)?;
+        if !self.running {
+            return Ok(());
         }
-        Ok(())
+        if let Ok(state) = self.active_state_mut() {
+            state.on_pause(resources)?;
+        }
+        self.states.push(state);
+        self.active_state_mut()?.on_start(resources)
     }
 
     fn pop(&mut self, resources: &mut Resources) -> Result<()> {
-        if self.running {
-            if let Some(mut state) = self.states.pop() {
-                state.on_stop(resources)?;
-            }
-            if let Some(state) = self.states.last_mut() {
-                state.on_resume(resources)?;
-            } else {
-                self.running = false;
-            }
+        if !self.running {
+            return Ok(());
         }
-        Ok(())
+
+        if let Some(mut state) = self.states.pop() {
+            state.on_stop(resources)?;
+        }
+
+        if let Some(state) = self.states.last_mut() {
+            state.on_resume(resources)
+        } else {
+            self.running = false;
+            Ok(())
+        }
     }
 
     pub fn stop(&mut self, resources: &mut Resources) -> Result<()> {
-        if self.running {
-            while let Some(mut state) = self.states.pop() {
-                state.on_stop(resources)?;
-            }
-            self.running = false;
+        if !self.running {
+            return Ok(());
         }
+        while let Some(mut state) = self.states.pop() {
+            state.on_stop(resources)?;
+        }
+        self.running = false;
         Ok(())
     }
 }

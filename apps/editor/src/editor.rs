@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use dragonglass::{
-    app::{App, MouseOrbit, Resources},
+    app::{MouseOrbit, Resources, State, Transition},
     gui::{
         egui::{
             self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
@@ -14,14 +14,14 @@ use dragonglass::{
         petgraph::{graph::NodeIndex, EdgeDirection::Outgoing},
         rapier3d::geometry::InteractionGroups,
         register_component, Ecs, EntityStore, IntoQuery, Name, RigidBody, SceneGraph, Transform,
-        Viewport,
+        Viewport, World,
     },
 };
 use log::{info, warn};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use winit::event::{ElementState, MouseButton, VirtualKeyCode};
+use std::path::Path;
+use winit::event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Selected;
@@ -31,27 +31,29 @@ pub struct Editor {
     moving_selected: bool,
     selected_entity: Option<Entity>,
     gizmo: GizmoWidget,
+    world: World,
 }
 
-impl Default for Editor {
-    fn default() -> Self {
-        Self {
+impl Editor {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             camera: MouseOrbit::default(),
             moving_selected: false,
             selected_entity: None,
             gizmo: GizmoWidget::new(),
-        }
+            world: World::new()?,
+        })
     }
 }
 
 impl Editor {
-    fn load_hdr(path: impl AsRef<Path>, resources: &mut Resources) -> Result<()> {
+    fn load_hdr(&mut self, resources: &mut Resources, path: impl AsRef<Path>) -> Result<()> {
         // FIXME: We are loading the hdr even if it's already loaded here
-        resources.world.load_hdr(path)?;
-        resources.world.scene.skybox = Some(resources.world.hdr_textures.len() - 1);
+        self.world.load_hdr(path)?;
+        self.world.scene.skybox = Some(self.world.hdr_textures.len() - 1);
 
         // FIXME: Don't reload entire scene whenever something is added
-        match resources.renderer.load_world(&resources.world) {
+        match resources.renderer.load_world(&self.world) {
             Ok(_) => {
                 info!("Reloaded gltf world");
             }
@@ -63,17 +65,16 @@ impl Editor {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn deselect_all(&mut self, resources: &mut Resources) -> Result<()> {
+    pub fn deselect_all(&mut self) -> Result<()> {
         let mut query = <(Entity, &Selected)>::query();
 
         let entities = query
-            .iter(&mut resources.world.ecs)
+            .iter(&mut self.world.ecs)
             .map(|(e, _)| *e)
             .collect::<Vec<_>>();
 
         for entity in entities.into_iter() {
-            let mut entry = resources
+            let mut entry = self
                 .world
                 .ecs
                 .entry(entity)
@@ -85,7 +86,7 @@ impl Editor {
         Ok(())
     }
 
-    pub fn load_world_from_file(&self, path: &PathBuf, resources: &mut Resources) -> Result<()> {
+    pub fn load_world_from_file(&mut self, resources: &mut Resources, path: &Path) -> Result<()> {
         let raw_path = match path.to_str() {
             Some(raw_path) => raw_path,
             None => return Ok(()),
@@ -94,11 +95,11 @@ impl Editor {
         if let Some(extension) = path.extension() {
             match extension.to_str() {
                 Some("glb") | Some("gltf") => {
-                    load_gltf(raw_path, resources.world)?;
+                    load_gltf(raw_path, &mut self.world)?;
                 }
-                Some("hdr") => Self::load_hdr(raw_path, resources)?,
+                Some("hdr") => self.load_hdr(resources, raw_path)?,
                 Some("dga") => {
-                    resources.world.reload(raw_path)?;
+                    self.world.reload(raw_path)?;
                     log::info!("Loaded world!");
                 }
                 _ => log::warn!(
@@ -108,7 +109,7 @@ impl Editor {
             }
 
             // TODO: Probably don't want this added every time
-            resources.renderer.load_world(resources.world)?;
+            resources.renderer.load_world(&self.world)?;
 
             // // TODO: Don't add an additional collider to existing entities...
             // let mut query = <(Entity, &MeshRender)>::query();
@@ -130,6 +131,7 @@ impl Editor {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn print_node(&mut self, ecs: &mut Ecs, graph: &SceneGraph, index: NodeIndex, ui: &mut Ui) {
         let entity = graph[index];
         let entry = ecs.entry_ref(entity).expect("Failed to find entity!");
@@ -187,27 +189,28 @@ impl Editor {
     }
 }
 
-impl App for Editor {
-    fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+impl State for Editor {
+    fn on_start(&mut self, _resources: &mut Resources) -> Result<()> {
         register_component::<Selected>("selected")?;
-        resources.world.add_default_light()?;
+        self.world.add_default_light()?;
         Ok(())
     }
 
-    fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+    fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<Transition> {
         if resources.input.is_key_pressed(VirtualKeyCode::Escape) {
             resources.system.exit_requested = true;
         }
 
-        if resources.world.active_camera_is_main()? && !self.moving_selected {
-            let camera_entity = resources.world.active_camera()?;
-            self.camera.update(resources, camera_entity)?;
+        if self.world.active_camera_is_main()? && !self.moving_selected {
+            let camera_entity = self.world.active_camera()?;
+            self.camera
+                .update(resources, camera_entity, &mut self.world)?;
         }
 
         // Run first animation
-        if let Some(animation) = resources.world.animations.first_mut() {
+        if let Some(animation) = self.world.animations.first_mut() {
             animation.animate(
-                &mut resources.world.ecs,
+                &mut self.world.ecs,
                 0.75 * resources.system.delta_time as f32,
             )?;
         }
@@ -215,18 +218,18 @@ impl App for Editor {
         if self.moving_selected {
             let mut query = <(Entity, &Selected)>::query();
             let entities = query
-                .iter_mut(&mut resources.world.ecs)
+                .iter_mut(&mut self.world.ecs)
                 .map(|(e, _)| (*e))
                 .collect::<Vec<_>>();
             for entity in entities.into_iter() {
                 let (right, up) = {
-                    let camera_entity = resources.world.active_camera()?;
-                    let camera_entry = resources.world.ecs.entry_ref(camera_entity)?;
+                    let camera_entity = self.world.active_camera()?;
+                    let camera_entry = self.world.ecs.entry_ref(camera_entity)?;
                     let camera_transform = camera_entry.get_component::<Transform>()?;
                     (camera_transform.right(), camera_transform.up())
                 };
 
-                let mut entry = resources.world.ecs.entry_mut(entity)?;
+                let mut entry = self.world.ecs.entry_mut(entity)?;
                 let speed = 10.0;
                 let transform = entry.get_component_mut::<Transform>()?;
                 let mouse_delta =
@@ -235,18 +238,14 @@ impl App for Editor {
                     transform.translation += right * mouse_delta.x * speed;
                     transform.translation += up * -mouse_delta.y * speed;
                 }
-                resources.world.sync_rigid_body_to_transform(entity)?;
+                self.world.sync_rigid_body_to_transform(entity)?;
             }
         }
 
-        Ok(())
+        Ok(Transition::None)
     }
 
-    fn gui_active(&mut self) -> bool {
-        true
-    }
-
-    fn update_gui(&mut self, resources: &mut Resources) -> Result<()> {
+    fn update_gui(&mut self, resources: &mut Resources) -> Result<Transition> {
         let ctx = &resources.gui.context();
 
         egui::TopBottomPanel::top("top_panel")
@@ -263,7 +262,7 @@ impl App for Editor {
                                     .set_directory("/")
                                     .pick_file();
                                 if let Some(path) = path {
-                                    self.load_world_from_file(&path, resources)
+                                    self.load_world_from_file(resources, &path)
                                         .expect("Failed to load asset!");
                                 }
                                 ui.close_menu();
@@ -275,7 +274,7 @@ impl App for Editor {
                                     .set_directory("/")
                                     .pick_file();
                                 if let Some(path) = path {
-                                    self.load_world_from_file(&path, resources)
+                                    self.load_world_from_file(resources, &path)
                                         .expect("Failed to load asset!");
                                 }
                                 ui.close_menu();
@@ -291,18 +290,17 @@ impl App for Editor {
                                     let mut query = <(Entity, &Selected)>::query();
 
                                     let entities = query
-                                        .iter(&mut resources.world.ecs)
+                                        .iter(&mut self.world.ecs)
                                         .map(|(e, _)| *e)
                                         .collect::<Vec<_>>();
 
                                     for entity in entities.into_iter() {
-                                        resources
-                                            .world
+                                        self.world
                                             .remove_rigid_body(entity)
                                             .expect("Failed to remove rigid body!");
                                     }
 
-                                    resources.world.save(&path).expect("Failed to save world!");
+                                    self.world.save(&path).expect("Failed to save world!");
                                 }
                                 ui.close_menu();
                             }
@@ -318,13 +316,14 @@ impl App for Editor {
         egui::SidePanel::left("scene_explorer")
             .resizable(true)
             .show(ctx, |ui| {
-                ui.heading(&resources.world.scene.name);
+                ui.heading(&self.world.scene.name);
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    let scene = &mut resources.world.scene;
-                    let ecs = &mut resources.world.ecs;
-                    for graph in scene.graphs.iter_mut() {
-                        self.print_node(ecs, graph, NodeIndex::new(0), ui);
-                    }
+                    // let scene = &mut self.world.scene;
+                    // let ecs = &mut self.world.ecs;
+                    // for graph in scene.graphs.iter_mut() {
+                    // TODO: Print nodes here
+                    // self.print_node(ecs, graph, NodeIndex::new(0), ui);
+                    // }
                     ui.end_row();
 
                     self.gizmo.render_controls(ui);
@@ -342,7 +341,7 @@ impl App for Editor {
 
                     let mut should_sync = false;
 
-                    let mut entry = resources
+                    let mut entry = self
                         .world
                         .ecs
                         .entry(entity)
@@ -370,8 +369,7 @@ impl App for Editor {
                     });
 
                     if should_sync && entry.get_component::<RigidBody>().is_ok() {
-                        resources
-                            .world
+                        self.world
                             .sync_rigid_body_to_transform(entity)
                             .expect("Failed to sync rigid body to transform!");
                     }
@@ -403,11 +401,11 @@ impl App for Editor {
             .fixed_pos((0.0, 0.0))
             .show(ctx, |ui| {
                 if let Some(entity) = self.selected_entity {
-                    let (projection, view) = resources
+                    let (projection, view) = self
                         .world
                         .active_camera_matrices(resources.system.aspect_ratio())
                         .expect("Failed to get camera matrices!");
-                    let transform = resources
+                    let transform = self
                         .world
                         .entity_global_transform(entity)
                         .expect("Failed to get entity transform!");
@@ -424,33 +422,43 @@ impl App for Editor {
         };
         // resources.renderer.set_viewport(viewport);
 
-        Ok(())
+        Ok(Transition::None)
+    }
+
+    fn on_file_dropped(
+        &mut self,
+        resources: &mut dragonglass::app::Resources,
+        path: &Path,
+    ) -> Result<Transition> {
+        self.load_world_from_file(resources, path)?;
+        Ok(Transition::None)
     }
 
     fn on_mouse(
         &mut self,
-        button: &winit::event::MouseButton,
-        button_state: &ElementState,
         resources: &mut Resources,
-    ) -> Result<()> {
+        button: &MouseButton,
+        button_state: &ElementState,
+    ) -> Result<Transition> {
         if (MouseButton::Left, ElementState::Pressed) == (*button, *button_state) {
             let interact_distance = f32::MAX;
-            if let Some(entity) = resources.world.pick_object(
-                &resources.mouse_ray_configuration()?,
+            let mouse_ray_configuration = resources.mouse_ray_configuration(&mut self.world)?;
+            if let Some(entity) = self.world.pick_object(
+                &mouse_ray_configuration,
                 interact_distance,
                 InteractionGroups::all(),
             )? {
                 let mut query = <(Entity, &Selected)>::query();
                 let already_selected = query
-                    .iter(&mut resources.world.ecs)
+                    .iter(&mut self.world.ecs)
                     .map(|(e, _)| *e)
                     .any(|e| e == entity);
                 if already_selected {
-                    return Ok(());
+                    return Ok(Transition::None);
                 }
 
-                self.deselect_all(resources)?;
-                let mut entry = resources
+                self.deselect_all()?;
+                let mut entry = self
                     .world
                     .ecs
                     .entry(entity)
@@ -460,40 +468,34 @@ impl App for Editor {
                 log::info!("Selected entity: {:?}", entity);
             }
         }
-        Ok(())
-    }
-
-    fn on_file_dropped(
-        &mut self,
-        path: &PathBuf,
-        resources: &mut dragonglass::app::Resources,
-    ) -> Result<()> {
-        self.load_world_from_file(path, resources)?;
-        Ok(())
+        Ok(Transition::None)
     }
 
     fn on_key(
         &mut self,
-        input: winit::event::KeyboardInput,
         resources: &mut dragonglass::app::Resources,
-    ) -> Result<()> {
-        match (input.virtual_keycode, input.state) {
+        input: KeyboardInput,
+    ) -> Result<Transition> {
+        let transition = match (input.virtual_keycode, input.state) {
             (Some(VirtualKeyCode::G), ElementState::Pressed) => {
                 self.moving_selected = !self.moving_selected;
+                Transition::None
             }
             (Some(VirtualKeyCode::S), ElementState::Pressed) => {
-                resources.world.save("saved_map.dga")?;
+                self.world.save("saved_map.dga")?;
                 log::info!("Saved world!");
+                Transition::None
             }
             (Some(VirtualKeyCode::C), ElementState::Pressed) => {
-                resources.world.clear()?;
+                self.world.clear()?;
                 self.selected_entity = None;
-                if let Err(error) = resources.renderer.load_world(&resources.world) {
+                if let Err(error) = resources.renderer.load_world(&self.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
+                Transition::None
             }
-            _ => {}
-        }
-        Ok(())
+            _ => Transition::None,
+        };
+        Ok(transition)
     }
 }

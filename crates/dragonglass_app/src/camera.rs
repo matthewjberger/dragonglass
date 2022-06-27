@@ -1,6 +1,6 @@
 use crate::Resources;
 use anyhow::Result;
-use dragonglass_world::{Entity, EntityStore, Transform};
+use dragonglass_world::{legion::EntityStore, Entity, Transform, World};
 use nalgebra_glm as glm;
 
 #[derive(Default)]
@@ -9,7 +9,12 @@ pub struct MouseOrbit {
 }
 
 impl MouseOrbit {
-    pub fn update(&mut self, resources: &mut Resources, entity: Entity) -> Result<()> {
+    pub fn update(
+        &mut self,
+        resources: &mut Resources,
+        entity: Entity,
+        world: &mut World,
+    ) -> Result<()> {
         self.orientation
             .zoom(resources.input.mouse.wheel_delta.y * 0.3);
 
@@ -22,7 +27,7 @@ impl MouseOrbit {
         }
 
         {
-            let mut entry = resources.world.ecs.entry_mut(entity)?;
+            let mut entry = world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
             if resources.input.mouse.is_right_clicked {
                 self.orientation.pan(&mouse_delta)
@@ -44,14 +49,19 @@ pub struct MouseLook {
 }
 
 impl MouseLook {
-    pub fn update(&mut self, resources: &mut Resources, entity: Entity) -> Result<()> {
+    pub fn update(
+        &mut self,
+        resources: &mut Resources,
+        entity: Entity,
+        world: &mut World,
+    ) -> Result<()> {
         let mouse_delta =
             resources.input.mouse.offset_from_center * resources.system.delta_time as f32;
 
         self.orientation.rotate(&mouse_delta);
 
         {
-            let mut entry = resources.world.ecs.entry_mut(entity)?;
+            let mut entry = world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
             transform.rotation = self.orientation.look_forward();
         }

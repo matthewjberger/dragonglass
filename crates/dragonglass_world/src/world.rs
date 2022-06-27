@@ -45,10 +45,11 @@ impl World {
         self.scene = Scene::default();
         self.scene.name = "Main Scene".to_string();
         self.add_default_camera()?;
+        self.add_default_font()?;
         Ok(())
     }
 
-    fn add_default_camera(&mut self) -> Result<()> {
+    pub fn add_default_camera(&mut self) -> Result<()> {
         let position = glm::vec3(0.0, 0.0, 10.0);
         let mut transform = Transform {
             translation: position,
@@ -72,6 +73,14 @@ impl World {
 
         self.scene.default_scenegraph_mut()?.add_node(camera_entity);
 
+        Ok(())
+    }
+
+    pub fn add_default_font(&mut self) -> Result<()> {
+        self.fonts.insert(
+            "default".to_string(),
+            SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
+        );
         Ok(())
     }
 
