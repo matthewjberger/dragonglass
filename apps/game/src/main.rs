@@ -14,8 +14,9 @@ use winit::event::{ElementState, VirtualKeyCode};
 // TODO: Create trigger with event on collision
 // TODO: Visualize triangle mesh colliders as wireframes in renderer?
 
-const PLAYER_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b10, 0b01);
-const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b01, 0b10);
+const OBJECT_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b100, 0b111);
+const PLAYER_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b010, 0b101);
+const LEVEL_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b001, 0b110);
 
 #[derive(Default)]
 pub struct Game {
@@ -25,6 +26,11 @@ pub struct Game {
 
 impl App for Game {
     fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+        resources
+            .world
+            .physics
+            .set_gravity(glm::vec3(0.0, -4.0, 0.0));
+
         resources.set_fullscreen();
         self.camera.orientation.sensitivity = glm::vec2(0.05, 0.05);
 
@@ -77,7 +83,7 @@ impl App for Game {
         }
 
         // Load player
-        let position = glm::vec3(0.0, 1.0, 0.0);
+        let position = glm::vec3(0.0, 4.0, 0.0);
         let transform = Transform {
             translation: position,
             ..Default::default()
@@ -94,22 +100,40 @@ impl App for Game {
         }
 
         // Load the level
-        resources.load_asset("assets/models/arena.glb")?;
+        resources.load_asset("assets/models/arena2.glb")?;
 
         // Add static colliders to level meshes
         let mut level_meshes = Vec::new();
         let mut query = <(Entity, &MeshRender)>::query();
         for (entity, mesh) in query.iter(&resources.world.ecs) {
-            level_meshes.push(*entity);
+            level_meshes.push((*entity, mesh.name.to_string()));
             log::info!("Mesh available: {}", mesh.name);
         }
-        for entity in level_meshes.into_iter() {
-            resources
-                .world
-                .add_rigid_body(entity, RigidBodyType::Static)?;
-            resources
-                .world
-                .add_trimesh_collider(entity, LEVEL_COLLISION_GROUP)?;
+        for (entity, mesh_name) in level_meshes.into_iter() {
+            if mesh_name == "Sphere" {
+                log::info!("Mesh '{}' will be dynamic", mesh_name);
+                resources
+                    .world
+                    .add_rigid_body(entity, RigidBodyType::Dynamic)?;
+                resources
+                    .world
+                    .add_sphere_collider(entity, OBJECT_COLLISION_GROUP)?;
+            } else if mesh_name == "Cube.020" {
+                log::info!("Mesh '{}' will be dynamic", mesh_name);
+                resources
+                    .world
+                    .add_rigid_body(entity, RigidBodyType::Dynamic)?;
+                resources
+                    .world
+                    .add_box_collider(entity, OBJECT_COLLISION_GROUP)?;
+            } else {
+                resources
+                    .world
+                    .add_rigid_body(entity, RigidBodyType::Static)?;
+                resources
+                    .world
+                    .add_trimesh_collider(entity, LEVEL_COLLISION_GROUP)?;
+            }
         }
 
         // Setup player
@@ -140,11 +164,11 @@ impl App for Game {
             resources.system.exit_requested = true;
         }
 
-        resources.world.sync_all_rigid_bodies();
         if let Some(player) = self.player.as_ref() {
             self.camera.update(resources, *player)?;
             update_player(resources, *player)?;
         }
+
         Ok(())
     }
 

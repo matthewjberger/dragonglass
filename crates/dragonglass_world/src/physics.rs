@@ -53,7 +53,7 @@ impl Default for WorldPhysics {
 impl WorldPhysics {
     pub fn new() -> Self {
         Self {
-            gravity: Vector3::y() * -9.81,
+            gravity: Vector3::y() * -9.812,
             integration_parameters: IntegrationParameters::default(),
             broad_phase: BroadPhase::new(),
             narrow_phase: NarrowPhase::new(),

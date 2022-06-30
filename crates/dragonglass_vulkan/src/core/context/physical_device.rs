@@ -13,6 +13,7 @@ pub struct PhysicalDevice {
 impl PhysicalDevice {
     pub fn new(instance: &ash::Instance, surface: &Surface) -> Result<Self> {
         let devices = unsafe { instance.enumerate_physical_devices() }?;
+        println!("{:#?}", devices);
         for device in devices {
             if let Some(physical_device) = Self::check_device_viability(device, instance, surface)?
             {
