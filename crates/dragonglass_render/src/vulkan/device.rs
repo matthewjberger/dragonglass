@@ -50,10 +50,9 @@ impl Renderer for VulkanRenderBackend {
         elapsed_milliseconds: u32,
         config: &Config,
     ) -> Result<()> {
-        let aspect_ratio = self.frame.swapchain_properties.aspect_ratio();
         self.scene.update(
             &world,
-            aspect_ratio,
+            self.viewport,
             gui_context,
             &clipped_meshes,
             elapsed_milliseconds,

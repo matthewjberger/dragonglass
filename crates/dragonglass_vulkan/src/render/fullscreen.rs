@@ -5,13 +5,17 @@ use crate::core::{
 };
 use anyhow::{Context as AnyhowContext, Result};
 use ash::vk;
+use nalgebra_glm as glm;
 use std::{mem, sync::Arc};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct FullscreenUniformBuffer {
     pub time: u32,
+    pub screen_width: f32,
+    pub screen_height: f32,
     pub chromatic_aberration_strength: f32,
     pub film_grain_strength: f32,
+    pub padding: glm::Vec3,
 }
 
 pub struct FullscreenRender {

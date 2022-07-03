@@ -283,7 +283,7 @@ impl Scene {
     pub fn update(
         &mut self,
         world: &World,
-        aspect_ratio: f32,
+        viewport: Viewport,
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
         elapsed_milliseconds: u32,
@@ -298,13 +298,16 @@ impl Scene {
             let settings = &config.graphics.post_processing;
             let ubo = FullscreenUniformBuffer {
                 time: elapsed_milliseconds,
+                screen_width: viewport.width,
+                screen_height: viewport.height,
                 chromatic_aberration_strength: settings.chromatic_aberration.strength,
                 film_grain_strength: settings.film_grain.strength,
+                ..Default::default()
             };
             fullscreen_pipeline.uniform_buffer.upload_data(&[ubo], 0)?;
         }
 
-        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        let (projection, view) = world.active_camera_matrices(viewport.aspect_ratio())?;
         let camera_entity = world.active_camera()?;
         let camera_transform = world.entity_global_transform(camera_entity)?;
 
@@ -321,7 +324,7 @@ impl Scene {
                 z_far: Some(1000.0),
                 z_near: 0.01,
             };
-            camera.matrix(aspect_ratio)
+            camera.matrix(viewport.aspect_ratio())
         } else {
             projection
         };

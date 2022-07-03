@@ -5,6 +5,8 @@ layout(location = 0) in vec2 inUV;
 layout(binding = 0) uniform sampler2D color;
 layout(binding = 1) uniform Ubo {
     int time;
+    float screen_width;
+    float screen_height;
     float chromatic_aberration_strength;
     float film_grain_strength;
 } settings;
@@ -12,26 +14,17 @@ layout(binding = 1) uniform Ubo {
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    vec2 uv = inUV;
-    vec4 newColor = texture(color, inUV);
+    vec2 uv = inUV / vec2(settings.screen_width, settings.screen_height);
 
-    if (settings.chromatic_aberration_strength > 0.0) {
-        vec2 texel = 1.0 / vec2(800.0, 600.0);
-        vec2 coords = (uv - 0.5) * 2.0;
-        float coordDot = dot(coords, coords);
-        vec2 precompute = coordDot * coords * settings.chromatic_aberration_strength;
-        vec2 uvR = uv - texel.xy * precompute;
-        vec2 uvB = uv + texel.xy * precompute;
-        newColor.r = texture(color, uvR).r;
-        newColor.g = texture(color, uv).g;
-        newColor.b = texture(color, uvB).b;
-    }
+    vec3 col;
+    col.r = texture(color,vec2(uv.x+0.003,-uv.y)).x;
+    // col.g = texture(color,vec2(uv.x+0.000,-uv.y)).y;
+    // col.b = texture(color,vec2(uv.x-0.003,-uv.y)).z;
+    // col = clamp(col*0.5+0.5*col*col*1.2,0.0,1.0);
+    // col *= 0.5 + 0.5*16.0*uv.x*uv.y*(1.0-uv.x)*(1.0-uv.y);
+    // col *= vec3(0.95,1.05,0.95);
+    // col *= 0.9+0.1*sin(10.0*settings.time+uv.y*1000.0);
+    // col *= 0.99+0.01*sin(110.0*settings.time);
 
-    if (settings.film_grain_strength > 0.0) {
-        float x = (uv.x + 4.0 ) * (uv.y + 4.0 ) * (settings.time);
-        vec4 grain = vec4(mod((mod(x, 13.0) + 1.0) * (mod(x, 123.0) + 1.0), 0.01)-0.005) * settings.film_grain_strength;
-        newColor += grain;
-    }
-
-    outColor = newColor;
+    outColor = vec4(col, 1.0);
 }
