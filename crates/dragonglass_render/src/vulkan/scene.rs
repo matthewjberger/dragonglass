@@ -145,12 +145,27 @@ impl Scene {
 
         let offscreen = "offscreen";
         let fullscreen = "fullscreen";
+        let shadow = "shadow";
+        let shadow_map = "shadow_map";
         let color = "color";
         let color_resolve = "color_resolve";
         let offscreen_extent = vk::Extent2D::builder().width(2048).height(2048).build();
         let mut rendergraph = RenderGraph::new(
-            &[offscreen, fullscreen],
+            &[offscreen, shadow, fullscreen],
             vec![
+                ImageNode {
+                    name: shadow_map.to_string(),
+                    extent: offscreen_extent,
+                    format: vk::Format::R8G8B8A8_UNORM,
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.39, 0.58, 0.92, 1.0],
+                        },
+                    },
+                    samples,
+                    force_store: false,
+                    force_shader_read: false,
+                },
                 ImageNode {
                     name: color.to_string(),
                     extent: offscreen_extent,
@@ -206,6 +221,8 @@ impl Scene {
                 },
             ],
             &[
+                (shadow, shadow_map),
+                (shadow_map, offscreen),
                 (offscreen, color),
                 (offscreen, color_resolve),
                 (offscreen, RenderGraph::DEPTH_STENCIL),
