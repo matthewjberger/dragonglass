@@ -15,6 +15,7 @@ pub trait Renderer {
         world: &World,
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
+        elapsed_milliseconds: u32,
     ) -> Result<()>;
     fn render(&mut self, world: &World, clipped_meshes: Vec<ClippedMesh>) -> Result<()>;
     fn viewport(&self) -> Viewport;

@@ -205,9 +205,12 @@ fn run_loop(
             } else {
                 None
             };
-            resources
-                .renderer
-                .update(resources.world, gui_context, &clipped_meshes)?;
+            resources.renderer.update(
+                resources.world,
+                gui_context,
+                &clipped_meshes,
+                resources.system.milliseconds_since_start(),
+            )?;
             resources.renderer.render(resources.world, clipped_meshes)?;
         }
         Event::LoopDestroyed => {

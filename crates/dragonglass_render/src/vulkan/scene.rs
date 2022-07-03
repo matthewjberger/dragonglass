@@ -8,7 +8,7 @@ use dragonglass_vulkan::{
         ShaderPathSetBuilder, Swapchain, SwapchainProperties,
     },
     pbr::EnvironmentMapSet,
-    render::{FullscreenRender, SkyboxRender},
+    render::{FullscreenRender, FullscreenUniformBuffer, SkyboxRender},
 };
 use dragonglass_world::{Camera, EntityStore, PerspectiveCamera, Viewport, World};
 use nalgebra_glm as glm;
@@ -285,10 +285,18 @@ impl Scene {
         aspect_ratio: f32,
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
+        elapsed_milliseconds: u32,
     ) -> Result<()> {
         if let Some(gui_context) = gui_context {
             self.gui_render
                 .update(gui_context, &self.transient_command_pool, clipped_meshes)?;
+        }
+
+        if let Some(fullscreen_pipeline) = self.fullscreen_pipeline.as_mut() {
+            let ubo = FullscreenUniformBuffer {
+                time: elapsed_milliseconds,
+            };
+            fullscreen_pipeline.uniform_buffer.upload_data(&[ubo], 0)?;
         }
 
         let (projection, view) = world.active_camera_matrices(aspect_ratio)?;

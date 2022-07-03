@@ -121,18 +121,25 @@ impl Mouse {
 pub struct System {
     pub window_dimensions: PhysicalSize<u32>,
     pub delta_time: f64,
+    pub start_time: Instant,
     pub last_frame: Instant,
     pub exit_requested: bool,
 }
 
 impl System {
     pub fn new(window_dimensions: PhysicalSize<u32>) -> Self {
+        let now = Instant::now();
         Self {
-            last_frame: Instant::now(),
+            start_time: now,
+            last_frame: now,
             window_dimensions,
             delta_time: 0.01,
             exit_requested: false,
         }
+    }
+
+    pub fn milliseconds_since_start(&self) -> u32 {
+        Instant::now().duration_since(self.start_time).as_millis() as u32
     }
 
     pub fn aspect_ratio(&self) -> f32 {

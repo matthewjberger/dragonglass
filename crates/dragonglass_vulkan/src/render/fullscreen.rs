@@ -1,15 +1,21 @@
 use crate::core::{
-    Context, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipelineSettings,
+    Context, CpuToGpuBuffer, DescriptorPool, DescriptorSetLayout, Device, GraphicsPipelineSettings,
     GraphicsPipelineSettingsBuilder, Pipeline, PipelineLayout, RenderPass, ShaderCache,
     ShaderPathSet,
 };
 use anyhow::{Context as AnyhowContext, Result};
 use ash::vk;
-use std::sync::Arc;
+use std::{mem, sync::Arc};
+
+#[derive(Debug, Clone, Copy)]
+pub struct FullscreenUniformBuffer {
+    pub time: u32,
+}
 
 pub struct FullscreenRender {
     pub pipeline: Option<Pipeline>,
     pub pipeline_layout: PipelineLayout,
+    pub uniform_buffer: CpuToGpuBuffer,
     pub descriptor_pool: DescriptorPool,
     pub descriptor_set_layout: Arc<DescriptorSetLayout>,
     pub descriptor_set: vk::DescriptorSet,
@@ -30,6 +36,11 @@ impl FullscreenRender {
         let descriptor_pool = Self::descriptor_pool(device.clone())?;
         let descriptor_set =
             descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
+        let uniform_buffer = CpuToGpuBuffer::uniform_buffer(
+            device.clone(),
+            context.allocator.clone(),
+            mem::size_of::<FullscreenUniformBuffer>() as _,
+        )?;
         let settings = Self::settings(
             device.clone(),
             shader_cache,
@@ -41,6 +52,7 @@ impl FullscreenRender {
         let mut rendering = Self {
             pipeline: Some(pipeline),
             pipeline_layout,
+            uniform_buffer,
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
@@ -74,7 +86,11 @@ impl FullscreenRender {
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
             .build();
-        let pool_sizes = [sampler_pool_size];
+        let ubo_pool_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .build();
+        let pool_sizes = [sampler_pool_size, ubo_pool_size];
 
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .pool_sizes(&pool_sizes)
@@ -90,7 +106,13 @@ impl FullscreenRender {
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
-        let bindings = [sampler_binding];
+        let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+            .build();
+        let bindings = [sampler_binding, ubo_binding];
 
         let create_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
         DescriptorSetLayout::new(device, create_info)
@@ -110,7 +132,22 @@ impl FullscreenRender {
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(&image_info_list);
 
-        let writes = &[sampler_write.build()];
+        let uniform_buffer_size = mem::size_of::<FullscreenUniformBuffer>() as vk::DeviceSize;
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.uniform_buffer.handle())
+            .offset(0)
+            .range(uniform_buffer_size)
+            .build();
+        let buffer_infos = [buffer_info];
+
+        let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&buffer_infos);
+
+        let writes = &[sampler_write.build(), ubo_descriptor_write.build()];
         unsafe { self.device.handle.update_descriptor_sets(writes, &[]) }
     }
 
