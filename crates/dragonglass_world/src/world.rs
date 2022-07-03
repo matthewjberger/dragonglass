@@ -16,7 +16,7 @@ use rapier3d::{
     prelude::RigidBodyType,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, mem::replace, path::Path};
+use std::{cmp, collections::HashMap, mem::replace, path::Path};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct World {
@@ -625,9 +625,19 @@ pub struct Viewport {
 }
 
 impl Viewport {
+    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
     pub fn aspect_ratio(&self) -> f32 {
-        let height = if self.height > 0.0 { self.height } else { 1.0 };
-        self.width / height
+        let width = self.width;
+        let height = cmp::max(self.height as u32, 0);
+        width as f32 / height as f32
     }
 
     pub fn as_glm_vec(&self) -> glm::Vec4 {

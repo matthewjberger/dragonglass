@@ -17,7 +17,6 @@ use dragonglass::{
         Transform, Viewport,
     },
 };
-use log::{info, warn};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -50,15 +49,15 @@ impl Editor {
         resources.world.load_hdr(path)?;
         resources.world.scene.skybox = Some(resources.world.hdr_textures.len() - 1);
 
-        // FIXME: Don't reload entire scene whenever something is added
-        match resources.renderer.load_world(&resources.world) {
-            Ok(_) => {
-                info!("Reloaded gltf world");
-            }
-            Err(error) => {
-                warn!("Failed to load gltf world: {}", error);
-            }
-        }
+        // // FIXME: Don't reload entire scene whenever something is added
+        // match resources.renderer.load_world(&resources.world) {
+        //     Ok(_) => {
+        //         info!("Reloaded gltf world");
+        //     }
+        //     Err(error) => {
+        //         warn!("Failed to load gltf world: {}", error);
+        //     }
+        // }
 
         Ok(())
     }
@@ -108,7 +107,7 @@ impl Editor {
             }
 
             // TODO: Probably don't want this added every time
-            resources.renderer.load_world(resources.world)?;
+            // resources.renderer.load_world(resources.world)?;
 
             // TODO: Don't add an additional collider to existing entities...
             let mut query = <(Entity, &MeshRender)>::query();
@@ -405,7 +404,7 @@ impl App for Editor {
                 if let Some(entity) = self.selected_entity {
                     let (projection, view) = resources
                         .world
-                        .active_camera_matrices(resources.system.aspect_ratio())
+                        .active_camera_matrices(resources.system.viewport.aspect_ratio())
                         .expect("Failed to get camera matrices!");
                     let transform = resources
                         .world
@@ -488,9 +487,9 @@ impl App for Editor {
             (Some(VirtualKeyCode::C), ElementState::Pressed) => {
                 resources.world.clear()?;
                 self.selected_entity = None;
-                if let Err(error) = resources.renderer.load_world(&resources.world) {
-                    warn!("Failed to load gltf world: {}", error);
-                }
+                // if let Err(error) = resources.renderer.load_world(&resources.world) {
+                //     warn!("Failed to load gltf world: {}", error);
+                // }
             }
             _ => {}
         }

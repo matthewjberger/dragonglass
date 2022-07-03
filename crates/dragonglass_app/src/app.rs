@@ -2,7 +2,7 @@ use crate::{logger::create_logger, Input, Resources, System};
 use anyhow::Result;
 use dragonglass_config::Config;
 use dragonglass_gui::{Gui, ScreenDescriptor};
-use dragonglass_render::{create_render_backend, Backend};
+use dragonglass_render::{create_render_backend, Backend, Renderer};
 use dragonglass_world::{SdfFont, Viewport, World};
 use image::io::Reader;
 use std::path::PathBuf;
@@ -121,7 +121,6 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
         window: &mut window,
         world: &mut world,
         gui: &mut gui,
-        renderer: &mut renderer,
         input: &mut input,
         system: &mut system,
     })?;
@@ -132,11 +131,10 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
             window: &mut window,
             world: &mut world,
             gui: &mut gui,
-            renderer: &mut renderer,
             input: &mut input,
             system: &mut system,
         };
-        if let Err(error) = run_loop(&mut app, state, event, control_flow) {
+        if let Err(error) = run_loop(&mut app, &mut renderer, state, event, control_flow) {
             eprintln!("Application Error: {}", error);
         }
     });
@@ -144,6 +142,7 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
 
 fn run_loop(
     app: &mut impl App,
+    renderer: &mut Box<dyn Renderer>,
     mut resources: Resources,
     event: Event<()>,
     control_flow: &mut ControlFlow,
@@ -168,12 +167,13 @@ fn run_loop(
             }
         }
         Event::WindowEvent { ref event, .. } => match event {
-            WindowEvent::Resized(physical_size) => resources.renderer.set_viewport(Viewport {
-                x: 0.0,
-                y: 0.0,
-                width: physical_size.width as _,
-                height: physical_size.height as _,
-            }),
+            WindowEvent::Resized(physical_size) => {
+                resources.system.viewport = Viewport {
+                    width: physical_size.width as _,
+                    height: physical_size.height as _,
+                    ..Default::default()
+                }
+            }
             WindowEvent::DroppedFile(ref path) => app.on_file_dropped(path, &mut resources)?,
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             WindowEvent::MouseInput { button, state, .. } => {
@@ -210,14 +210,14 @@ fn run_loop(
             } else {
                 None
             };
-            resources.renderer.update(
+            renderer.update(
                 resources.world,
                 gui_context,
                 &clipped_meshes,
                 resources.system.milliseconds_since_start(),
                 resources.config,
             )?;
-            resources.renderer.render(resources.world, clipped_meshes)?;
+            renderer.render(resources.world, clipped_meshes)?;
         }
         Event::LoopDestroyed => {
             app.cleanup()?;
@@ -276,7 +276,6 @@ pub fn initialize_resources(mut app: impl App + 'static, config: AppConfig) -> R
         window: &mut window,
         world: &mut world,
         gui: &mut gui,
-        renderer: &mut renderer,
         input: &mut input,
         system: &mut system,
     })?;
@@ -287,11 +286,10 @@ pub fn initialize_resources(mut app: impl App + 'static, config: AppConfig) -> R
             window: &mut window,
             world: &mut world,
             gui: &mut gui,
-            renderer: &mut renderer,
             input: &mut input,
             system: &mut system,
         };
-        if let Err(error) = run_loop(&mut app, state, event, control_flow) {
+        if let Err(error) = run_loop(&mut app, &mut renderer, state, event, control_flow) {
             eprintln!("Application Error: {}", error);
         }
     });

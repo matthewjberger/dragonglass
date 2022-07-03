@@ -84,14 +84,6 @@ impl Renderer for VulkanRenderBackend {
 
         Ok(())
     }
-
-    fn viewport(&self) -> Viewport {
-        self.viewport
-    }
-
-    fn set_viewport(&mut self, viewport: Viewport) {
-        self.viewport = viewport;
-    }
 }
 
 impl Drop for VulkanRenderBackend {

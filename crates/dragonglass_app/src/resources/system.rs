@@ -1,12 +1,13 @@
+use dragonglass_world::Viewport;
 use nalgebra_glm as glm;
-use std::{cmp, time::Instant};
+use std::time::Instant;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, WindowEvent},
 };
 
 pub struct System {
-    pub window_dimensions: PhysicalSize<u32>,
+    pub viewport: Viewport,
     pub delta_time: f64,
     pub start_time: Instant,
     pub last_frame: Instant,
@@ -19,9 +20,13 @@ impl System {
         Self {
             start_time: now,
             last_frame: now,
-            window_dimensions,
             delta_time: 0.01,
             exit_requested: false,
+            viewport: Viewport {
+                width: window_dimensions.width as _,
+                height: window_dimensions.height as _,
+                ..Default::default()
+            },
         }
     }
 
@@ -29,17 +34,8 @@ impl System {
         Instant::now().duration_since(self.start_time).as_millis() as u32
     }
 
-    pub fn aspect_ratio(&self) -> f32 {
-        let width = self.window_dimensions.width;
-        let height = cmp::max(self.window_dimensions.height as u32, 0);
-        width as f32 / height as f32
-    }
-
     pub fn window_center(&self) -> glm::Vec2 {
-        glm::vec2(
-            self.window_dimensions.width as f32 / 2.0,
-            self.window_dimensions.height as f32 / 2.0,
-        )
+        glm::vec2(self.viewport.width / 2.0, self.viewport.height / 2.0)
     }
 
     pub fn handle_event<T>(&mut self, event: &Event<T>) {
@@ -53,7 +49,11 @@ impl System {
             Event::WindowEvent { event, .. } => match *event {
                 WindowEvent::CloseRequested => self.exit_requested = true,
                 WindowEvent::Resized(dimensions) => {
-                    self.window_dimensions = dimensions;
+                    self.viewport = Viewport {
+                        width: dimensions.width as _,
+                        height: dimensions.height as _,
+                        ..Default::default()
+                    };
                 }
                 _ => {}
             },

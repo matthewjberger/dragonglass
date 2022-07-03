@@ -6,22 +6,19 @@ pub use self::{input::*, system::*};
 use anyhow::Result;
 use dragonglass_config::Config;
 use dragonglass_gui::Gui;
-use dragonglass_render::Renderer;
-use dragonglass_world::{load_gltf, MouseRayConfiguration, World};
+use dragonglass_world::{MouseRayConfiguration, World};
 use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalPosition,
     window::{Fullscreen, Window},
 };
 
-// TODO: Don't include renderer (or world) in this
 pub struct Resources<'a> {
     pub config: &'a mut Config,
     pub window: &'a mut Window,
     pub input: &'a mut Input,
     pub system: &'a mut System,
     pub gui: &'a mut Gui,
-    pub renderer: &'a mut Box<dyn Renderer>,
     pub world: &'a mut World,
 }
 
@@ -50,8 +47,7 @@ impl<'a> Resources<'a> {
     }
 
     pub fn mouse_ray_configuration(&self) -> Result<MouseRayConfiguration> {
-        let viewport = self.renderer.viewport();
-
+        let viewport = self.system.viewport;
         let (projection, view) = self.world.active_camera_matrices(viewport.aspect_ratio())?;
 
         let mouse_ray_configuration = MouseRayConfiguration {
@@ -62,11 +58,5 @@ impl<'a> Resources<'a> {
         };
 
         Ok(mouse_ray_configuration)
-    }
-
-    pub fn load_asset(&mut self, path: &str) -> Result<()> {
-        load_gltf(path, &mut self.world)?;
-        self.renderer.load_world(&self.world)?;
-        Ok(())
     }
 }

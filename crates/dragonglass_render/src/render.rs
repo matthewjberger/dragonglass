@@ -21,8 +21,6 @@ pub trait Renderer {
         config: &Config,
     ) -> Result<()>;
     fn render(&mut self, world: &World, clipped_meshes: Vec<ClippedMesh>) -> Result<()>;
-    fn viewport(&self) -> Viewport;
-    fn set_viewport(&mut self, viewport: Viewport);
 }
 
 pub fn create_render_backend(

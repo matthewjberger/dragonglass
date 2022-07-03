@@ -100,7 +100,7 @@ impl App for Game {
         }
 
         // Load the level
-        resources.load_asset("assets/models/arena2.glb")?;
+        // resources.load_asset("assets/models/arena2.glb")?;
 
         // Add static colliders to level meshes
         let mut level_meshes = Vec::new();
