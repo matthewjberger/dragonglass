@@ -4,7 +4,7 @@ use dragonglass::{
     gui::{
         egui::{
             self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
-            SelectableLabel, Ui,
+            SelectableLabel, Slider, Ui,
         },
         GizmoWidget,
     },
@@ -327,7 +327,35 @@ impl App for Editor {
                     }
                     ui.end_row();
 
-                    self.gizmo.render_controls(ui);
+                    ui.heading("Post Processing");
+
+                    ui.add(
+                        Slider::new(
+                            &mut resources
+                                .config
+                                .graphics
+                                .post_processing
+                                .chromatic_aberration
+                                .strength,
+                            0.0..=10.0,
+                        )
+                        .text("Chromatic Aberration Strength"),
+                    );
+
+                    ui.add(
+                        Slider::new(
+                            &mut resources
+                                .config
+                                .graphics
+                                .post_processing
+                                .film_grain
+                                .strength,
+                            0.0..=10.0,
+                        )
+                        .text("Film Grain Strength"),
+                    );
+
+                    ui.end_row();
 
                     ui.allocate_space(ui.available_size());
                 });

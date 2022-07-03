@@ -48,7 +48,7 @@ impl Renderer for VulkanRenderBackend {
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
         elapsed_milliseconds: u32,
-        _config: &Config,
+        config: &Config,
     ) -> Result<()> {
         let aspect_ratio = self.frame.swapchain_properties.aspect_ratio();
         self.scene.update(
@@ -57,6 +57,7 @@ impl Renderer for VulkanRenderBackend {
             gui_context,
             &clipped_meshes,
             elapsed_milliseconds,
+            config,
         )?;
         Ok(())
     }

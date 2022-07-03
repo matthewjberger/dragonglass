@@ -10,6 +10,8 @@ use std::{mem, sync::Arc};
 #[derive(Debug, Clone, Copy)]
 pub struct FullscreenUniformBuffer {
     pub time: u32,
+    pub chromatic_aberration_strength: f32,
+    pub film_grain_strength: f32,
 }
 
 pub struct FullscreenRender {

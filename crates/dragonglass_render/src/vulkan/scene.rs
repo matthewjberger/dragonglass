@@ -1,5 +1,6 @@
 use crate::vulkan::world::WorldRender;
 use anyhow::Result;
+use dragonglass_config::Config;
 use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::{
     ash::vk::{self, CommandBuffer},
@@ -286,6 +287,7 @@ impl Scene {
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
         elapsed_milliseconds: u32,
+        config: &Config,
     ) -> Result<()> {
         if let Some(gui_context) = gui_context {
             self.gui_render
@@ -293,8 +295,11 @@ impl Scene {
         }
 
         if let Some(fullscreen_pipeline) = self.fullscreen_pipeline.as_mut() {
+            let settings = &config.graphics.post_processing;
             let ubo = FullscreenUniformBuffer {
                 time: elapsed_milliseconds,
+                chromatic_aberration_strength: settings.chromatic_aberration.strength,
+                film_grain_strength: settings.film_grain.strength,
             };
             fullscreen_pipeline.uniform_buffer.upload_data(&[ubo], 0)?;
         }

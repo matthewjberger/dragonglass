@@ -18,12 +18,10 @@ pub struct PostProcessing {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct ChromaticAberration {
-    pub enabled: bool,
     pub strength: f32,
 }
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct FilmGrain {
-    pub enabled: bool,
     pub strength: f32,
 }
