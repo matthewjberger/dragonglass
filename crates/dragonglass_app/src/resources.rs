@@ -1,6 +1,10 @@
+mod input;
+mod system;
+
+pub use self::{input::*, system::*};
+
 use anyhow::Result;
 use dragonglass_gui::Gui;
-use dragonglass_input::{Input, System};
 use dragonglass_render::Renderer;
 use dragonglass_world::{load_gltf, MouseRayConfiguration, World};
 use nalgebra_glm as glm;

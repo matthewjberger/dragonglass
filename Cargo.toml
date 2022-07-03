@@ -12,6 +12,5 @@ members = ["crates/*", "apps/*"]
 [dependencies]
 dragonglass_app = {path = "crates/dragonglass_app"}
 dragonglass_gui = {path = "crates/dragonglass_gui"}
-dragonglass_input = {path = "crates/dragonglass_input"}
 dragonglass_render = {path = "crates/dragonglass_render"}
 dragonglass_world = {path = "crates/dragonglass_world"}

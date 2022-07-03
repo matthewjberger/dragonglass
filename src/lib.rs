@@ -6,10 +6,6 @@ pub mod gui {
     pub use dragonglass_gui::*;
 }
 
-pub mod input {
-    pub use dragonglass_input::*;
-}
-
 pub mod render {
     pub use dragonglass_render::*;
 }
