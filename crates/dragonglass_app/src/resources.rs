@@ -4,6 +4,7 @@ mod system;
 pub use self::{input::*, system::*};
 
 use anyhow::Result;
+use dragonglass_config::Config;
 use dragonglass_gui::Gui;
 use dragonglass_render::Renderer;
 use dragonglass_world::{load_gltf, MouseRayConfiguration, World};
@@ -13,7 +14,9 @@ use winit::{
     window::{Fullscreen, Window},
 };
 
+// TODO: Don't include renderer (or world) in this
 pub struct Resources<'a> {
+    pub config: &'a mut Config,
     pub window: &'a mut Window,
     pub input: &'a mut Input,
     pub system: &'a mut System,

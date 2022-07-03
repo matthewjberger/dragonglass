@@ -646,6 +646,7 @@ name = "dragonglass_app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dragonglass_config",
  "dragonglass_gui",
  "dragonglass_render",
  "dragonglass_world",
@@ -655,6 +656,13 @@ dependencies = [
  "serde",
  "simplelog",
  "winit",
+]
+
+[[package]]
+name = "dragonglass_config"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -675,6 +683,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "derive_builder",
+ "dragonglass_config",
  "dragonglass_gui",
  "dragonglass_shader",
  "dragonglass_vulkan",

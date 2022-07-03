@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = "1.0.52"
+dragonglass_config = {path = "../dragonglass_config"}
 dragonglass_gui = {path = "../dragonglass_gui"}
 dragonglass_render = {path = "../dragonglass_render"}
 dragonglass_world = {path = "../dragonglass_world"}

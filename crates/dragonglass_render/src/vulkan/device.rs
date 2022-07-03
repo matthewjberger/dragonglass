@@ -1,5 +1,6 @@
 use crate::{vulkan::scene::Scene, Renderer};
 use anyhow::Result;
+use dragonglass_config::Config;
 use dragonglass_gui::egui::{ClippedMesh, CtxRef};
 use dragonglass_vulkan::core::{Context, Frame};
 use dragonglass_world::{Viewport, World};
@@ -47,6 +48,7 @@ impl Renderer for VulkanRenderBackend {
         gui_context: Option<&CtxRef>,
         clipped_meshes: &[ClippedMesh],
         elapsed_milliseconds: u32,
+        _config: &Config,
     ) -> Result<()> {
         let aspect_ratio = self.frame.swapchain_properties.aspect_ratio();
         self.scene.update(

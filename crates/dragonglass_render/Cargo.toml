@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1.0.52"
 derive_builder = "0.10.2"
+dragonglass_config = {path = "../dragonglass_config"}
 dragonglass_gui = {path = "../dragonglass_gui"}
 dragonglass_shader = {path = "../dragonglass_shader"}
 dragonglass_vulkan = {path = "../dragonglass_vulkan"}

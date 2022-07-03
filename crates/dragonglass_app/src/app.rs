@@ -1,5 +1,6 @@
 use crate::{logger::create_logger, Input, Resources, System};
 use anyhow::Result;
+use dragonglass_config::Config;
 use dragonglass_gui::{Gui, ScreenDescriptor};
 use dragonglass_render::{create_render_backend, Backend};
 use dragonglass_world::{SdfFont, Viewport, World};
@@ -112,7 +113,11 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
         SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
     );
 
+    // TODO: Load config from local file if available
+    let mut config = Config::default();
+
     app.initialize(&mut Resources {
+        config: &mut config,
         window: &mut window,
         world: &mut world,
         gui: &mut gui,
@@ -123,6 +128,7 @@ pub fn run_application(mut app: impl App + 'static, config: AppConfig) -> Result
 
     event_loop.run(move |event, _, control_flow| {
         let state = Resources {
+            config: &mut config,
             window: &mut window,
             world: &mut world,
             gui: &mut gui,
@@ -209,6 +215,7 @@ fn run_loop(
                 gui_context,
                 &clipped_meshes,
                 resources.system.milliseconds_since_start(),
+                resources.config,
             )?;
             resources.renderer.render(resources.world, clipped_meshes)?;
         }
@@ -262,7 +269,10 @@ pub fn initialize_resources(mut app: impl App + 'static, config: AppConfig) -> R
         SdfFont::new("assets/fonts/font.fnt", "assets/fonts/font_sdf_rgba.png")?,
     );
 
+    let mut config = Config::default();
+
     app.initialize(&mut Resources {
+        config: &mut config,
         window: &mut window,
         world: &mut world,
         gui: &mut gui,
@@ -273,6 +283,7 @@ pub fn initialize_resources(mut app: impl App + 'static, config: AppConfig) -> R
 
     event_loop.run(move |event, _, control_flow| {
         let state = Resources {
+            config: &mut config,
             window: &mut window,
             world: &mut world,
             gui: &mut gui,
