@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use dragonglass::{
     app::{run_application, App, AppConfig, MouseLook, Resources},
+    audio::Audio,
     render::Backend,
     world::{
         Camera as WorldCamera, Entity, EntityStore, Hidden, IntoQuery, Light, LightKind,
@@ -26,6 +27,8 @@ pub struct Game {
 
 impl App for Game {
     fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+        Audio::play_music("assets/sounds/music.mp3");
+
         {
             let mut post_processing = &mut resources.config.graphics.post_processing;
             post_processing.film_grain.strength = 20.0;

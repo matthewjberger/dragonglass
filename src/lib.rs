@@ -2,6 +2,10 @@ pub mod app {
     pub use dragonglass_app::*;
 }
 
+pub mod audio {
+    pub use dragonglass_audio::*;
+}
+
 pub mod gui {
     pub use dragonglass_gui::*;
 }

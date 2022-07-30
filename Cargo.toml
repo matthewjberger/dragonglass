@@ -6,11 +6,11 @@ version = "0.1.0"
 
 [workspace]
 default-members = ["apps/*"]
-exclude = ["benches"]
-members = ["crates/*", "apps/*"]
+members = ["apps/*", "crates/*"]
 
 [dependencies]
 dragonglass_app = {path = "crates/dragonglass_app"}
+dragonglass_audio = {path = "crates/dragonglass_audio"}
 dragonglass_gui = {path = "crates/dragonglass_gui"}
 dragonglass_render = {path = "crates/dragonglass_render"}
 dragonglass_world = {path = "crates/dragonglass_world"}
