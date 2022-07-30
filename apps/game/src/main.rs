@@ -26,6 +26,12 @@ pub struct Game {
 
 impl App for Game {
     fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+        {
+            let mut post_processing = &mut resources.config.graphics.post_processing;
+            post_processing.film_grain.strength = 20.0;
+            post_processing.chromatic_aberration.strength = 10.0;
+        }
+
         resources
             .world
             .physics
@@ -83,7 +89,7 @@ impl App for Game {
         }
 
         // Load player
-        let position = glm::vec3(0.0, 4.0, 0.0);
+        let position = glm::vec3(0.0, 1.0, 0.0);
         let transform = Transform {
             translation: position,
             ..Default::default()
@@ -100,7 +106,7 @@ impl App for Game {
         }
 
         // Load the level
-        resources.load_asset("assets/models/arena2.glb")?;
+        resources.load_asset("assets/models/backrooms.glb")?;
 
         // Add static colliders to level meshes
         let mut level_meshes = Vec::new();
@@ -153,7 +159,7 @@ impl App for Game {
 
             resources
                 .world
-                .add_cylinder_collider(*entity, 0.5, 0.25, PLAYER_COLLISION_GROUP)?;
+                .add_cylinder_collider(*entity, 1.2, 0.25, PLAYER_COLLISION_GROUP)?;
         }
 
         Ok(())
