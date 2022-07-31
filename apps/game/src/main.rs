@@ -27,7 +27,7 @@ pub struct Game {
 
 impl App for Game {
     fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
-        Audio::play_music("assets/sounds/music.mp3");
+        Audio::play_music("assets/sounds/light-buzzing.mp3");
 
         {
             let mut post_processing = &mut resources.config.graphics.post_processing;
