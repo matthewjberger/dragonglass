@@ -318,14 +318,9 @@ impl App for Editor {
         egui::SidePanel::left("scene_explorer")
             .resizable(true)
             .show(ctx, |ui| {
-                ui.heading(&resources.world.scene.name);
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    let scene = &mut resources.world.scene;
-                    let ecs = &mut resources.world.ecs;
-                    for graph in scene.graphs.iter_mut() {
-                        self.print_node(ecs, graph, NodeIndex::new(0), ui);
-                    }
-                    ui.end_row();
+                    ui.heading("Tools");
+                    self.gizmo.render_mode_selection(ui);
 
                     ui.heading("Post Processing");
 
@@ -355,6 +350,15 @@ impl App for Editor {
                         .text("Film Grain Strength"),
                     );
 
+                    ui.end_row();
+
+                    ui.heading("Scenegraph");
+                    ui.label(&resources.world.scene.name);
+                    let scene = &mut resources.world.scene;
+                    let ecs = &mut resources.world.ecs;
+                    for graph in scene.graphs.iter_mut() {
+                        self.print_node(ecs, graph, NodeIndex::new(0), ui);
+                    }
                     ui.end_row();
 
                     ui.allocate_space(ui.available_size());

@@ -1,6 +1,6 @@
 use crate::{
     deserialize_ecs, serialize_ecs, world_as_bytes, world_from_bytes, Animation, Camera, Ecs,
-    Entity, Material, PerspectiveCamera, Projection, RigidBody, SceneGraph, SceneGraphNode,
+    Entity, Material, Name, PerspectiveCamera, Projection, RigidBody, SceneGraph, SceneGraphNode,
     Texture, Transform, WorldPhysics,
 };
 use anyhow::{bail, Context, Result};
@@ -57,6 +57,7 @@ impl World {
         transform.look_at(&(-position), &glm::Vec3::y());
 
         let camera_entity = self.ecs.push((
+            Name("Default Camera".to_string()),
             transform,
             Camera {
                 name: Self::MAIN_CAMERA_NAME.to_string(),
@@ -83,6 +84,7 @@ impl World {
         };
         transform.look_at(&(-position), &glm::Vec3::y());
         let light_entity = self.ecs.push((
+            Name("Default Light".to_string()),
             transform,
             Light {
                 color: glm::vec3(200.0, 200.0, 200.0),

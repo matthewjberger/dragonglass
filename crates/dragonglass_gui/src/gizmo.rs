@@ -33,7 +33,7 @@ impl GizmoWidget {
         }
     }
 
-    pub fn render_controls(&mut self, ui: &mut Ui) {
+    pub fn render_mode_selection(&mut self, ui: &mut Ui) {
         egui::ComboBox::from_label("Mode")
             .selected_text(format!("{:?}", self.mode))
             .show_ui(ui, |ui| {
@@ -41,7 +41,19 @@ impl GizmoWidget {
                 ui.selectable_value(&mut self.mode, GizmoMode::Translate, "Translate");
                 ui.selectable_value(&mut self.mode, GizmoMode::Scale, "Scale");
             });
+
+        egui::ComboBox::from_label("Orientation")
+            .selected_text(format!("{:?}", self.orientation))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.orientation, GizmoOrientation::Global, "Global");
+                ui.selectable_value(&mut self.orientation, GizmoOrientation::Local, "Local");
+            });
+
         ui.end_row();
+    }
+
+    pub fn render_controls(&mut self, ui: &mut Ui) {
+        self.render_mode_selection(ui);
 
         egui::ComboBox::from_label("Orientation")
             .selected_text(format!("{:?}", self.orientation))
