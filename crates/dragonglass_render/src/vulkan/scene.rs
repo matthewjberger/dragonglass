@@ -342,7 +342,7 @@ impl Scene {
             let ubo = WorldUniformBuffer {
                 view,
                 projection,
-                camera_position: camera_transform.translation,
+                camera_position: camera_transform.decompose().translation,
                 number_of_lights,
                 lights,
                 joint_matrices,

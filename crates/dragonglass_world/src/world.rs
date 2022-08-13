@@ -49,16 +49,15 @@ impl World {
     }
 
     fn add_default_camera(&mut self) -> Result<()> {
-        let position = glm::vec3(0.0, 0.0, 10.0);
-        let mut transform = Transform {
-            translation: position,
-            ..Default::default()
-        };
-        transform.look_at(&(-position), &glm::Vec3::y());
+        let matrix = glm::look_at(
+            &glm::vec3(0.0, 0.0, 10.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::Vec3::y(),
+        );
 
         let camera_entity = self.ecs.push((
             Name("Default Camera".to_string()),
-            transform,
+            Transform::new(matrix),
             Camera {
                 name: Self::MAIN_CAMERA_NAME.to_string(),
                 projection: Projection::Perspective(PerspectiveCamera {
@@ -77,15 +76,15 @@ impl World {
     }
 
     pub fn add_default_light(&mut self) -> Result<()> {
-        let position = glm::vec3(-4.0, 10.0, 0.0);
-        let mut transform = Transform {
-            translation: position,
-            ..Default::default()
-        };
-        transform.look_at(&(-position), &glm::Vec3::y());
+        let matrix = glm::look_at(
+            &glm::vec3(-4.0, 10.0, 0.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::Vec3::y(),
+        );
+
         let light_entity = self.ecs.push((
             Name("Default Light".to_string()),
-            transform,
+            Transform::new(matrix),
             Light {
                 color: glm::vec3(200.0, 200.0, 200.0),
                 kind: LightKind::Point,
@@ -106,17 +105,24 @@ impl World {
         bail!("The world must have at least one entity with an enabled camera component to render with!")
     }
 
-    pub fn global_transform(&self, graph: &SceneGraph, index: NodeIndex) -> Result<glm::Mat4> {
+    pub fn global_transform_matrix(
+        &self,
+        graph: &SceneGraph,
+        index: NodeIndex,
+    ) -> Result<glm::Mat4> {
         let entity = graph[index];
         let transform = match self.ecs.entry_ref(entity)?.get_component::<Transform>() {
-            Ok(transform) => transform.matrix(),
+            Ok(transform) => transform,
             Err(_) => bail!(
                 "A transform component was requested from a component that does not have one!"
             ),
-        };
+        }
+        .matrix;
         let mut incoming_walker = graph.0.neighbors_directed(index, Incoming).detach();
         match incoming_walker.next_node(&graph.0) {
-            Some(parent_index) => Ok(self.global_transform(graph, parent_index)? * transform),
+            Some(parent_index) => {
+                Ok(self.global_transform_matrix(graph, parent_index)? * transform)
+            }
             None => Ok(transform),
         }
     }
@@ -129,7 +135,7 @@ impl World {
                 if entity != graph[node_index] {
                     return Ok(());
                 }
-                transform = self.global_transform(graph, node_index)?;
+                transform = self.global_transform_matrix(graph, node_index)?;
                 found = true;
                 Ok(())
             })?;
@@ -138,26 +144,18 @@ impl World {
             }
         }
         if !found {
-            // TODO: Maybe returning an error if the global transform of an entity that isn't in the scenegraph is better...
-            // Not found in the scenegraph, so the entity just have a local transform
-            transform = self
-                .ecs
-                .entry_ref(entity)?
-                .get_component::<Transform>()?
-                .matrix();
+            bail!("Failed to find entity in scenegraph!");
         }
         Ok(transform)
     }
 
     pub fn entity_global_transform(&self, entity: Entity) -> Result<Transform> {
-        let transform_matrix = self.entity_global_transform_matrix(entity)?;
-        Ok(Transform::from(transform_matrix))
+        Ok(Transform::new(self.entity_global_transform_matrix(entity)?))
     }
 
     pub fn active_camera_matrices(&self, aspect_ratio: f32) -> Result<(glm::Mat4, glm::Mat4)> {
         let camera_entity = self.active_camera()?;
-        let transform = self.entity_global_transform(camera_entity)?;
-        let view = transform.as_view_matrix();
+        let view = self.entity_global_transform_matrix(camera_entity)?;
         let projection = {
             let entry = self.ecs.entry_ref(camera_entity)?;
             let camera = entry.get_component::<Camera>()?;
@@ -194,9 +192,9 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = self.global_transform(graph, node_index)?;
+                let node_transform = self.global_transform_matrix(graph, node_index)?;
                 if let Ok(light) = self.ecs.entry_ref(entity)?.get_component::<Light>() {
-                    lights.push((Transform::from(node_transform), *light));
+                    lights.push((Transform::new(node_transform), *light));
                 }
                 Ok(())
             })?;
@@ -220,14 +218,14 @@ impl World {
         for graph in self.scene.graphs.iter() {
             graph.walk(|node_index| {
                 let entity = graph[node_index];
-                let node_transform = self.global_transform(graph, node_index)?;
+                let node_transform = self.global_transform_matrix(graph, node_index)?;
                 if let Ok(skin) = self.ecs.entry_ref(entity)?.get_component::<Skin>() {
                     for joint in skin.joints.iter() {
                         let joint_transform = {
                             let mut transform = glm::Mat4::identity();
                             for graph in self.scene.graphs.iter() {
                                 if let Some(index) = graph.find_node(joint.target) {
-                                    transform = self.global_transform(graph, index)?;
+                                    transform = self.global_transform_matrix(graph, index)?;
                                 }
                             }
                             transform
@@ -257,7 +255,9 @@ impl World {
 
         let entry = self.ecs.entry_ref(entity)?;
         let transform = entry.get_component::<Transform>()?;
-        let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        let half_extents = bounding_box
+            .half_extents()
+            .component_mul(&transform.decompose().scale);
 
         let collider = ColliderBuilder::ball(half_extents.y)
             .collision_groups(collision_groups)
@@ -321,7 +321,9 @@ impl World {
             .entry_ref(entity)?
             .get_component::<RigidBody>()?
             .handle;
-        let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        let half_extents = bounding_box
+            .half_extents()
+            .component_mul(&transform.decompose().scale);
         let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z)
             .collision_groups(collision_groups)
             .build();
@@ -350,7 +352,9 @@ impl World {
             .entry_ref(entity)?
             .get_component::<RigidBody>()?
             .handle;
-        let half_extents = bounding_box.half_extents().component_mul(&transform.scale);
+        let half_extents = bounding_box
+            .half_extents()
+            .component_mul(&transform.decompose().scale);
         let collider = ColliderBuilder::capsule_y(
             half_extents.y,
             std::cmp::max(half_extents.x as u32, half_extents.z as u32) as f32,
@@ -372,7 +376,7 @@ impl World {
     ) -> Result<()> {
         let entry = self.ecs.entry_ref(entity)?;
         let mesh = entry.get_component::<MeshRender>()?;
-        let transform = self.entity_global_transform(entity)?;
+        let transform = self.entity_global_transform_matrix(entity)?;
         let mesh = &self.geometry.meshes[&mesh.name];
 
         // TODO: Add collider handles to component
@@ -386,7 +390,13 @@ impl World {
             let vertices = self.geometry.vertices
                 [primitive.first_vertex..primitive.first_vertex + primitive.number_of_vertices]
                 .iter()
-                .map(|v| Point::from_slice((v.position.component_mul(&transform.scale)).as_slice()))
+                .map(|v| {
+                    Point::from_slice(
+                        (v.position
+                            .component_mul(&Transform::new(transform).decompose().scale))
+                        .as_slice(),
+                    )
+                })
                 .collect::<Vec<_>>();
 
             let indices = self.geometry.indices
@@ -415,8 +425,10 @@ impl World {
 
     pub fn add_rigid_body(&mut self, entity: Entity, rigid_body_type: RigidBodyType) -> Result<()> {
         let handle = {
-            let isometry =
-                Transform::from(self.entity_global_transform_matrix(entity)?).as_isometry();
+            let isometry = self
+                .entity_global_transform(entity)?
+                .decompose()
+                .as_isometry();
 
             // Insert a corresponding rigid body
             let rigid_body = RigidBodyBuilder::new(rigid_body_type)
@@ -554,9 +566,10 @@ impl World {
         let rigid_body = entry.get_component::<RigidBody>()?;
         let transform = entry.get_component::<Transform>()?;
         if let Some(body) = self.physics.bodies.get_mut(rigid_body.handle) {
+            let decomposed = transform.decompose();
             let mut position = body.position().clone();
-            position.translation.vector = transform.translation;
-            body.set_position(position, true);
+            body.set_translation(decomposed.translation, true);
+            body.set_rotation(decomposed.euler_angles(), true);
         }
         Ok(())
     }
@@ -572,8 +585,8 @@ impl World {
         let transform = entry.get_component_mut::<Transform>()?;
         if let Some(body) = self.physics.bodies.get(rigid_body_handle) {
             let position = body.position();
-            transform.translation = position.translation.vector;
-            transform.rotation = *position.rotation.quaternion();
+            let translation = glm::translation(&position.translation.vector);
+            transform.matrix = glm::quat_to_mat4(&body.rotation().quaternion()) * translation;
         }
         if let Some(body) = self.physics.bodies.get_mut(rigid_body_handle) {
             body.wake_up(true);
@@ -587,34 +600,10 @@ impl World {
         for (rigid_body, transform) in query.iter_mut(&mut self.ecs) {
             if let Some(body) = self.physics.bodies.get(rigid_body.handle) {
                 let position = body.position();
-                transform.translation = position.translation.vector;
-                transform.rotation = *position.rotation.quaternion();
+                let mut translation = glm::translation(&position.translation.vector);
+                transform.matrix = glm::quat_to_mat4(&body.rotation().quaternion()) * translation;
             }
         }
-    }
-
-    pub fn entity_model_matrix(
-        &self,
-        entity: Entity,
-        global_transform: glm::Mat4,
-    ) -> Result<glm::Mat4> {
-        let entry = self.ecs.entry_ref(entity)?;
-        let model = match entry.get_component::<RigidBody>() {
-            Ok(rigid_body) => {
-                let body = self
-                    .physics
-                    .bodies
-                    .get(rigid_body.handle)
-                    .context("Failed to acquire physics body to render!")?;
-                let position = body.position();
-                let translation = position.translation.vector;
-                let rotation = *position.rotation.quaternion();
-                let scale = Transform::from(global_transform).scale;
-                Transform::new(translation, rotation, scale).matrix()
-            }
-            Err(_) => global_transform,
-        };
-        Ok(model)
     }
 }
 

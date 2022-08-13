@@ -34,16 +34,6 @@ pub fn graph_node(
     }
 }
 
-fn node_transform(node: &gltf::Node) -> Transform {
-    let (translation, rotation, scale) = node.transform().decomposed();
-
-    let translation: glm::Vec3 = translation.into();
-    let scale: glm::Vec3 = scale.into();
-    let rotation = glm::quat_normalize(&glm::make_quat(&rotation));
-
-    Transform::new(translation, rotation, scale)
-}
-
 const DEFAULT_NAME: &str = "<Unnamed>";
 
 pub fn load_gltf(path: impl AsRef<Path>, world: &mut World) -> Result<()> {
@@ -280,7 +270,7 @@ fn load_nodes(
 
         entry.add_component(Name(name));
 
-        entry.add_component(node_transform(&node));
+        entry.add_component(Transform::new(glm::Mat4::from(node.transform().matrix())));
 
         if let Some(camera) = node.camera() {
             entry.add_component(load_camera(&camera)?);

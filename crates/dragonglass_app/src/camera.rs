@@ -32,8 +32,10 @@ impl MouseOrbit {
             {
                 self.orientation.pan(&mouse_delta)
             }
-            transform.translation = self.orientation.position();
-            transform.rotation = self.orientation.look_at_offset();
+
+            let translation = glm::translation(&self.orientation.position());
+            let rotation = self.orientation.look_at_offset();
+            transform.matrix = translation * glm::quat_to_mat4(&rotation);
         }
 
         resources.set_cursor_grab(false)?;
@@ -58,7 +60,7 @@ impl MouseLook {
         {
             let mut entry = resources.world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
-            transform.rotation = self.orientation.look_forward();
+            transform.matrix = glm::quat_to_mat4(&self.orientation.look_forward());
         }
 
         resources.set_cursor_grab(true)?;

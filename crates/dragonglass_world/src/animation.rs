@@ -1,8 +1,10 @@
-use crate::{Ecs, Entity, Mesh, Transform};
+use crate::{Ecs, Entity, Mesh};
 use anyhow::Result;
 use legion::EntityStore;
 use nalgebra_glm as glm;
 use serde::{Deserialize, Serialize};
+
+// TODO: Get animations working again using the new transformation system
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Animation {
@@ -41,9 +43,9 @@ impl Animation {
                             let start = translations[previous_key];
                             let end = translations[next_key];
                             let translation_vec = glm::mix(&start, &end, interpolation);
-                            ecs.entry_mut(channel.target)?
-                                .get_component_mut::<Transform>()?
-                                .translation = translation_vec;
+                            // ecs.entry_mut(channel.target)?
+                            //     .get_component_mut::<Transform>()?
+                            //     .translation = translation_vec;
                         }
                         TransformationSet::Rotations(rotations) => {
                             let start = rotations[previous_key];
@@ -53,18 +55,18 @@ impl Animation {
                             let rotation_quat =
                                 glm::quat_slerp(&start_quat, &end_quat, interpolation);
 
-                            ecs.entry_mut(channel.target)?
-                                .get_component_mut::<Transform>()?
-                                .rotation = rotation_quat;
+                            // ecs.entry_mut(channel.target)?
+                            //     .get_component_mut::<Transform>()?
+                            //     .rotation = rotation_quat;
                         }
                         TransformationSet::Scales(scales) => {
                             let start = scales[previous_key];
                             let end = scales[next_key];
                             let scale_vec = glm::mix(&start, &end, interpolation);
 
-                            ecs.entry_mut(channel.target)?
-                                .get_component_mut::<Transform>()?
-                                .scale = scale_vec;
+                            // ecs.entry_mut(channel.target)?
+                            //     .get_component_mut::<Transform>()?
+                            //     .scale = scale_vec;
                         }
                         TransformationSet::MorphTargetWeights(animation_weights) => {
                             match ecs.entry_mut(channel.target)?.get_component_mut::<Mesh>() {

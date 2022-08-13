@@ -3,8 +3,8 @@ use dragonglass::{
     app::{App, MouseOrbit, Resources},
     gui::{
         egui::{
-            self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
-            SelectableLabel, Slider, Ui,
+            self, global_dark_light_mode_switch, menu, Align, Id, LayerId, SelectableLabel, Slider,
+            Ui,
         },
         egui_gizmo::GizmoMode,
         GizmoWidget,
@@ -130,22 +130,6 @@ impl Editor {
 
             // TODO: Probably don't want this added every time
             resources.renderer.load_world(resources.world)?;
-
-            // TODO: Don't add an additional collider to existing entities...
-            let mut query = <(Entity, &MeshRender)>::query();
-            let entities = query
-                .iter(&mut resources.world.ecs)
-                .map(|(e, _)| *e)
-                .collect::<Vec<_>>();
-
-            for entity in entities.into_iter() {
-                resources
-                    .world
-                    .add_rigid_body(entity, RigidBodyType::Static)?;
-                resources
-                    .world
-                    .add_trimesh_collider(entity, InteractionGroups::all())?;
-            }
         }
 
         Ok(())
@@ -362,8 +346,6 @@ impl App for Editor {
                 if let Some(entity) = self.selected_entity {
                     ui.heading("Transform");
 
-                    let mut should_sync = false;
-
                     let mut entry = resources
                         .world
                         .ecs
@@ -374,29 +356,12 @@ impl App for Editor {
                         let transform = entry
                             .get_component_mut::<Transform>()
                             .expect("Entity does not have a transform!");
-
-                        ui.label("X");
-                        let x_response =
-                            ui.add(DragValue::new(&mut transform.translation.x).speed(0.1));
-
-                        ui.label("Y");
-                        let y_response =
-                            ui.add(DragValue::new(&mut transform.translation.y).speed(0.1));
-
-                        ui.label("Z");
-                        let z_response =
-                            ui.add(DragValue::new(&mut transform.translation.z).speed(0.1));
-
-                        should_sync =
-                            x_response.changed() || y_response.changed() || z_response.changed();
+                        let translation = transform.decompose().translation;
+                        ui.label(format!(
+                            "({}, {}, {})",
+                            translation.x, translation.y, translation.z
+                        ));
                     });
-
-                    if should_sync && entry.get_component::<RigidBody>().is_ok() {
-                        resources
-                            .world
-                            .sync_rigid_body_to_transform(entity)
-                            .expect("Failed to sync rigid body to transform!");
-                    }
                 }
 
                 ui.allocate_space(ui.available_size());
@@ -432,19 +397,15 @@ impl App for Editor {
                             .expect("Failed to get camera matrices!");
                         let transform = resources
                             .world
-                            .entity_global_transform(entity)
+                            .entity_global_transform_matrix(entity)
                             .expect("Failed to get entity transform!");
                         if let Some(gizmo_result) =
-                            self.gizmo.render(ui, transform.matrix(), view, projection)
+                            self.gizmo.render(ui, transform, view, projection)
                         {
-                            let model_matrix: glm::Mat4 = gizmo_result.transform.into();
-                            let gizmo_transform = Transform::from(model_matrix);
+                            let gizmo_transform_matrix: glm::Mat4 = gizmo_result.transform.into();
                             let mut entry = resources.world.ecs.entry_mut(entity).unwrap();
                             let mut transform = entry.get_component_mut::<Transform>().unwrap();
-                            transform.translation = gizmo_transform.translation;
-                            transform.rotation = gizmo_transform.rotation;
-                            log::info!("Rotation: {:?}", gizmo_transform.rotation);
-                            transform.scale = gizmo_transform.scale;
+                            transform.matrix = gizmo_transform_matrix;
                             if entry.get_component::<RigidBody>().is_ok() {
                                 resources
                                     .world
