@@ -150,16 +150,16 @@ fn run_loop(
 ) -> Result<()> {
     *control_flow = ControlFlow::Poll;
 
-    if app.gui_active() {
-        resources.gui.handle_event(&event);
-    }
-    if !app.gui_active() || !resources.gui.captures_event(&event) {
-        app.handle_events(&event, &mut resources)?;
-        resources.system.handle_event(&event);
-        resources
-            .input
-            .handle_event(&event, resources.system.window_center());
-    }
+    // if app.gui_active() {
+    resources.gui.handle_event(&event);
+    // }
+    // if !app.gui_active() || !resources.gui.captures_event(&event) {
+    app.handle_events(&event, &mut resources)?;
+    resources.system.handle_event(&event);
+    resources
+        .input
+        .handle_event(&event, resources.system.window_center());
+    // }
 
     match event {
         Event::NewEvents(_) => {
@@ -191,18 +191,20 @@ fn run_loop(
         },
         Event::MainEventsCleared => {
             resources.world.tick(resources.system.delta_time as f32)?;
-            app.update(&mut resources)?;
 
             let clipped_meshes = if app.gui_active() {
                 let _frame_data = resources
                     .gui
                     .start_frame(resources.window.scale_factor() as _);
+
                 app.update_gui(&mut resources)?;
                 let shapes = resources.gui.end_frame(resources.window);
                 resources.gui.context().tessellate(shapes)
             } else {
                 Vec::new()
             };
+
+            app.update(&mut resources)?;
 
             let context_ref = &resources.gui.context();
             let gui_context = if app.gui_active() {

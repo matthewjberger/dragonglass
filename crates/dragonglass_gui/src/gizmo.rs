@@ -3,7 +3,7 @@ use egui_gizmo::{Gizmo, GizmoMode, GizmoOrientation, GizmoResult, GizmoVisuals};
 use nalgebra_glm as glm;
 
 pub struct GizmoWidget {
-    mode: GizmoMode,
+    pub mode: GizmoMode,
     orientation: GizmoOrientation,
     last_gizmo_response: Option<GizmoResult>,
     snap_angle: f32,
@@ -154,7 +154,6 @@ impl GizmoWidget {
         let response = gizmo.interact(ui);
 
         if let Some(gizmo_response) = self.last_gizmo_response {
-            // model_matrix = Mat4::from_cols_array_2d(&gizmo_response.transform);
             self.show_gizmo_status(ui, gizmo_response);
         }
 

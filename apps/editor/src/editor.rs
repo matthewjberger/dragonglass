@@ -6,6 +6,7 @@ use dragonglass::{
             self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
             SelectableLabel, Slider, Ui,
         },
+        egui_gizmo::GizmoMode,
         GizmoWidget,
     },
     world::{
@@ -18,6 +19,7 @@ use dragonglass::{
     },
 };
 use log::{info, warn};
+use nalgebra_glm as glm;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -28,7 +30,6 @@ pub struct Selected;
 
 pub struct Editor {
     camera: MouseOrbit,
-    moving_selected: bool,
     selected_entity: Option<Entity>,
     gizmo: GizmoWidget,
 }
@@ -37,7 +38,6 @@ impl Default for Editor {
     fn default() -> Self {
         Self {
             camera: MouseOrbit::default(),
-            moving_selected: false,
             selected_entity: None,
             gizmo: GizmoWidget::new(),
         }
@@ -63,7 +63,28 @@ impl Editor {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    pub fn select_entity(&mut self, entity: Entity, resources: &mut Resources) -> Result<()> {
+        let mut query = <(Entity, &Selected)>::query();
+        let already_selected = query
+            .iter(&mut resources.world.ecs)
+            .map(|(e, _)| *e)
+            .any(|e| e == entity);
+        if already_selected {
+            return Ok(());
+        }
+
+        self.deselect_all(resources)?;
+        let mut entry = resources
+            .world
+            .ecs
+            .entry(entity)
+            .context("Failed to find entity")?;
+        entry.add_component(Selected::default());
+        self.selected_entity = Some(entity);
+        log::info!("Selected entity: {:?}", entity);
+        Ok(())
+    }
+
     pub fn deselect_all(&mut self, resources: &mut Resources) -> Result<()> {
         let mut query = <(Entity, &Selected)>::query();
 
@@ -195,11 +216,7 @@ impl App for Editor {
     }
 
     fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
-        if resources.input.is_key_pressed(VirtualKeyCode::Escape) {
-            resources.system.exit_requested = true;
-        }
-
-        if resources.world.active_camera_is_main()? && !self.moving_selected {
+        if resources.world.active_camera_is_main()? {
             let camera_entity = resources.world.active_camera()?;
             self.camera.update(resources, camera_entity)?;
         }
@@ -211,33 +228,6 @@ impl App for Editor {
         //         0.75 * resources.system.delta_time as f32,
         //     )?;
         // }
-
-        if self.moving_selected {
-            let mut query = <(Entity, &Selected)>::query();
-            let entities = query
-                .iter_mut(&mut resources.world.ecs)
-                .map(|(e, _)| (*e))
-                .collect::<Vec<_>>();
-            for entity in entities.into_iter() {
-                let (right, up) = {
-                    let camera_entity = resources.world.active_camera()?;
-                    let camera_entry = resources.world.ecs.entry_ref(camera_entity)?;
-                    let camera_transform = camera_entry.get_component::<Transform>()?;
-                    (camera_transform.right(), camera_transform.up())
-                };
-
-                let mut entry = resources.world.ecs.entry_mut(entity)?;
-                let speed = 10.0;
-                let transform = entry.get_component_mut::<Transform>()?;
-                let mouse_delta =
-                    resources.input.mouse.position_delta * resources.system.delta_time as f32;
-                if resources.input.mouse.is_right_clicked {
-                    transform.translation += right * mouse_delta.x * speed;
-                    transform.translation += up * -mouse_delta.y * speed;
-                }
-                resources.world.sync_rigid_body_to_transform(entity)?;
-            }
-        }
 
         Ok(())
     }
@@ -434,17 +424,36 @@ impl App for Editor {
         egui::Area::new("Viewport")
             .fixed_pos((0.0, 0.0))
             .show(ctx, |ui| {
-                if let Some(entity) = self.selected_entity {
-                    let (projection, view) = resources
-                        .world
-                        .active_camera_matrices(resources.system.aspect_ratio())
-                        .expect("Failed to get camera matrices!");
-                    let transform = resources
-                        .world
-                        .entity_global_transform(entity)
-                        .expect("Failed to get entity transform!");
-                    let _result = self.gizmo.render(ui, transform.matrix(), view, projection);
-                }
+                ui.with_layer_id(LayerId::background(), |ui| {
+                    if let Some(entity) = self.selected_entity {
+                        let (projection, view) = resources
+                            .world
+                            .active_camera_matrices(resources.system.aspect_ratio())
+                            .expect("Failed to get camera matrices!");
+                        let transform = resources
+                            .world
+                            .entity_global_transform(entity)
+                            .expect("Failed to get entity transform!");
+                        if let Some(gizmo_result) =
+                            self.gizmo.render(ui, transform.matrix(), view, projection)
+                        {
+                            let model_matrix: glm::Mat4 = gizmo_result.transform.into();
+                            let gizmo_transform = Transform::from(model_matrix);
+                            let mut entry = resources.world.ecs.entry_mut(entity).unwrap();
+                            let mut transform = entry.get_component_mut::<Transform>().unwrap();
+                            transform.translation = gizmo_transform.translation;
+                            transform.rotation = gizmo_transform.rotation;
+                            log::info!("Rotation: {:?}", gizmo_transform.rotation);
+                            transform.scale = gizmo_transform.scale;
+                            if entry.get_component::<RigidBody>().is_ok() {
+                                resources
+                                    .world
+                                    .sync_rigid_body_to_transform(entity)
+                                    .expect("Failed to sync rigid body to transform!");
+                            }
+                        }
+                    }
+                });
             });
 
         // TODO: Don't render underneath the gui
@@ -510,12 +519,17 @@ impl App for Editor {
         resources: &mut dragonglass::app::Resources,
     ) -> Result<()> {
         match (input.virtual_keycode, input.state) {
-            (Some(VirtualKeyCode::G), ElementState::Pressed) => {
-                self.moving_selected = !self.moving_selected;
+            (Some(VirtualKeyCode::Escape), ElementState::Pressed) => {
+                self.deselect_all(resources)?;
+            }
+            (Some(VirtualKeyCode::T), ElementState::Pressed) => {
+                self.gizmo.mode = GizmoMode::Translate;
+            }
+            (Some(VirtualKeyCode::R), ElementState::Pressed) => {
+                self.gizmo.mode = GizmoMode::Rotate;
             }
             (Some(VirtualKeyCode::S), ElementState::Pressed) => {
-                resources.world.save("saved_map.dga")?;
-                log::info!("Saved world!");
+                self.gizmo.mode = GizmoMode::Scale;
             }
             (Some(VirtualKeyCode::C), ElementState::Pressed) => {
                 resources.world.clear()?;

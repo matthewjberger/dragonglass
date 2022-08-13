@@ -2,6 +2,7 @@ use crate::Resources;
 use anyhow::Result;
 use dragonglass_world::{Entity, EntityStore, Transform};
 use nalgebra_glm as glm;
+use winit::event::VirtualKeyCode;
 
 #[derive(Default)]
 pub struct MouseOrbit {
@@ -15,7 +16,9 @@ impl MouseOrbit {
 
         let mouse_delta = resources.input.mouse.position_delta * resources.system.delta_time as f32;
 
-        if resources.input.mouse.is_left_clicked {
+        if resources.input.mouse.is_right_clicked
+            && !resources.input.is_key_pressed(VirtualKeyCode::LShift)
+        {
             let mut delta = mouse_delta;
             delta.x = -1.0 * mouse_delta.x;
             self.orientation.rotate(&delta);
@@ -24,7 +27,9 @@ impl MouseOrbit {
         {
             let mut entry = resources.world.ecs.entry_mut(entity)?;
             let mut transform = entry.get_component_mut::<Transform>()?;
-            if resources.input.mouse.is_right_clicked {
+            if resources.input.mouse.is_right_clicked
+                && resources.input.is_key_pressed(VirtualKeyCode::LShift)
+            {
                 self.orientation.pan(&mouse_delta)
             }
             transform.translation = self.orientation.position();
