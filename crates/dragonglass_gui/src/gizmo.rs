@@ -174,7 +174,7 @@ impl GizmoWidget {
 
         let rect = ui.clip_rect();
         ui.painter().text(
-            pos2(rect.left() + 10.0, rect.bottom() - 10.0),
+            pos2(rect.left() + 400.0, rect.bottom() - 400.0),
             Align2::LEFT_BOTTOM,
             text,
             TextStyle::Heading,

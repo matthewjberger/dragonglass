@@ -15,15 +15,18 @@ use dragonglass::{
         petgraph::{graph::NodeIndex, EdgeDirection::Outgoing},
         rapier3d::{geometry::InteractionGroups, prelude::RigidBodyType},
         register_component, Ecs, EntityStore, IntoQuery, MeshRender, Name, RigidBody, SceneGraph,
-        Transform, Viewport,
+        Transform,
     },
 };
 use log::{info, warn};
+use nalgebra::UnitQuaternion;
 use nalgebra_glm as glm;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
+
+const EDITOR_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b1, 0b1);
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Selected;
@@ -144,7 +147,7 @@ impl Editor {
                     .add_rigid_body(entity, RigidBodyType::Static)?;
                 resources
                     .world
-                    .add_trimesh_collider(entity, InteractionGroups::all())?;
+                    .add_trimesh_collider(entity, EDITOR_COLLISION_GROUP)?;
             }
         }
 
@@ -206,108 +209,95 @@ impl Editor {
             // TODO: Allow renaming entity
         }
     }
-}
 
-impl App for Editor {
-    fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
-        register_component::<Selected>("selected")?;
-        resources.world.add_default_light()?;
-        Ok(())
-    }
-
-    fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
-        if resources.world.active_camera_is_main()? {
-            let camera_entity = resources.world.active_camera()?;
-            self.camera.update(resources, camera_entity)?;
-        }
-
-        // // Run first animation
-        // if let Some(animation) = resources.world.animations.first_mut() {
-        //     animation.animate(
-        //         &mut resources.world.ecs,
-        //         0.75 * resources.system.delta_time as f32,
-        //     )?;
-        // }
-
-        Ok(())
-    }
-
-    fn gui_active(&mut self) -> bool {
-        true
-    }
-
-    fn update_gui(&mut self, resources: &mut Resources) -> Result<()> {
-        let ctx = &resources.gui.context();
+    fn top_panel(&mut self, resources: &mut Resources) -> Result<()> {
+        let context = &resources.gui.context();
 
         egui::TopBottomPanel::top("top_panel")
             .resizable(true)
-            .show(ctx, |ui| {
-                egui::menu::bar(ui, |ui| {
-                    menu::bar(ui, |ui| {
-                        global_dark_light_mode_switch(ui);
-                        ui.menu_button("File", |ui| {
-                            // TODO: Distinguish between loading levels and importing assets
-                            if ui.button("Load Level").clicked() {
-                                let path = FileDialog::new()
-                                    .add_filter("Dragonglass Asset", &["dga"])
-                                    .set_directory("/")
-                                    .pick_file();
-                                if let Some(path) = path {
-                                    self.load_world_from_file(&path, resources)
-                                        .expect("Failed to load asset!");
+            .show(context, |ui| {
+                menu::bar(ui, |ui| {
+                    global_dark_light_mode_switch(ui);
+                    ui.menu_button("File", |ui| {
+                        // TODO: Distinguish between loading levels and importing assets
+                        if ui.button("Load Level").clicked() {
+                            let path = FileDialog::new()
+                                .add_filter("Dragonglass Asset", &["dga"])
+                                .set_directory("/")
+                                .pick_file();
+                            if let Some(path) = path {
+                                self.load_world_from_file(&path, resources)
+                                    .expect("Failed to load asset!");
+                            }
+                            ui.close_menu();
+                        }
+
+                        if ui.button("Import gltf/glb").clicked() {
+                            let path = FileDialog::new()
+                                .add_filter("GLTF Asset", &["glb", "gltf"])
+                                .set_directory("/")
+                                .pick_file();
+                            if let Some(path) = path {
+                                self.load_world_from_file(&path, resources)
+                                    .expect("Failed to load asset!");
+                            }
+                            ui.close_menu();
+                        }
+
+                        if ui.button("Save").clicked() {
+                            let path = FileDialog::new()
+                                .add_filter("Dragonglass Asset", &["dga"])
+                                .set_directory("/")
+                                .save_file();
+
+                            if let Some(path) = path {
+                                let mut query = <(Entity, &Selected)>::query();
+
+                                let entities = query
+                                    .iter(&mut resources.world.ecs)
+                                    .map(|(e, _)| *e)
+                                    .collect::<Vec<_>>();
+
+                                for entity in entities.into_iter() {
+                                    resources
+                                        .world
+                                        .remove_rigid_body(entity)
+                                        .expect("Failed to remove rigid body!");
                                 }
-                                ui.close_menu();
+
+                                resources.world.save(&path).expect("Failed to save world!");
                             }
+                            ui.close_menu();
+                        }
 
-                            if ui.button("Import gltf/glb").clicked() {
-                                let path = FileDialog::new()
-                                    .add_filter("GLTF Asset", &["glb", "gltf"])
-                                    .set_directory("/")
-                                    .pick_file();
-                                if let Some(path) = path {
-                                    self.load_world_from_file(&path, resources)
-                                        .expect("Failed to load asset!");
-                                }
-                                ui.close_menu();
-                            }
-
-                            if ui.button("Save").clicked() {
-                                let path = FileDialog::new()
-                                    .add_filter("Dragonglass Asset", &["dga"])
-                                    .set_directory("/")
-                                    .save_file();
-
-                                if let Some(path) = path {
-                                    let mut query = <(Entity, &Selected)>::query();
-
-                                    let entities = query
-                                        .iter(&mut resources.world.ecs)
-                                        .map(|(e, _)| *e)
-                                        .collect::<Vec<_>>();
-
-                                    for entity in entities.into_iter() {
-                                        resources
-                                            .world
-                                            .remove_rigid_body(entity)
-                                            .expect("Failed to remove rigid body!");
-                                    }
-
-                                    resources.world.save(&path).expect("Failed to save world!");
-                                }
-                                ui.close_menu();
-                            }
-
-                            if ui.button("Quit").clicked() {
-                                resources.system.exit_requested = true;
-                            }
-                        });
+                        if ui.button("Quit").clicked() {
+                            resources.system.exit_requested = true;
+                        }
                     });
                 });
             });
+        Ok(())
+    }
+
+    fn bottom_panel(&mut self, resources: &mut Resources) -> Result<()> {
+        let context = &resources.gui.context();
+
+        egui::TopBottomPanel::bottom("console")
+            .resizable(true)
+            .show(context, |ui| {
+                ui.heading("Console");
+                ui.allocate_space(ui.available_size());
+            });
+
+        Ok(())
+    }
+
+    fn left_panel(&mut self, resources: &mut Resources) -> Result<()> {
+        let context = &resources.gui.context();
 
         egui::SidePanel::left("scene_explorer")
             .resizable(true)
-            .show(ctx, |ui| {
+            .show(context, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.heading("Tools");
                     self.gizmo.render_mode_selection(ui);
@@ -354,76 +344,171 @@ impl App for Editor {
                     ui.allocate_space(ui.available_size());
                 });
             });
+        Ok(())
+    }
+
+    fn right_panel(&mut self, resources: &mut Resources) -> Result<()> {
+        let context = &resources.gui.context();
 
         egui::SidePanel::right("inspector")
             .resizable(true)
-            .show(ctx, |ui| {
+            .show(context, |ui| -> Result<()> {
                 ui.heading("Inspector");
-                if let Some(entity) = self.selected_entity {
-                    ui.heading("Transform");
+                let entity = match self.selected_entity {
+                    Some(entity) => entity,
+                    None => return Ok(()),
+                };
 
-                    let mut should_sync = false;
-
-                    let mut entry = resources
-                        .world
-                        .ecs
-                        .entry(entity)
-                        .expect("Failed to find entity!");
-
-                    ui.with_layout(egui::Layout::top_down(Align::LEFT), |ui| {
-                        let transform = entry
-                            .get_component_mut::<Transform>()
-                            .expect("Entity does not have a transform!");
-
-                        ui.label("X");
-                        let x_response =
-                            ui.add(DragValue::new(&mut transform.translation.x).speed(0.1));
-
-                        ui.label("Y");
-                        let y_response =
-                            ui.add(DragValue::new(&mut transform.translation.y).speed(0.1));
-
-                        ui.label("Z");
-                        let z_response =
-                            ui.add(DragValue::new(&mut transform.translation.z).speed(0.1));
-
-                        should_sync =
-                            x_response.changed() || y_response.changed() || z_response.changed();
-                    });
-
-                    if should_sync && entry.get_component::<RigidBody>().is_ok() {
-                        resources
-                            .world
-                            .sync_rigid_body_to_transform(entity)
-                            .expect("Failed to sync rigid body to transform!");
-                    }
-                }
-
+                self.translation_widget(resources, entity, ui)?;
+                self.rotation_widget(resources, entity, ui)?;
+                self.scale_widget(resources, entity, ui)?;
                 ui.allocate_space(ui.available_size());
-            });
 
-        egui::TopBottomPanel::bottom("console")
-            .resizable(true)
-            .show(ctx, |ui| {
-                ui.heading("Console");
-                ui.allocate_space(ui.available_size());
+                Ok(())
             });
+        Ok(())
+    }
 
-        // This is the space leftover on screen after the UI is drawn
-        // We can restrict rendering to this viewport to
-        // prevent drawing the gui over the scene
-        let central_rect = Ui::new(
-            ctx.clone(),
-            LayerId::background(),
-            Id::new("central_panel"),
-            ctx.available_rect(),
-            ctx.input().screen_rect(),
-        )
-        .max_rect();
+    fn translation_widget(
+        &mut self,
+        resources: &mut Resources,
+        entity: Entity,
+        ui: &mut Ui,
+    ) -> Result<()> {
+        let ecs = &mut resources.world.ecs;
+        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
+        let mut should_sync = false;
+
+        ui.heading("Translation");
+        ui.horizontal(|ui| {
+            let transform = entry
+                .get_component_mut::<Transform>()
+                .expect("Entity does not have a transform!");
+
+            ui.label("X");
+            let x_response = ui.add(DragValue::new(&mut transform.translation.x).speed(0.1));
+
+            ui.label("Y");
+            let y_response = ui.add(DragValue::new(&mut transform.translation.y).speed(0.1));
+
+            ui.label("Z");
+            let z_response = ui.add(DragValue::new(&mut transform.translation.z).speed(0.1));
+
+            should_sync = x_response.changed() || y_response.changed() || z_response.changed();
+        });
+
+        if should_sync && entry.get_component::<RigidBody>().is_ok() {
+            resources
+                .world
+                .sync_rigid_body_to_transform(entity)
+                .expect("Failed to sync rigid body to transform!");
+        }
+
+        ui.end_row();
+
+        Ok(())
+    }
+
+    fn rotation_widget(
+        &mut self,
+        resources: &mut Resources,
+        entity: Entity,
+        ui: &mut Ui,
+    ) -> Result<()> {
+        let ecs = &mut resources.world.ecs;
+        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
+        let mut should_sync = false;
+
+        ui.label("Rotation");
+        ui.horizontal(|ui| {
+            let transform = entry
+                .get_component_mut::<Transform>()
+                .expect("Entity does not have a transform!");
+
+            let mut angles = glm::quat_euler_angles(&transform.rotation);
+            angles = glm::vec3(
+                angles.x.to_degrees(),
+                angles.y.to_degrees(),
+                angles.z.to_degrees(),
+            );
+
+            ui.label("X");
+            let x_response = ui.add(DragValue::new(&mut angles.x).speed(0.1));
+
+            ui.label("Y");
+            let y_response = ui.add(DragValue::new(&mut angles.y).speed(0.1));
+
+            ui.label("Z");
+            let z_response = ui.add(DragValue::new(&mut angles.z).speed(0.1));
+
+            should_sync = x_response.changed() || y_response.changed() || z_response.changed();
+
+            if should_sync {
+                let quat_x = glm::quat_angle_axis(angles.x.to_radians(), &glm::Vec3::x());
+                let quat_y = glm::quat_angle_axis(angles.y.to_radians(), &glm::Vec3::y());
+                let quat_z = glm::quat_angle_axis(angles.z.to_radians(), &glm::Vec3::z());
+                transform.rotation = quat_z * quat_y * quat_x;
+            }
+        });
+
+        if should_sync && entry.get_component::<RigidBody>().is_ok() {
+            resources
+                .world
+                .sync_rigid_body_to_transform(entity)
+                .expect("Failed to sync rigid body to transform!");
+        }
+
+        ui.end_row();
+
+        Ok(())
+    }
+
+    fn scale_widget(
+        &mut self,
+        resources: &mut Resources,
+        entity: Entity,
+        ui: &mut Ui,
+    ) -> Result<()> {
+        let ecs = &mut resources.world.ecs;
+        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
+        let mut should_sync = false;
+
+        ui.label("Scale");
+        ui.horizontal(|ui| {
+            let transform = entry
+                .get_component_mut::<Transform>()
+                .expect("Entity does not have a transform!");
+
+            ui.label("X");
+            let x_response = ui.add(DragValue::new(&mut transform.scale.x).speed(0.1));
+
+            ui.label("Y");
+            let y_response = ui.add(DragValue::new(&mut transform.scale.y).speed(0.1));
+
+            ui.label("Z");
+            let z_response = ui.add(DragValue::new(&mut transform.scale.z).speed(0.1));
+
+            should_sync = x_response.changed() || y_response.changed() || z_response.changed();
+        });
+
+        if should_sync && entry.get_component::<RigidBody>().is_ok() {
+            resources
+                .world
+                .sync_rigid_body_to_transform(entity)
+                .expect("Failed to sync rigid body to transform!");
+        }
+
+        ui.end_row();
+
+        Ok(())
+    }
+
+    fn viewport_panel(&mut self, resources: &mut Resources) -> Result<()> {
+        let context = &resources.gui.context();
 
         egui::Area::new("Viewport")
             .fixed_pos((0.0, 0.0))
-            .show(ctx, |ui| {
+            .show(context, |ui| {
                 ui.with_layer_id(LayerId::background(), |ui| {
                     if let Some(entity) = self.selected_entity {
                         let (projection, view) = resources
@@ -443,7 +528,6 @@ impl App for Editor {
                             let mut transform = entry.get_component_mut::<Transform>().unwrap();
                             transform.translation = gizmo_transform.translation;
                             transform.rotation = gizmo_transform.rotation;
-                            log::info!("Rotation: {:?}", gizmo_transform.rotation);
                             transform.scale = gizmo_transform.scale;
                             if entry.get_component::<RigidBody>().is_ok() {
                                 resources
@@ -456,15 +540,44 @@ impl App for Editor {
                 });
             });
 
-        // TODO: Don't render underneath the gui
-        let _viewport = Viewport {
-            x: central_rect.min.x,
-            y: central_rect.min.y,
-            width: central_rect.width(),
-            height: central_rect.height(),
-        };
-        // resources.renderer.set_viewport(viewport);
+        Ok(())
+    }
+}
 
+impl App for Editor {
+    fn initialize(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+        register_component::<Selected>("selected")?;
+        resources.world.add_default_light()?;
+        Ok(())
+    }
+
+    fn update(&mut self, resources: &mut dragonglass::app::Resources) -> Result<()> {
+        if resources.world.active_camera_is_main()? {
+            let camera_entity = resources.world.active_camera()?;
+            self.camera.update(resources, camera_entity)?;
+        }
+
+        // // Run first animation
+        // if let Some(animation) = resources.world.animations.first_mut() {
+        //     animation.animate(
+        //         &mut resources.world.ecs,
+        //         0.75 * resources.system.delta_time as f32,
+        //     )?;
+        // }
+
+        Ok(())
+    }
+
+    fn gui_active(&mut self) -> bool {
+        true
+    }
+
+    fn update_gui(&mut self, resources: &mut Resources) -> Result<()> {
+        self.top_panel(resources)?;
+        self.left_panel(resources)?;
+        self.right_panel(resources)?;
+        self.bottom_panel(resources)?;
+        self.viewport_panel(resources)?;
         Ok(())
     }
 
@@ -479,7 +592,7 @@ impl App for Editor {
             if let Some(entity) = resources.world.pick_object(
                 &resources.mouse_ray_configuration()?,
                 interact_distance,
-                InteractionGroups::all(),
+                EDITOR_COLLISION_GROUP,
             )? {
                 let mut query = <(Entity, &Selected)>::query();
                 let already_selected = query

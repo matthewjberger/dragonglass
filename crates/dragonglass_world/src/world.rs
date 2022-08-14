@@ -518,7 +518,6 @@ impl World {
 
     pub fn tick(&mut self, delta_time: f32) -> Result<()> {
         self.physics.update(delta_time);
-        self.sync_all_rigid_bodies();
         Ok(())
     }
 
@@ -557,6 +556,7 @@ impl World {
             let mut position = body.position().clone();
             position.translation.vector = transform.translation;
             body.set_position(position, true);
+            body.set_rotation(glm::quat_euler_angles(&transform.rotation).into(), true);
         }
         Ok(())
     }
