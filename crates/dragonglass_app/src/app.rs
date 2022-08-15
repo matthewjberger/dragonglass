@@ -8,7 +8,7 @@ use image::io::Reader;
 use std::path::PathBuf;
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Icon, WindowBuilder},
 };
@@ -180,11 +180,6 @@ fn run_loop(
                 app.on_mouse(button, state, &mut resources)?
             }
             WindowEvent::KeyboardInput { input, .. } => {
-                if let (Some(VirtualKeyCode::Escape), ElementState::Pressed) =
-                    (input.virtual_keycode, input.state)
-                {
-                    *control_flow = ControlFlow::Exit;
-                }
                 app.on_key(*input, &mut resources)?;
             }
             _ => (),

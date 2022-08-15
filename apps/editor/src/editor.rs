@@ -2,10 +2,7 @@ use anyhow::{Context, Result};
 use dragonglass::{
     app::{App, MouseOrbit, Resources},
     gui::{
-        egui::{
-            self, global_dark_light_mode_switch, menu, Align, DragValue, Id, LayerId,
-            SelectableLabel, Slider, Ui,
-        },
+        egui::{self, global_dark_light_mode_switch, menu, LayerId, SelectableLabel, Slider, Ui},
         egui_gizmo::GizmoMode,
         GizmoWidget,
     },
@@ -19,12 +16,13 @@ use dragonglass::{
     },
 };
 use log::{info, warn};
-use nalgebra::UnitQuaternion;
 use nalgebra_glm as glm;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
+
+use crate::widgets::{rotation_widget, scale_widget, translation_widget};
 
 const EDITOR_COLLISION_GROUP: InteractionGroups = InteractionGroups::new(0b1, 0b1);
 
@@ -105,6 +103,8 @@ impl Editor {
             log::info!("Deselecting entity: {:?}", entity);
             entry.remove_component::<Selected>();
         }
+
+        self.selected_entity = None;
 
         Ok(())
     }
@@ -359,147 +359,13 @@ impl Editor {
                     None => return Ok(()),
                 };
 
-                self.translation_widget(resources, entity, ui)?;
-                self.rotation_widget(resources, entity, ui)?;
-                self.scale_widget(resources, entity, ui)?;
+                translation_widget(resources, entity, ui)?;
+                rotation_widget(resources, entity, ui)?;
+                scale_widget(resources, entity, ui)?;
                 ui.allocate_space(ui.available_size());
 
                 Ok(())
             });
-        Ok(())
-    }
-
-    fn translation_widget(
-        &mut self,
-        resources: &mut Resources,
-        entity: Entity,
-        ui: &mut Ui,
-    ) -> Result<()> {
-        let ecs = &mut resources.world.ecs;
-        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
-        let mut should_sync = false;
-
-        ui.heading("Translation");
-        ui.horizontal(|ui| {
-            let transform = entry
-                .get_component_mut::<Transform>()
-                .expect("Entity does not have a transform!");
-
-            ui.label("X");
-            let x_response = ui.add(DragValue::new(&mut transform.translation.x).speed(0.1));
-
-            ui.label("Y");
-            let y_response = ui.add(DragValue::new(&mut transform.translation.y).speed(0.1));
-
-            ui.label("Z");
-            let z_response = ui.add(DragValue::new(&mut transform.translation.z).speed(0.1));
-
-            should_sync = x_response.changed() || y_response.changed() || z_response.changed();
-        });
-
-        if should_sync && entry.get_component::<RigidBody>().is_ok() {
-            resources
-                .world
-                .sync_rigid_body_to_transform(entity)
-                .expect("Failed to sync rigid body to transform!");
-        }
-
-        ui.end_row();
-
-        Ok(())
-    }
-
-    fn rotation_widget(
-        &mut self,
-        resources: &mut Resources,
-        entity: Entity,
-        ui: &mut Ui,
-    ) -> Result<()> {
-        let ecs = &mut resources.world.ecs;
-        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
-        let mut should_sync = false;
-
-        ui.label("Rotation");
-        ui.horizontal(|ui| {
-            let transform = entry
-                .get_component_mut::<Transform>()
-                .expect("Entity does not have a transform!");
-
-            let mut angles = glm::quat_euler_angles(&transform.rotation);
-            angles = glm::vec3(
-                angles.x.to_degrees(),
-                angles.y.to_degrees(),
-                angles.z.to_degrees(),
-            );
-
-            ui.label("X");
-            let x_response = ui.add(DragValue::new(&mut angles.x).speed(0.1));
-
-            ui.label("Y");
-            let y_response = ui.add(DragValue::new(&mut angles.y).speed(0.1));
-
-            ui.label("Z");
-            let z_response = ui.add(DragValue::new(&mut angles.z).speed(0.1));
-
-            should_sync = x_response.changed() || y_response.changed() || z_response.changed();
-
-            if should_sync {
-                let quat_x = glm::quat_angle_axis(angles.x.to_radians(), &glm::Vec3::x());
-                let quat_y = glm::quat_angle_axis(angles.y.to_radians(), &glm::Vec3::y());
-                let quat_z = glm::quat_angle_axis(angles.z.to_radians(), &glm::Vec3::z());
-                transform.rotation = quat_z * quat_y * quat_x;
-            }
-        });
-
-        if should_sync && entry.get_component::<RigidBody>().is_ok() {
-            resources
-                .world
-                .sync_rigid_body_to_transform(entity)
-                .expect("Failed to sync rigid body to transform!");
-        }
-
-        ui.end_row();
-
-        Ok(())
-    }
-
-    fn scale_widget(
-        &mut self,
-        resources: &mut Resources,
-        entity: Entity,
-        ui: &mut Ui,
-    ) -> Result<()> {
-        let ecs = &mut resources.world.ecs;
-        let mut entry = ecs.entry(entity).context("Failed to find entity!")?;
-        let mut should_sync = false;
-
-        ui.label("Scale");
-        ui.horizontal(|ui| {
-            let transform = entry
-                .get_component_mut::<Transform>()
-                .expect("Entity does not have a transform!");
-
-            ui.label("X");
-            let x_response = ui.add(DragValue::new(&mut transform.scale.x).speed(0.1));
-
-            ui.label("Y");
-            let y_response = ui.add(DragValue::new(&mut transform.scale.y).speed(0.1));
-
-            ui.label("Z");
-            let z_response = ui.add(DragValue::new(&mut transform.scale.z).speed(0.1));
-
-            should_sync = x_response.changed() || y_response.changed() || z_response.changed();
-        });
-
-        if should_sync && entry.get_component::<RigidBody>().is_ok() {
-            resources
-                .world
-                .sync_rigid_body_to_transform(entity)
-                .expect("Failed to sync rigid body to transform!");
-        }
-
-        ui.end_row();
-
         Ok(())
     }
 
@@ -589,29 +455,13 @@ impl App for Editor {
     ) -> Result<()> {
         if (MouseButton::Left, ElementState::Pressed) == (*button, *button_state) {
             let interact_distance = f32::MAX;
-            if let Some(entity) = resources.world.pick_object(
+            let picked_entity = resources.world.pick_object(
                 &resources.mouse_ray_configuration()?,
                 interact_distance,
                 EDITOR_COLLISION_GROUP,
-            )? {
-                let mut query = <(Entity, &Selected)>::query();
-                let already_selected = query
-                    .iter(&mut resources.world.ecs)
-                    .map(|(e, _)| *e)
-                    .any(|e| e == entity);
-                if already_selected {
-                    return Ok(());
-                }
-
-                self.deselect_all(resources)?;
-                let mut entry = resources
-                    .world
-                    .ecs
-                    .entry(entity)
-                    .context("Failed to find entity")?;
-                entry.add_component(Selected::default());
-                self.selected_entity = Some(entity);
-                log::info!("Selected entity: {:?}", entity);
+            )?;
+            if let Some(entity) = picked_entity {
+                self.select_entity(entity, resources)?;
             }
         }
         Ok(())

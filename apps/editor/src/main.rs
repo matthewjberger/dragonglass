@@ -1,4 +1,5 @@
 mod editor;
+mod widgets;
 
 use anyhow::Result;
 use dragonglass::{
