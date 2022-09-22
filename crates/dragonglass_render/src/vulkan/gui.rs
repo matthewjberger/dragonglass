@@ -47,7 +47,7 @@ impl GuiRender {
         let vertex_buffer_size = 1024 * 1024 * 4;
         let index_buffer_size = 1024 * 1024 * 4;
         let geometry_buffer = GeometryBuffer::new(
-            device.clone(),
+            device,
             context.allocator.clone(),
             vertex_buffer_size,
             Some(index_buffer_size),

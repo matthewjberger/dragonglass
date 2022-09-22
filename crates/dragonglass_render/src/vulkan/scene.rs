@@ -405,7 +405,7 @@ impl Scene {
                     fullscreen_pipeline.issue_commands(command_buffer)?;
                 }
                 self.gui_render
-                    .issue_commands(viewport, command_buffer, &clipped_meshes)?;
+                    .issue_commands(viewport, command_buffer, clipped_meshes)?;
                 Ok(())
             },
         )?;

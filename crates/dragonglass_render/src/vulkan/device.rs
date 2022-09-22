@@ -52,10 +52,10 @@ impl Renderer for VulkanRenderBackend {
     ) -> Result<()> {
         let aspect_ratio = self.frame.swapchain_properties.aspect_ratio();
         self.scene.update(
-            &world,
+            world,
             aspect_ratio,
             gui_context,
-            &clipped_meshes,
+            clipped_meshes,
             elapsed_milliseconds,
             config,
         )?;
@@ -71,7 +71,7 @@ impl Renderer for VulkanRenderBackend {
             // TODO: Make this take less parameters...
             scene.execute_passes(
                 command_buffer,
-                &world,
+                world,
                 image_index,
                 aspect_ratio,
                 viewport,

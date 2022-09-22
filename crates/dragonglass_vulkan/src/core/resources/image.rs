@@ -272,7 +272,7 @@ impl AllocatedImage {
         allocator: Arc<RwLock<Allocator>>,
         image_create_info: &vk::ImageCreateInfoBuilder,
     ) -> Result<Self> {
-        let handle = unsafe { device.handle.create_image(&image_create_info, None) }?;
+        let handle = unsafe { device.handle.create_image(image_create_info, None) }?;
         let requirements = unsafe { device.handle.get_image_memory_requirements(handle) };
         let allocation_create_info = AllocationCreateDesc {
             // TODO: Allow custom naming allocations

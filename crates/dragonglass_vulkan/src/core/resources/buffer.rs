@@ -107,7 +107,7 @@ impl CpuToGpuBuffer {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
         let buffer = Buffer::new(
             device,
-            allocator.clone(),
+            allocator,
             buffer_create_info,
             MemoryLocation::CpuToGpu,
         )?;
@@ -266,7 +266,7 @@ impl GeometryBuffer {
         allocator: Arc<RwLock<Allocator>>,
         size: vk::DeviceSize,
     ) -> Result<()> {
-        self.vertex_buffer = GpuBuffer::vertex_buffer(device, allocator.clone(), size)?;
+        self.vertex_buffer = GpuBuffer::vertex_buffer(device, allocator, size)?;
         self.vertex_buffer_size = size;
         Ok(())
     }

@@ -174,7 +174,7 @@ impl RenderGraph {
     }
 
     fn backbuffer_node(&self) -> Option<NodeIndex> {
-        for index in self.graph.node_indices().into_iter() {
+        for index in self.graph.node_indices() {
             if let Node::Image(image_node) = &self.graph[index] {
                 if image_node.is_backbuffer() {
                     return Some(index);
@@ -587,8 +587,8 @@ impl PassBuilder {
     }
 
     fn attachment_offset(&self) -> usize {
-        let number_of_color_attachments = self.color_attachments.iter().count();
-        let number_of_resolve_attachments = self.resolve_attachments.iter().count();
+        let number_of_color_attachments = self.color_attachments.len();
+        let number_of_resolve_attachments = self.resolve_attachments.len();
         let has_depth_attachment = self.depth_stencil_attachment.is_some();
         number_of_color_attachments
             + number_of_resolve_attachments

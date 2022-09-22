@@ -27,7 +27,7 @@ pub trait State {
     }
 
     fn gui_active(&mut self) -> bool {
-        return false;
+        false
     }
 
     fn update_gui(&mut self, _resources: &mut Resources) -> Result<()> {
@@ -100,7 +100,7 @@ impl StateMachine {
     pub fn handle_event(&mut self, resources: &mut Resources, event: &Event<()>) -> Result<()> {
         if self.running {
             let transition = match self.states.last_mut() {
-                Some(state) => state.handle_event(resources, &event)?,
+                Some(state) => state.handle_event(resources, event)?,
                 None => Transition::None,
             };
             self.transition(transition, resources)?;

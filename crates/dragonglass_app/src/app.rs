@@ -21,7 +21,7 @@ pub trait App {
         Ok(())
     }
     fn gui_active(&mut self) -> bool {
-        return false;
+        false
     }
     fn update_gui(&mut self, _resources: &mut Resources) -> Result<()> {
         Ok(())

@@ -17,7 +17,7 @@ impl Instance {
 
     pub fn new(entry: &ash::Entry, extensions: &[*const i8], layers: &[*const i8]) -> Result<Self> {
         let application_create_info = Self::application_create_info()?;
-        Self::check_layers_supported(entry, &layers)?;
+        Self::check_layers_supported(entry, layers)?;
 
         let instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&application_create_info)

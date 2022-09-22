@@ -492,7 +492,7 @@ impl PbrPipelineData {
             Self::MAX_NUMBER_OF_JOINTS
         );
 
-        self.update_node_ubos(&world)?;
+        self.update_node_ubos(world)?;
 
         Ok(())
     }
@@ -668,7 +668,7 @@ impl WorldRender {
             .as_ref()
             .context("Failed to get pipeline layout for rendering world!")?;
 
-        let (projection, view) = world.active_camera_matrices(aspect_ratio)?;
+        let (_projection, _view) = world.active_camera_matrices(aspect_ratio)?;
 
         for alpha_mode in [AlphaMode::Opaque, AlphaMode::Mask, AlphaMode::Blend].iter() {
             let has_indices = self
@@ -691,7 +691,7 @@ impl WorldRender {
                         return Ok(());
                     }
 
-                    let transform = world.entity_global_transform(entity)?;
+                    let _transform = world.entity_global_transform(entity)?;
 
                     // FIXME: Don't always render lights, add a debug flag to the component or something
                     // Render lights as colored boxes for debugging

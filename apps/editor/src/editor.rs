@@ -52,7 +52,7 @@ impl Editor {
         resources.world.scene.skybox = Some(resources.world.hdr_textures.len() - 1);
 
         // FIXME: Don't reload entire scene whenever something is added
-        match resources.renderer.load_world(&resources.world) {
+        match resources.renderer.load_world(resources.world) {
             Ok(_) => {
                 info!("Reloaded gltf world");
             }
@@ -185,7 +185,7 @@ impl Editor {
         };
 
         let response = if graph.has_children(index) {
-            egui::CollapsingHeader::new(label.to_string())
+            egui::CollapsingHeader::new(label)
                 .selectable(true)
                 .selected(selected)
                 .show(ui, |ui| {
@@ -197,7 +197,7 @@ impl Editor {
                 .header_response
                 .context_menu(context_menu)
         } else {
-            ui.add(SelectableLabel::new(selected, label.to_string()))
+            ui.add(SelectableLabel::new(selected, label))
                 .context_menu(context_menu)
         };
 
@@ -497,7 +497,7 @@ impl App for Editor {
             (Some(VirtualKeyCode::C), ElementState::Pressed) => {
                 resources.world.clear()?;
                 self.selected_entity = None;
-                if let Err(error) = resources.renderer.load_world(&resources.world) {
+                if let Err(error) = resources.renderer.load_world(resources.world) {
                     warn!("Failed to load gltf world: {}", error);
                 }
             }

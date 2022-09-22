@@ -43,7 +43,7 @@ pub fn load_prefilter_map(
 
     let rendergraph = rendergraph(
         device.clone(),
-        allocator.clone(),
+        allocator,
         &output_cubemap_description,
     )?;
 
@@ -55,7 +55,7 @@ pub fn load_prefilter_map(
     let descriptor_set =
         descriptor_pool.allocate_descriptor_sets(descriptor_set_layout.handle, 1)?[0];
 
-    update_descriptor_set(&device.handle, descriptor_set, &cubemap);
+    update_descriptor_set(&device.handle, descriptor_set, cubemap);
 
     transition_cubemap_to_transfer_dst(
         command_pool,
@@ -73,7 +73,7 @@ pub fn load_prefilter_map(
     let (pipeline, pipeline_layout) = pipeline(
         device.clone(),
         shader_cache,
-        descriptor_set_layout.clone(),
+        descriptor_set_layout,
         offscreen_renderpass,
     )?;
 
@@ -84,7 +84,7 @@ pub fn load_prefilter_map(
             .height(dimension as _)
             .build();
         for (face_index, matrix) in matrices.iter().enumerate() {
-            let pipeline_layout_handle = pipeline_layout.handle.clone();
+            let pipeline_layout_handle = pipeline_layout.handle;
             let push_constants = PushConstantPrefilter {
                 mvp: projection * matrix,
                 roughness: mip_level as f32 / (output_cubemap_description.mip_levels - 1) as f32,

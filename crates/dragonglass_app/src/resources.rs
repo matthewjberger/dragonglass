@@ -35,7 +35,7 @@ impl<'a> Resources<'a> {
     }
 
     pub fn center_cursor(&mut self) -> Result<()> {
-        Ok(self.set_cursor_position(&self.system.window_center())?)
+        self.set_cursor_position(&self.system.window_center())
     }
 
     pub fn set_cursor_position(&mut self, position: &glm::Vec2) -> Result<()> {
@@ -65,8 +65,8 @@ impl<'a> Resources<'a> {
     }
 
     pub fn load_asset(&mut self, path: &str) -> Result<()> {
-        load_gltf(path, &mut self.world)?;
-        self.renderer.load_world(&self.world)?;
+        load_gltf(path, self.world)?;
+        self.renderer.load_world(self.world)?;
         Ok(())
     }
 }

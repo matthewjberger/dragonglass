@@ -35,7 +35,7 @@ impl Brdflut {
             &[fullscreen],
             vec![ImageNode {
                 name: color.to_string(),
-                extent: extent,
+                extent,
                 format: vk::Format::R16G16_SFLOAT,
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -46,7 +46,7 @@ impl Brdflut {
                 force_store: true,
                 force_shader_read: true,
             }],
-            &[(fullscreen, &color)],
+            &[(fullscreen, color)],
         )?;
 
         rendergraph.build(device.clone(), allocator)?;
@@ -61,7 +61,7 @@ impl Brdflut {
             context,
             fullscreen_pass,
             shader_cache,
-            rendergraph.image_view(&color)?.handle,
+            rendergraph.image_view(color)?.handle,
             rendergraph.sampler("default")?.handle,
             shader_path_set,
         )?;
@@ -74,7 +74,7 @@ impl Brdflut {
             })
         })?;
 
-        let (image, view) = rendergraph.take_image(&color)?;
+        let (image, view) = rendergraph.take_image(color)?;
 
         if let Ok(debug) = context.debug() {
             debug.name_image("brdflut", image.handle().as_raw())?;

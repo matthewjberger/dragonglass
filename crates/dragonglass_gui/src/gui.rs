@@ -1,6 +1,6 @@
 use egui::{epaint::ClippedShape, CtxRef, FontDefinitions, FontFamily, TextStyle};
 use egui_winit_platform::{Platform, PlatformDescriptor};
-use epi;
+
 use std::{sync::Arc, time::Instant};
 use winit::{dpi::PhysicalSize, event::Event, window::Window};
 
@@ -54,7 +54,7 @@ impl Gui {
     }
 
     pub fn handle_event(&mut self, event: &Event<()>) {
-        self.platform.handle_event(&event);
+        self.platform.handle_event(event);
     }
 
     pub fn context(&self) -> CtxRef {

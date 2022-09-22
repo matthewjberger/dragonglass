@@ -59,7 +59,7 @@ pub fn load_hdr_map(
     let device = context.device.clone();
     let allocator = context.allocator.clone();
 
-    let rendergraph = rendergraph(device.clone(), allocator.clone(), &hdr_description)?;
+    let rendergraph = rendergraph(device.clone(), allocator, &hdr_description)?;
     let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
     let color_image = rendergraph.image("color")?.handle();
 
@@ -90,7 +90,7 @@ pub fn load_hdr_map(
     let (pipeline, pipeline_layout) = pipeline(
         device.clone(),
         shader_cache,
-        descriptor_set_layout.clone(),
+        descriptor_set_layout,
         offscreen_renderpass,
     )?;
 
@@ -102,7 +102,7 @@ pub fn load_hdr_map(
                 .height(dimension as _)
                 .build();
 
-            let pipeline_layout_handle = pipeline_layout.handle.clone();
+            let pipeline_layout_handle = pipeline_layout.handle;
             let push_constants_hdr = PushConstantHdr {
                 mvp: projection * matrix,
             };

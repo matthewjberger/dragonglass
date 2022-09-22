@@ -19,7 +19,7 @@ pub fn create_logger() -> Result<()> {
             Config::default(),
             File::create(LOG_FILE).context(format!(
                 "Failed to create log file named: {}",
-                LOG_FILE.to_string()
+                LOG_FILE
             ))?,
         ),
     ])?;
