@@ -115,7 +115,7 @@ impl CpuToGpuBuffer {
     }
 
     pub fn size(&self) -> u64 {
-        self.buffer.allocation.size()
+        self.buffer.allocation.as_ref().unwrap().size()
     }
 
     pub fn handle(&self) -> vk::Buffer {
@@ -159,7 +159,7 @@ impl CpuToGpuBuffer {
         alignment: vk::DeviceSize,
     ) -> Result<()> {
         let data_pointer = self.mapped_ptr()?.as_ptr();
-        let size = self.buffer.allocation.size();
+        let size = self.buffer.allocation.as_ref().unwrap().size();
         unsafe {
             let data_pointer = data_pointer.add(offset);
             let mut align = ash::util::Align::new(data_pointer as _, alignment, size as _);
@@ -171,6 +171,8 @@ impl CpuToGpuBuffer {
     pub fn mapped_ptr(&self) -> Result<NonNull<c_void>> {
         self.buffer
             .allocation
+            .as_ref()
+            .unwrap()
             .mapped_ptr()
             .context("Failed to get mapped buffer ptr!")
     }
@@ -178,7 +180,7 @@ impl CpuToGpuBuffer {
 
 pub struct Buffer {
     pub handle: vk::Buffer,
-    allocation: Allocation,
+    allocation: Option<Allocation>,
     allocator: Arc<RwLock<Allocator>>,
     device: Arc<Device>,
 }
@@ -198,6 +200,7 @@ impl Buffer {
             requirements,
             location,
             linear: true, // Buffers are always linear
+            allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer(handle),
         };
         let allocation = {
             let mut allocator = allocator.write().expect("Failed to acquire allocator!");
@@ -210,7 +213,7 @@ impl Buffer {
         };
         Ok(Self {
             handle,
-            allocation,
+            allocation: Some(allocation),
             allocator,
             device,
         })
@@ -224,7 +227,7 @@ impl Drop for Buffer {
             .write()
             .expect("Failed to acquire allocator!");
         allocator
-            .free(self.allocation.clone())
+            .free(self.allocation.take().unwrap())
             .expect("Failed to free allocated buffer!");
         unsafe { self.device.handle.destroy_buffer(self.handle, None) };
     }

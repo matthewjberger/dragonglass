@@ -255,7 +255,7 @@ impl Image for RawImage {
 
 pub struct AllocatedImage {
     pub handle: vk::Image,
-    allocation: Allocation,
+    allocation: Option<Allocation>,
     allocator: Arc<RwLock<Allocator>>,
     device: Arc<Device>,
 }
@@ -280,6 +280,7 @@ impl AllocatedImage {
             requirements,
             location: MemoryLocation::GpuOnly,
             linear: true, // Linear texture
+            allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedImage(handle),
         };
         let allocation = {
             let mut allocator = allocator.write().expect("Failed to acquire allocator!");
@@ -292,7 +293,7 @@ impl AllocatedImage {
         };
         Ok(Self {
             handle,
-            allocation,
+            allocation: Some(allocation),
             allocator,
             device,
         })
@@ -304,10 +305,14 @@ impl AllocatedImage {
         pool: &CommandPool,
         description: &ImageDescription,
     ) -> Result<()> {
+        if self.allocation.is_none() {
+            return Ok(());
+        }
+
         let buffer = CpuToGpuBuffer::staging_buffer(
             self.device.clone(),
             self.allocator.clone(),
-            self.allocation.size(),
+            self.allocation.as_ref().unwrap().size(),
         )?;
         buffer.upload_data(&description.pixels, 0)?;
         self.transition_base_to_transfer_dst(pool, description.mip_levels)?;
@@ -474,7 +479,7 @@ impl Drop for AllocatedImage {
             .write()
             .expect("Failed to acquire allocator!");
         allocator
-            .free(self.allocation.clone())
+            .free(self.allocation.take().unwrap())
             .expect("Failed to free allocated image!");
         unsafe { self.device.handle.destroy_image(self.handle, None) };
     }
