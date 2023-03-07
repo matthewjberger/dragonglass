@@ -11,12 +11,11 @@ impl Instance {
     const APPLICATION_NAME: &'static str = "Dragonglass";
     // The 'variant' field is always 0 for Vulkan
     const APPLICATION_VERSION: u32 = make_api_version(0, 1, 0, 0);
-    const API_VERSION: u32 = make_api_version(0, 1, 2, 0);
     const ENGINE_VERSION: u32 = make_api_version(0, 1, 0, 0);
     const ENGINE_NAME: &'static str = "Dragonglass Engine";
 
     pub fn new(entry: &ash::Entry, extensions: &[*const i8], layers: &[*const i8]) -> Result<Self> {
-        let application_create_info = Self::application_create_info()?;
+        let application_create_info = Self::application_create_info(entry)?;
         Self::check_layers_supported(entry, layers)?;
 
         let instance_create_info = vk::InstanceCreateInfo::builder()
@@ -28,13 +27,22 @@ impl Instance {
         Ok(Self { handle })
     }
 
-    fn application_create_info() -> Result<vk::ApplicationInfo> {
+    fn application_create_info(entry: &ash::Entry) -> Result<vk::ApplicationInfo> {
+        let (major, minor) = match entry.try_enumerate_instance_version()? {
+            Some(version) => (
+                vk::api_version_major(version),
+                vk::api_version_minor(version),
+            ),
+            None => (1, 0),
+        };
+        log::info!("Vulkan {major}.{minor} supported");
+
         let app_name = CString::new(Self::APPLICATION_NAME)?;
         let engine_name = CString::new(Self::ENGINE_NAME)?;
         let app_info = vk::ApplicationInfo::builder()
             .application_name(&app_name)
             .engine_name(&engine_name)
-            .api_version(Self::API_VERSION)
+            .api_version(vk::make_api_version(0, major, minor, 0))
             .application_version(Self::APPLICATION_VERSION)
             .engine_version(Self::ENGINE_VERSION)
             .build();
