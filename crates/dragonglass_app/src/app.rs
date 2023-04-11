@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{logger::create_logger, Input, Resources, System};
 use anyhow::Result;
 use dragonglass_config::Config;
@@ -5,7 +7,6 @@ use dragonglass_gui::{Gui, ScreenDescriptor};
 use dragonglass_render::{create_render_backend, Backend};
 use dragonglass_world::{SdfFont, Viewport, World};
 use image::io::Reader;
-use std::path::PathBuf;
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, MouseButton, WindowEvent},
@@ -26,7 +27,7 @@ pub trait App {
     fn update_gui(&mut self, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
-    fn on_file_dropped(&mut self, _path: &PathBuf, _resources: &mut Resources) -> Result<()> {
+    fn on_file_dropped(&mut self, _path: &Path, _resources: &mut Resources) -> Result<()> {
         Ok(())
     }
     fn cleanup(&mut self) -> Result<()> {

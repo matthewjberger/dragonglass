@@ -1,9 +1,8 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Result};
-use winit::event::{ElementState, Event, KeyboardInput, MouseButton};
+use std::path::Path;
 
 use crate::Resources;
+use anyhow::{Context, Result};
+use winit::event::{ElementState, Event, KeyboardInput, MouseButton};
 
 pub trait State {
     fn on_start(&mut self, _resources: &mut Resources) -> Result<()> {
@@ -34,7 +33,7 @@ pub trait State {
         Ok(())
     }
 
-    fn on_file_dropped(&mut self, _resources: &mut Resources, _path: &PathBuf) -> Result<()> {
+    fn on_file_dropped(&mut self, _resources: &mut Resources, _path: &Path) -> Result<()> {
         Ok(())
     }
 

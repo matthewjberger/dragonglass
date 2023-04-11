@@ -19,7 +19,7 @@ use log::{info, warn};
 use nalgebra_glm as glm;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use winit::event::{ElementState, MouseButton, VirtualKeyCode};
 
 use crate::widgets::{rotation_widget, scale_widget, translation_widget};
@@ -67,7 +67,7 @@ impl Editor {
     pub fn select_entity(&mut self, entity: Entity, resources: &mut Resources) -> Result<()> {
         let mut query = <(Entity, &Selected)>::query();
         let already_selected = query
-            .iter(&mut resources.world.ecs)
+            .iter(&resources.world.ecs)
             .map(|(e, _)| *e)
             .any(|e| e == entity);
         if already_selected {
@@ -90,7 +90,7 @@ impl Editor {
         let mut query = <(Entity, &Selected)>::query();
 
         let entities = query
-            .iter(&mut resources.world.ecs)
+            .iter(&resources.world.ecs)
             .map(|(e, _)| *e)
             .collect::<Vec<_>>();
 
@@ -109,7 +109,7 @@ impl Editor {
         Ok(())
     }
 
-    pub fn load_world_from_file(&self, path: &PathBuf, resources: &mut Resources) -> Result<()> {
+    pub fn load_world_from_file(&self, path: &Path, resources: &mut Resources) -> Result<()> {
         let raw_path = match path.to_str() {
             Some(raw_path) => raw_path,
             None => return Ok(()),
@@ -137,7 +137,7 @@ impl Editor {
             // TODO: Don't add an additional collider to existing entities...
             let mut query = <(Entity, &MeshRender)>::query();
             let entities = query
-                .iter(&mut resources.world.ecs)
+                .iter(&resources.world.ecs)
                 .map(|(e, _)| *e)
                 .collect::<Vec<_>>();
 
@@ -254,7 +254,7 @@ impl Editor {
                                 let mut query = <(Entity, &Selected)>::query();
 
                                 let entities = query
-                                    .iter(&mut resources.world.ecs)
+                                    .iter(&resources.world.ecs)
                                     .map(|(e, _)| *e)
                                     .collect::<Vec<_>>();
 
@@ -265,7 +265,7 @@ impl Editor {
                                         .expect("Failed to remove rigid body!");
                                 }
 
-                                resources.world.save(&path).expect("Failed to save world!");
+                                resources.world.save(path).expect("Failed to save world!");
                             }
                             ui.close_menu();
                         }
@@ -469,7 +469,7 @@ impl App for Editor {
 
     fn on_file_dropped(
         &mut self,
-        path: &PathBuf,
+        path: &Path,
         resources: &mut dragonglass::app::Resources,
     ) -> Result<()> {
         self.load_world_from_file(path, resources)?;

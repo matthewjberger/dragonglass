@@ -41,11 +41,7 @@ pub fn load_irradiance_map(
     let device = context.device.clone();
     let allocator = context.allocator.clone();
 
-    let rendergraph = rendergraph(
-        device.clone(),
-        allocator,
-        &output_cubemap_description,
-    )?;
+    let rendergraph = rendergraph(device.clone(), allocator, &output_cubemap_description)?;
 
     let offscreen_renderpass = rendergraph.pass_handle("offscreen")?;
     let color_image = rendergraph.image("color")?.handle();

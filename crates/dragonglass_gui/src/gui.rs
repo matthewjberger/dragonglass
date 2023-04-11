@@ -61,7 +61,7 @@ impl Gui {
         self.platform.context()
     }
 
-    pub fn start_frame<'a>(&mut self, scale_factor: f32) -> epi::backend::FrameData {
+    pub fn start_frame(&mut self, scale_factor: f32) -> epi::backend::FrameData {
         self.platform
             .update_time(self.start_time.elapsed().as_secs_f64());
 

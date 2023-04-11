@@ -31,7 +31,7 @@ impl System {
 
     pub fn aspect_ratio(&self) -> f32 {
         let width = self.window_dimensions.width;
-        let height = cmp::max(self.window_dimensions.height as u32, 0);
+        let height = cmp::max(self.window_dimensions.height, 0);
         width as f32 / height as f32
     }
 

@@ -11,8 +11,8 @@ pub struct GizmoWidget {
     visuals: GizmoVisuals,
 }
 
-impl GizmoWidget {
-    pub fn new() -> Self {
+impl Default for GizmoWidget {
+    fn default() -> Self {
         Self {
             mode: GizmoMode::Rotate,
             orientation: GizmoOrientation::Global,
@@ -31,6 +31,12 @@ impl GizmoWidget {
                 highlight_alpha: 1.0,
             },
         }
+    }
+}
+
+impl GizmoWidget {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn render_mode_selection(&mut self, ui: &mut Ui) {

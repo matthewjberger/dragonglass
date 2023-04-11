@@ -81,7 +81,7 @@ impl Animation {
                                     let start = weights[previous_key];
                                     let end = weights[next_key];
                                     for index in 0..number_of_mesh_weights {
-                                        (*mesh).weights[index] = glm::lerp_scalar(
+                                        mesh.weights[index] = glm::lerp_scalar(
                                             start[index],
                                             end[index],
                                             interpolation,

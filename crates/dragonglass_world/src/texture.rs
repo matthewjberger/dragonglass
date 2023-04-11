@@ -47,8 +47,8 @@ impl Texture {
         let decoder = HdrDecoder::new(BufReader::new(file))?;
         let metadata = decoder.metadata();
         let decoded = decoder.read_image_hdr()?;
-        let width = metadata.width as u32;
-        let height = metadata.height as u32;
+        let width = metadata.width;
+        let height = metadata.height;
         let data = decoded
             .iter()
             .flat_map(|pixel| vec![pixel[0], pixel[1], pixel[2], 1.0])

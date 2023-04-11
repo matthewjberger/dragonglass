@@ -17,10 +17,8 @@ pub fn create_logger() -> Result<()> {
         WriteLogger::new(
             LevelFilter::max(),
             Config::default(),
-            File::create(LOG_FILE).context(format!(
-                "Failed to create log file named: {}",
-                LOG_FILE
-            ))?,
+            File::create(LOG_FILE)
+                .context(format!("Failed to create log file named: {}", LOG_FILE))?,
         ),
     ])?;
     Ok(())

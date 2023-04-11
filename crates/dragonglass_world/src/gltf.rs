@@ -21,7 +21,7 @@ pub fn graph_node(
     graph: &mut SceneGraph,
     gltf_node: &gltf::Node,
     parent_index: NodeIndex,
-    ecs: &mut Ecs,
+    _ecs: &mut Ecs,
     entities: &[Entity],
 ) {
     let entity = entities[gltf_node.index()];
@@ -30,7 +30,7 @@ pub fn graph_node(
         graph.add_edge(parent_index, index);
     }
     for child in gltf_node.children() {
-        graph_node(graph, &child, index, ecs, entities);
+        graph_node(graph, &child, index, _ecs, entities);
     }
 }
 
@@ -556,28 +556,28 @@ fn load_animations(
                 .read_outputs()
                 .context("Failed to read animation channel outputs!")?;
 
-            let transformations: TransformationSet;
-            match outputs {
+            let transformations: TransformationSet = match outputs {
                 ReadOutputs::Translations(translations) => {
                     let translations = translations.map(glm::Vec3::from).collect::<Vec<_>>();
-                    transformations = TransformationSet::Translations(translations);
+                    TransformationSet::Translations(translations)
                 }
                 ReadOutputs::Rotations(rotations) => {
                     let rotations = rotations
                         .into_f32()
                         .map(glm::Vec4::from)
                         .collect::<Vec<_>>();
-                    transformations = TransformationSet::Rotations(rotations);
+                    TransformationSet::Rotations(rotations)
                 }
                 ReadOutputs::Scales(scales) => {
                     let scales = scales.map(glm::Vec3::from).collect::<Vec<_>>();
-                    transformations = TransformationSet::Scales(scales);
+                    TransformationSet::Scales(scales)
                 }
                 ReadOutputs::MorphTargetWeights(weights) => {
                     let morph_target_weights = weights.into_f32().collect::<Vec<_>>();
-                    transformations = TransformationSet::MorphTargetWeights(morph_target_weights);
+                    TransformationSet::MorphTargetWeights(morph_target_weights)
                 }
-            }
+            };
+
             channels.push(Channel {
                 target,
                 inputs,

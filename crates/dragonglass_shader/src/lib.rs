@@ -27,9 +27,9 @@ fn compile_shader(shader_path: &Path) -> Result<()> {
 
     info!("Compiling {:?} -> {:?}", file_name, output_name);
     let result = Command::new(SHADER_COMPILER_NAME)
-        .current_dir(&parent_name)
+        .current_dir(parent_name)
         .arg("-V")
-        .arg(&file_name)
+        .arg(file_name)
         .arg("-o")
         .arg(output_name)
         .output();

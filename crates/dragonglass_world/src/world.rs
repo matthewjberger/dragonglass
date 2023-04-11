@@ -33,7 +33,7 @@ pub struct World {
 }
 
 impl World {
-    pub const MAIN_CAMERA_NAME: &'static str = &"Main Camera";
+    pub const MAIN_CAMERA_NAME: &'static str = "Main Camera";
 
     pub fn new() -> Result<World> {
         let mut world = World::default();
@@ -522,7 +522,7 @@ impl World {
     }
 
     pub fn as_bytes(&self) -> Result<Vec<u8>> {
-        world_as_bytes(&self)
+        world_as_bytes(self)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<World> {
@@ -530,7 +530,7 @@ impl World {
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        Ok(std::fs::write(path, &self.as_bytes()?)?)
+        Ok(std::fs::write(path, self.as_bytes()?)?)
     }
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
@@ -553,10 +553,10 @@ impl World {
         let rigid_body = entry.get_component::<RigidBody>()?;
         let transform = entry.get_component::<Transform>()?;
         if let Some(body) = self.physics.bodies.get_mut(rigid_body.handle) {
-            let mut position = body.position().clone();
+            let mut position = *body.position();
             position.translation.vector = transform.translation;
             body.set_position(position, true);
-            body.set_rotation(glm::quat_euler_angles(&transform.rotation).into(), true);
+            body.set_rotation(glm::quat_euler_angles(&transform.rotation), true);
         }
         Ok(())
     }

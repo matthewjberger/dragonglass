@@ -40,7 +40,7 @@ impl SceneGraph {
             linear_offset += 1;
             Ok(())
         })?;
-        return Ok(nodes);
+        Ok(nodes)
     }
 
     pub fn parent_of(&self, index: NodeIndex) -> Option<NodeIndex> {
