@@ -12,7 +12,18 @@ pub struct PhysicalDevice {
 
 impl PhysicalDevice {
     pub fn new(instance: &ash::Instance, surface: &Surface) -> Result<Self> {
-        let devices = unsafe { instance.enumerate_physical_devices() }?;
+        let devices = {
+            let mut devices = unsafe { instance.enumerate_physical_devices()? };
+            devices.sort_by_key(|device| {
+                let props = unsafe { instance.get_physical_device_properties(*device) };
+                match props.device_type {
+                    vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+                    vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+                    _ => 2,
+                }
+            });
+            devices
+        };
         println!("{:#?}", devices);
         for device in devices {
             if let Some(physical_device) = Self::check_device_viability(device, instance, surface)?
