@@ -391,7 +391,7 @@ impl Editor {
                             let model_matrix: glm::Mat4 = gizmo_result.transform.into();
                             let gizmo_transform = Transform::from(model_matrix);
                             let mut entry = resources.world.ecs.entry_mut(entity).unwrap();
-                            let mut transform = entry.get_component_mut::<Transform>().unwrap();
+                            let transform = entry.get_component_mut::<Transform>().unwrap();
                             transform.translation = gizmo_transform.translation;
                             transform.rotation = gizmo_transform.rotation;
                             transform.scale = gizmo_transform.scale;

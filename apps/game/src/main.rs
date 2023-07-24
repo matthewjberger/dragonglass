@@ -30,7 +30,7 @@ impl App for Game {
         Audio::play_music("assets/sounds/light-buzzing.mp3");
 
         {
-            let mut post_processing = &mut resources.config.graphics.post_processing;
+            let post_processing = &mut resources.config.graphics.post_processing;
             post_processing.film_grain.strength = 20.0;
             post_processing.chromatic_aberration.strength = 10.0;
         }

@@ -26,7 +26,7 @@ impl MouseOrbit {
 
         {
             let mut entry = resources.world.ecs.entry_mut(entity)?;
-            let mut transform = entry.get_component_mut::<Transform>()?;
+            let transform = entry.get_component_mut::<Transform>()?;
             if resources.input.mouse.is_right_clicked
                 && resources.input.is_key_pressed(VirtualKeyCode::LShift)
             {
@@ -57,7 +57,7 @@ impl MouseLook {
 
         {
             let mut entry = resources.world.ecs.entry_mut(entity)?;
-            let mut transform = entry.get_component_mut::<Transform>()?;
+            let transform = entry.get_component_mut::<Transform>()?;
             transform.rotation = self.orientation.look_forward();
         }
 
