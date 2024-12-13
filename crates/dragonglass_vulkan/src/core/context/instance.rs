@@ -35,7 +35,7 @@ impl Instance {
             ),
             None => (1, 0),
         };
-        log::info!("Vulkan {major}.{minor} supported");
+        // log::info!("Vulkan {major}.{minor} supported");
 
         let app_name = CString::new(Self::APPLICATION_NAME)?;
         let engine_name = CString::new(Self::ENGINE_NAME)?;
